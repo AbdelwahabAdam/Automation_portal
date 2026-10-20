@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  body { font-family: "Noto Sans Arabic", "Noto Sans", "DejaVu Sans", sans-serif; color: #222; font-size: 11pt; }
+  .receipt { border: 1px solid #888; padding: 7mm 8mm 9mm; }
+  .head { display: flex; justify-content: space-between; align-items: flex-start; }
+  .title { font-size: 19pt; font-weight: bold; margin: 0; }
+  .meta { font-size: 10.5pt; direction: rtl; white-space: nowrap; }
+  .meta b { font-weight: bold; }
+  .company { display: flex; justify-content: space-between; align-items: flex-start; margin-top: 4mm; }
+  .company .text { text-align: right; line-height: 1.55; }
+  .company .name { font-size: 14pt; margin-bottom: 2mm; }
+  .company .address { direction: ltr; text-align: right; font-size: 10.5pt; }
+  .logo { width: 36mm; }
+  hr { border: 0; border-top: 1px solid #999; margin: 6mm 0 4mm; }
+  .row { margin: 0 0 5.5mm; font-size: 10.5pt; }
+  .row b { font-weight: bold; }
+  .gap { display: inline-block; width: 10mm; }
+  .ltr { direction: ltr; unicode-bidi: isolate; }
+  .signature { margin-top: 18mm; margin-right: 22mm; width: 62mm; border-top: 1px solid #999; text-align: center; padding-top: 4mm; color: #555; }
+</style>
+</head>
+<body>
+  <div class="receipt">
+    <div class="head">
+      <h1 class="title">إيصال استلام</h1>
+      <div class="meta">رقم: <b class="ltr">{{ number }}</b>&nbsp;&nbsp;&nbsp; التاريخ: <b class="ltr">{{ date }}</b></div>
+    </div>
+    <div class="company">
+      <div class="text">
+        <div class="name">FUTURE LIFE L.L.C O.P.C</div>
+        <div class="address">United Arab Emirates – Al Ain City – Downtown– Hessa Bint Mohammed Street</div>
+        <div class="address">Opposite ADCB Bank and Al Ain Post Office</div>
+        <div class="address">ALAIN Abu Dhabi 15975</div>
+      </div>
+      <img class="logo" src="logo.jpg" alt="Future Life">
+    </div>
+    <hr>
+    <p class="row"><b>من:</b> {{ client }}</p>
+    <p class="row"><b>المبلغ:</b> <span class="ltr">{{ amount }} AED</span><span class="gap"></span><b>بواسطة:</b> {{ method }}</p>
+    <p class="row"><b>فاتورة:</b> <span class="ltr">#{{ invoice_no }}</span></p>
+    <p class="row"><b>المستلم:</b> {{ receiver }}</p>
+    {% if treasury %}<p class="row"><b>الخزينة:</b> <span class="ltr">{{ treasury }}</span></p>{% endif %}
+    <div class="signature">التــوقــيع</div>
+  </div>
+</body>
+</html>

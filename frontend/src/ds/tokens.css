@@ -1,0 +1,159 @@
+/* Future Life Design System — single token source (v1.0.0).
+   Layers: primitives (--fl-<hue>-<step>) → semantic (--fl-color-*, --fl-space-*, …) → component (--fl-<component>-*).
+   Components reference semantic or component tokens only, never primitives. */
+:root {
+  /* ── Primitives · navy (brand) ── */
+  --fl-navy-950:#0B1B2B; --fl-navy-900:#102840; --fl-navy-800:#16324F; --fl-navy-700:#234565; --fl-navy-600:#36597D;
+  --fl-navy-200:#C3D1DF; --fl-navy-100:#E2E9F1; --fl-navy-50:#F0F4F8;
+  /* ── Primitives · teal (action) ── */
+  --fl-teal-900:#0B4A45; --fl-teal-800:#115E59; --fl-teal-700:#0F766E; --fl-teal-600:#14897F;
+  --fl-teal-300:#7CCBC1; --fl-teal-200:#A9DDD6; --fl-teal-100:#CDEDE9; --fl-teal-50:#E6F5F3;
+  /* ── Primitives · slate (neutral, cool) ── */
+  --fl-slate-0:#FFFFFF; --fl-slate-25:#FAFBFC; --fl-slate-50:#F6F8FA; --fl-slate-100:#EEF2F5; --fl-slate-150:#E4EAEF;
+  --fl-slate-200:#D8E1E8; --fl-slate-300:#BFCBD5; --fl-slate-400:#8D9CAA; --fl-slate-500:#6F8091; --fl-slate-600:#526475;
+  --fl-slate-700:#3E5062; --fl-slate-800:#2A3D4D; --fl-slate-900:#172B3A;
+  /* ── Primitives · status hues ── */
+  --fl-green-700:#116632; --fl-green-600:#15803D; --fl-green-200:#B7DEC3; --fl-green-50:#ECF7EF;
+  --fl-amber-700:#8F4208; --fl-amber-600:#B45309; --fl-amber-200:#F0D3A8; --fl-amber-50:#FDF4E7;
+  --fl-red-700:#911C13; --fl-red-600:#B42318; --fl-red-200:#F3C2BD; --fl-red-50:#FDEDEC;
+  --fl-blue-700:#1E3FA8; --fl-blue-600:#1D4ED8; --fl-blue-200:#BFD0F6; --fl-blue-50:#EBF1FD;
+
+  /* ── Semantic · brand ── */
+  --fl-color-brand-primary: var(--fl-navy-800);
+  --fl-color-brand-strong: var(--fl-navy-900);
+  --fl-color-brand-subtle: var(--fl-navy-50);
+  /* ── Semantic · background ── */
+  --fl-color-background-canvas: var(--fl-slate-50);
+  --fl-color-background-surface: var(--fl-slate-0);
+  --fl-color-background-sunken: var(--fl-slate-25);
+  --fl-color-background-subtle: var(--fl-slate-100);
+  --fl-color-background-hover: var(--fl-slate-100);
+  --fl-color-background-pressed: var(--fl-slate-150);
+  --fl-color-background-selected: var(--fl-teal-50);
+  --fl-color-background-disabled: var(--fl-slate-100);
+  --fl-color-background-readonly: var(--fl-slate-25);
+  --fl-color-background-inverse: var(--fl-navy-900);
+  --fl-color-background-scrim: rgba(11, 27, 43, .52);
+  /* ── Semantic · text ── */
+  --fl-color-text-primary: var(--fl-slate-900);
+  --fl-color-text-secondary: var(--fl-slate-600);
+  --fl-color-text-disabled: var(--fl-slate-500);
+  --fl-color-text-inverse: var(--fl-slate-0);
+  --fl-color-text-brand: var(--fl-navy-800);
+  --fl-color-text-link: var(--fl-teal-700);
+  --fl-color-text-link-hover: var(--fl-teal-900);
+  --fl-color-text-selected: var(--fl-teal-800);
+  --fl-color-text-error: var(--fl-red-600);
+  /* ── Semantic · icon ── */
+  --fl-color-icon-default: var(--fl-slate-600);
+  --fl-color-icon-strong: var(--fl-slate-900);
+  --fl-color-icon-disabled: var(--fl-slate-400);
+  --fl-color-icon-selected: var(--fl-teal-700);
+  /* ── Semantic · border ── */
+  --fl-color-border-subtle: var(--fl-slate-150);
+  --fl-color-border-default: var(--fl-slate-200);
+  --fl-color-border-control: var(--fl-slate-500);
+  --fl-color-border-control-hover: var(--fl-slate-700);
+  --fl-color-border-selected: var(--fl-teal-700);
+  --fl-color-border-error: var(--fl-red-600);
+  --fl-color-border-disabled: var(--fl-slate-200);
+  --fl-color-focus-ring: var(--fl-teal-700);
+  /* ── Semantic · action ── */
+  --fl-color-action-primary-background: var(--fl-teal-700);
+  --fl-color-action-primary-background-hover: var(--fl-teal-800);
+  --fl-color-action-primary-background-pressed: var(--fl-teal-900);
+  --fl-color-action-primary-text: var(--fl-slate-0);
+  --fl-color-action-secondary-background: var(--fl-slate-0);
+  --fl-color-action-secondary-background-hover: var(--fl-slate-100);
+  --fl-color-action-secondary-background-pressed: var(--fl-slate-150);
+  --fl-color-action-secondary-border: var(--fl-slate-500);
+  --fl-color-action-secondary-text: var(--fl-slate-900);
+  --fl-color-action-tertiary-text: var(--fl-teal-700);
+  --fl-color-action-tertiary-background-hover: var(--fl-teal-50);
+  --fl-color-action-tertiary-background-pressed: var(--fl-teal-100);
+  --fl-color-action-destructive-background: var(--fl-red-600);
+  --fl-color-action-destructive-background-hover: var(--fl-red-700);
+  --fl-color-action-destructive-text: var(--fl-slate-0);
+  --fl-color-action-disabled-background: var(--fl-slate-150);
+  --fl-color-action-disabled-text: var(--fl-slate-500);
+  /* ── Semantic · status (each: background / border / text / icon) ── */
+  --fl-color-status-neutral-background: var(--fl-slate-100); --fl-color-status-neutral-border: var(--fl-slate-300); --fl-color-status-neutral-text: var(--fl-slate-700); --fl-color-status-neutral-icon: var(--fl-slate-600);
+  --fl-color-status-info-background: var(--fl-blue-50); --fl-color-status-info-border: var(--fl-blue-200); --fl-color-status-info-text: var(--fl-blue-700); --fl-color-status-info-icon: var(--fl-blue-600);
+  --fl-color-status-success-background: var(--fl-green-50); --fl-color-status-success-border: var(--fl-green-200); --fl-color-status-success-text: var(--fl-green-700); --fl-color-status-success-icon: var(--fl-green-600);
+  --fl-color-status-warning-background: var(--fl-amber-50); --fl-color-status-warning-border: var(--fl-amber-200); --fl-color-status-warning-text: var(--fl-amber-700); --fl-color-status-warning-icon: var(--fl-amber-600);
+  --fl-color-status-error-background: var(--fl-red-50); --fl-color-status-error-border: var(--fl-red-200); --fl-color-status-error-text: var(--fl-red-700); --fl-color-status-error-icon: var(--fl-red-600);
+
+  /* ── Typography ── */
+  --fl-font-family: 'IBM Plex Sans Arabic', 'Segoe UI', Tahoma, 'Noto Sans Arabic', 'Geeza Pro', system-ui, sans-serif;
+  --fl-font-weight-regular: 400; --fl-font-weight-medium: 500; --fl-font-weight-semibold: 600; --fl-font-weight-bold: 700;
+  --fl-type-display-size: 28px;  --fl-type-display-line: 1.3;
+  --fl-type-page-title-size: 22px; --fl-type-page-title-line: 1.4;
+  --fl-type-section-title-size: 17px; --fl-type-section-title-line: 1.45;
+  --fl-type-subsection-size: 15px; --fl-type-subsection-line: 1.5;
+  --fl-type-body-size: 14px; --fl-type-body-line: 1.65;
+  --fl-type-body-sm-size: 13px; --fl-type-body-sm-line: 1.6;
+  --fl-type-label-size: 13px; --fl-type-label-line: 1.5;
+  --fl-type-caption-size: 12px; --fl-type-caption-line: 1.5;
+  --fl-type-numeric-size: 14px;
+  --fl-type-input-size: 16px; /* 16px prevents iOS zoom-on-focus */
+
+  /* ── Space (4px base) ── */
+  --fl-space-0:0; --fl-space-1:2px; --fl-space-2:4px; --fl-space-3:8px; --fl-space-4:12px; --fl-space-5:16px;
+  --fl-space-6:20px; --fl-space-7:24px; --fl-space-8:32px; --fl-space-9:40px; --fl-space-10:48px; --fl-space-11:64px;
+  /* ── Radius ── */
+  --fl-radius-sm:4px; --fl-radius-md:6px; --fl-radius-lg:10px; --fl-radius-xl:14px; --fl-radius-full:999px;
+  /* ── Border width ── */
+  --fl-border-width-default:1px; --fl-border-width-strong:2px;
+  /* ── Size ── */
+  --fl-control-height-sm:32px; --fl-control-height-md:40px; --fl-control-height-lg:48px; --fl-touch-target:44px;
+  --fl-icon-size-sm:16px; --fl-icon-size-md:20px; --fl-icon-size-lg:24px; --fl-icon-stroke:1.75;
+  --fl-container-form:760px; --fl-container-content:1280px; --fl-container-reading:72ch;
+  --fl-sidebar-width:248px; --fl-dialog-width-sm:440px; --fl-dialog-width-md:640px; --fl-drawer-width:480px;
+  /* ── Elevation ── */
+  --fl-elevation-0: none;
+  --fl-elevation-1: 0 1px 2px rgba(16, 40, 64, .06);
+  --fl-elevation-2: 0 8px 20px -6px rgba(16, 40, 64, .18), 0 1px 3px rgba(16, 40, 64, .08);
+  --fl-elevation-3: 0 24px 56px -16px rgba(16, 40, 64, .32), 0 2px 6px rgba(16, 40, 64, .08);
+  /* ── Layers ── */
+  --fl-z-base:0; --fl-z-sticky:10; --fl-z-dropdown:100; --fl-z-drawer:200; --fl-z-modal:300; --fl-z-toast:400; --fl-z-tooltip:500;
+  /* ── Motion ── */
+  --fl-motion-duration-fast:120ms; --fl-motion-duration-base:180ms; --fl-motion-duration-slow:260ms;
+  --fl-motion-easing-standard: cubic-bezier(.2, 0, 0, 1); --fl-motion-easing-exit: cubic-bezier(.4, 0, 1, 1);
+
+  /* ── Component tokens (density-aware) ── */
+  --fl-field-height: 40px;
+  --fl-table-row-height: 52px;
+  --fl-table-cell-padding-block: 12px;
+  --fl-table-cell-padding-inline: 14px;
+  --fl-stack-gap: 16px;
+  --fl-card-padding: 20px;
+}
+[data-fl-density="compact"] {
+  --fl-field-height: 36px;
+  --fl-table-row-height: 40px;
+  --fl-table-cell-padding-block: 7px;
+  --fl-table-cell-padding-inline: 10px;
+  --fl-stack-gap: 12px;
+  --fl-card-padding: 16px;
+}
+[data-fl-touch="true"] { --fl-field-height: 48px; --fl-control-height-md: 44px; }
+/* Reduced motion: OS preference or the in-app simulation switch. */
+@media (prefers-reduced-motion: reduce) {
+  :root { --fl-motion-duration-fast:0ms; --fl-motion-duration-base:0ms; --fl-motion-duration-slow:0ms; }
+  *, *::before, *::after { animation-duration:.001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important; }
+}
+[data-fl-reduced-motion="true"], [data-fl-reduced-motion="true"] * { animation-duration:.001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important; }
+
+/* Behaviour that cannot be expressed inline */
+html, body { margin:0; padding:0; }
+body { font-family: var(--fl-font-family); background: var(--fl-color-background-canvas); color: var(--fl-color-text-primary); -webkit-font-smoothing: antialiased; }
+*, *::before, *::after { box-sizing: border-box; }
+button, input, select, textarea { font-family: inherit; }
+a { color: var(--fl-color-text-link); }
+a:hover { color: var(--fl-color-text-link-hover); }
+:focus-visible { outline: 2px solid var(--fl-color-focus-ring); outline-offset: 2px; }
+[dir="rtl"] [data-fl-flip="true"] { transform: scaleX(-1); }
+.fl-num, [data-fl-num] { font-variant-numeric: tabular-nums; }
+@keyframes fl-spin { to { transform: rotate(360deg); } }
+@keyframes fl-pulse { 0%, 100% { opacity: .5; } 50% { opacity: 1; } }
+@keyframes fl-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }

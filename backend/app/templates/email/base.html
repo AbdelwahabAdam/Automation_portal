@@ -1,0 +1,44 @@
+{# Layout shared by every email. Tables and inline styles only: mail apps ignore most CSS. #}
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="supported-color-schemes" content="light">
+  <title>{% block title %}{{ portal_name }}{% endblock %}</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #eef0f5;">
+  {# Shown next to the subject in the inbox list, hidden in the message itself #}
+  <div style="display: none; max-height: 0; overflow: hidden; opacity: 0; color: transparent;">{% block preheader %}{% endblock %}</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#eef0f5" style="background-color: #eef0f5;">
+    <tr>
+      <td align="center" style="padding: 28px 12px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width: 560px;">
+          <tr>
+            <td bgcolor="#4a2d7f" style="padding: 26px 32px 22px; border-radius: 12px 12px 0 0;" dir="rtl" align="right">
+              <div dir="ltr" style="font-family: Georgia, 'Times New Roman', serif; font-size: 26px; font-weight: bold; letter-spacing: 1px; color: #ffffff; text-align: right;">Future Life</div>
+              <div dir="ltr" style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 12px; letter-spacing: 1px; color: #9fdcee; text-align: right; padding-top: 2px;">Water with future technology</div>
+            </td>
+          </tr>
+          <tr>
+            <td bgcolor="#2aa7c9" style="height: 4px; line-height: 4px; font-size: 0;">&nbsp;</td>
+          </tr>
+          <tr>
+            <td bgcolor="#ffffff" dir="rtl" align="right" style="padding: 32px 32px 30px; font-family: Tahoma, 'Segoe UI', Arial, sans-serif; font-size: 15px; line-height: 1.9; color: #1f2937; text-align: right;">
+              <h1 style="margin: 0 0 18px; font-family: Tahoma, 'Segoe UI', Arial, sans-serif; font-size: 21px; line-height: 1.5; color: #2d1b54;">{% block heading %}{% endblock %}</h1>
+              {% block content %}{% endblock %}
+            </td>
+          </tr>
+          <tr>
+            <td bgcolor="#f8f9fc" dir="rtl" align="center" style="padding: 18px 32px; border-top: 1px solid #e5e7ef; border-radius: 0 0 12px 12px; font-family: Tahoma, 'Segoe UI', Arial, sans-serif; font-size: 12px; line-height: 1.8; color: #8a93a3; text-align: center;">
+              هذه رسالة آلية من {{ portal_name }}، فلا ترد عليها.<br>
+              <span dir="ltr">FUTURE LIFE L.L.C O.P.C · Al Ain, United Arab Emirates</span>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

@@ -1,0 +1,164 @@
+// Mirrors backend/app/forms.py so the user sees errors before submitting.
+// The backend validates again and stays the source of truth.
+
+const PHONE_RE = /^(?:\+?971|0)\d{8,9}$/;
+const ARABIC_DIGITS = '٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹';
+// Field types 'product' and 'staff' hold a name picked from a Daftra list
+const DEFAULT_MAX_LENGTH = { text: 300, product: 300, staff: 300, textarea: 3000 };
+// Field types holding the id of a row in a Daftra list (see DAFTRA_LIST_TYPES in forms.py)
+export const DAFTRA_LIST_TYPES = ['daftra_order_source', 'daftra_treasury', 'daftra_client_category', 'daftra_client_invoice'];
+
+const toLatinDigits = (text) => text.replace(/[٠-٩۰-۹]/g, (d) => ARABIC_DIGITS.indexOf(d) % 10);
+
+export const allFields = (formType) => formType.sections.flatMap((section) => section.fields);
+export const isInput = (spec) => !['files', 'auto_user'].includes(spec.type) && !spec.computed;
+
+// Returns the phone as digits when it is a valid UAE number, otherwise null
+export function normalizePhone(raw) {
+  const value = toLatinDigits(String(raw ?? '')).replace(/[\s\-()]/g, '');
+  return PHONE_RE.test(value) ? value : null;
+}
+
+export function today() {
+  const now = new Date();
+  return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}
+
+// Returns [value, error] for one input field; an empty value comes back as null
+function cleanValue(spec, raw) {
+  if (spec.type === 'multiselect') {
+    const chosen = Array.isArray(raw) ? raw.filter((v) => spec.options.includes(v)) : [];
+    return [chosen.length ? chosen : null, null];
+  }
+  if (spec.type === 'order_lines') {
+    const lines = Array.isArray(raw) ? raw.filter((l) => l && l.product_id && Number(l.quantity) > 0) : [];
+    return [lines.length ? lines : null, null];
+  }
+  let value = raw == null || typeof raw === 'object' ? '' : String(raw).trim();
+  if (value === '') return [null, null];
+
+  if (spec.type === 'number') {
+    const number = Number(toLatinDigits(value).replace(/,/g, ''));
+    if (Number.isNaN(number)) return [null, 'أدخل رقمًا صحيحًا'];
+    if (spec.integer && !Number.isInteger(number)) return [null, 'أدخل عددًا بدون كسور'];
+    if (spec.positive && number <= 0) return [null, 'يجب أن يكون أكبر من صفر'];
+    if (spec.min !== undefined && number < spec.min) return [null, `الحد الأدنى ${spec.min}`];
+    if (spec.max !== undefined && number > spec.max) return [null, `الحد الأقصى ${spec.max}`];
+    return [Math.round(number * 100) / 100, null];
+  }
+  if (spec.type === 'phone') {
+    value = toLatinDigits(value).replace(/[\s\-()]/g, '');
+    return PHONE_RE.test(value) ? [value, null] : [null, 'أدخل رقم هاتف إماراتي صحيح'];
+  }
+  if (spec.type === 'date') {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(Date.parse(value))) return [null, 'أدخل تاريخًا صحيحًا'];
+    if (spec.not_future && value > today()) return [null, 'التاريخ لا يمكن أن يكون في المستقبل'];
+    return [value, null];
+  }
+  if (spec.type === 'select') return spec.options.includes(value) ? [value, null] : [null, 'اختر من القائمة'];
+  if (DAFTRA_LIST_TYPES.includes(spec.type)) return /^\d+$/.test(value) ? [Number(value), null] : [null, 'اختر من القائمة'];
+
+  const maxLength = spec.max_length ?? DEFAULT_MAX_LENGTH[spec.type];
+  if (value.length > maxLength) return [null, `الحد الأقصى ${maxLength} حرفًا`];
+  if (spec.pattern) {
+    value = toLatinDigits(value);
+    if (!new RegExp(spec.pattern).test(value)) return [null, spec.pattern_message || 'صيغة غير صحيحة'];
+  }
+  return [value, null];
+}
+
+// The cooler colours a package's name allows (a "package_color" field's families, from forms.py
+// PACKAGE_COLOR_FAMILIES): the first family whose words the name contains; [] when none matches
+export function packageColors(spec, packageName) {
+  const name = String(packageName ?? '').split(/\s+/).filter(Boolean).join(' ');
+  const family = (spec.families || []).find((f) => f.match.some((w) => name.includes(w)) && !f.exclude.some((w) => name.includes(w)));
+  return family ? family.colors : [];
+}
+
+// How many of the package a line was picked from (its «الكمية»); 1 for a product picked on its own
+export function packageQuantity(line) {
+  const value = Number(line.details?.package_quantity);
+  return line.group_id && Number.isInteger(value) && value > 0 ? value : 1;
+}
+
+// A line's price: what the product costs inside the package it was picked from, else its own price
+export function linePrice(line, priceById) {
+  return typeof line.unit_price === 'number' ? line.unit_price : priceById.get(Number(line.product_id)) || 0;
+}
+
+function conditionMet(condition, clean) {
+  const value = clean[condition.field];
+  if ('equals' in condition) return value === condition.equals;
+  if ('in' in condition) return condition.in.includes(value);
+  if ('not_in' in condition) return !condition.not_in.includes(value);
+  return typeof value === 'number' && value > condition.gt;
+}
+
+// Cleans the typed values and works out computed fields.
+// catalog gives the live price of each product, for a field an order_lines field feeds (its "subtotal_field").
+// Returns { clean, errors, required } where required is the set of field names needed right now.
+export function evaluateForm(formType, values, fileCounts = {}, catalog = {}) {
+  const fields = allFields(formType);
+  const clean = {};
+  const errors = {};
+
+  for (const spec of fields.filter(isInput)) {
+    const [value, error] = cleanValue(spec, values[spec.name]);
+    if (error) errors[spec.name] = error;
+    else if (value !== null) clean[spec.name] = value;
+  }
+  for (const spec of fields) {
+    if (spec.type !== 'order_lines' || !spec.subtotal_field) continue;
+    const priceById = new Map((catalog.products || []).map((p) => [p.id, p.price || 0]));
+    const charges = (spec.line_fields || []).filter((d) => d.charge).map((d) => d.name);
+    const lines = Array.isArray(values[spec.name]) ? values[spec.name] : [];
+    const seenGroups = new Set();
+    let total = 0;
+    for (const line of lines) {
+      // A package's «الكمية» is already in its products' quantities
+      total += linePrice(line, priceById) * (Number(line.quantity) || 0);
+      // A package's details sit on each of its lines, so its charges (e.g. the inscription) count once per package
+      if (!line.group_id || !seenGroups.has(line.group_id)) {
+        total += charges.reduce((sum, name) => sum + (Number(toLatinDigits(String(line.details?.[name] ?? ''))) || 0), 0) * packageQuantity(line);
+      }
+      if (line.group_id) seenGroups.add(line.group_id);
+    }
+    clean[spec.subtotal_field] = Math.round(total * 100) / 100;
+  }
+  for (const spec of fields.filter((s) => s.computed)) {
+    if (spec.name in clean || !spec.computed.length) continue;
+    const [first, ...rest] = spec.computed.map((name) => clean[name]);
+    if (first === undefined) continue;
+    const result = Math.round((first - rest.reduce((sum, v) => sum + (v || 0), 0)) * 100) / 100;
+    clean[spec.name] = result;
+    if (result < 0) errors[spec.name] = spec.negative_message;
+  }
+  // A field that must equal another (e.g. the amount paid must be the whole total)
+  for (const spec of fields.filter((s) => s.must_equal)) {
+    if (spec.name in clean && spec.must_equal in clean && !errors[spec.name]
+        && Math.abs(clean[spec.name] - clean[spec.must_equal]) > 0.005) {
+      errors[spec.name] = spec.must_equal_message || 'القيمتان يجب أن تتساويا';
+    }
+  }
+
+  const required = new Set();
+  for (const spec of fields) {
+    if (!(spec.required || (spec.required_if && conditionMet(spec.required_if, clean)))) continue;
+    required.add(spec.name);
+    if (errors[spec.name]) continue;
+    if (spec.type === 'files') {
+      if (!fileCounts[spec.name]) errors[spec.name] = 'أرفق ملفًا واحدًا على الأقل';
+    } else if (isInput(spec) && !(spec.name in clean)) {
+      errors[spec.name] = 'مطلوب';
+    }
+  }
+  return { clean, errors, required };
+}
+
+export function initialValues(formType) {
+  const values = {};
+  for (const spec of allFields(formType)) {
+    if (spec.default) values[spec.name] = spec.default === 'today' ? today() : spec.default;
+  }
+  return values;
+}

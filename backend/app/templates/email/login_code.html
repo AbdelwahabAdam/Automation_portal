@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% from "_macros.html" import note %}
+{% block title %}رمز التحقق{% endblock %}
+{% block preheader %}رمز الدخول إلى {{ portal_name }}، صالح {{ minutes }} دقائق.{% endblock %}
+{% block heading %}رمز التحقق لتسجيل الدخول{% endblock %}
+{% block content %}
+<p style="margin: 0 0 12px;">مرحبًا {{ full_name }}،</p>
+<p style="margin: 0;">اكتب هذا الرمز في صفحة الدخول لإكمال تسجيل دخولك:</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 22px 0;">
+  <tr>
+    <td align="center" bgcolor="#f4f1fa" dir="ltr" style="padding: 20px 12px; border: 1px dashed #b9a8dc; border-radius: 10px; font-family: Consolas, 'Courier New', monospace; font-size: 36px; font-weight: bold; letter-spacing: 10px; color: #2d1b54; text-align: center;">{{ code }}</td>
+  </tr>
+</table>
+<p style="margin: 0; font-size: 13px; color: #6b7280;">الرمز صالح لمدة {{ minutes }} دقائق ولمرة واحدة. لا تشاركه مع أحد.</p>
+{{ note("إذا لم تحاول الدخول الآن فهناك من يعرف كلمة مرورك: غيّرها من صفحة «حسابي» في أقرب وقت.") }}
+{% endblock %}

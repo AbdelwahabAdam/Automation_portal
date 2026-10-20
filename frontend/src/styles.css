@@ -1,0 +1,8 @@
+/* App-wide styling comes from the design system (src/ds/tokens.css and src/ds/ds.css).
+   Keep this file for rules that belong to this app only. */
+
+/* Two fields sharing one line of a grid: two thirds and one third, stacked on a phone */
+.fl-pair { display: grid; grid-template-columns: 2fr 1fr; gap: var(--fl-space-5); align-items: start; }
+@media (max-width: 600px) {
+  .fl-pair { grid-template-columns: 1fr; }
+}

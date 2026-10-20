@@ -1,0 +1,443 @@
+// React versions of the Future Life design system components (Design/portal/Fl*.dc.html).
+// Styling lives in ds.css and uses the tokens in tokens.css only.
+import { useEffect, useId, useRef, useState } from 'react';
+import Icon from './Icon.jsx';
+
+export { Icon };
+
+const cx = (...names) => names.filter(Boolean).join(' ');
+
+// ---------- Button (FlButton) ----------
+
+export function Button({
+  variant = 'secondary', size = 'md', icon, iconEnd, loading, full, iconOnly, label, children, className, type = 'button', ...rest
+}) {
+  const text = children ?? label;
+  return (
+    <button
+      type={type}
+      className={cx('fl-btn', `fl-btn--${variant}`, `fl-btn--${size}`, full && 'fl-btn--full', iconOnly && 'fl-btn--icon', className)}
+      aria-busy={loading ? 'true' : undefined}
+      aria-label={iconOnly ? label : rest['aria-label']}
+      title={iconOnly ? label : rest.title}
+      {...rest}
+      disabled={rest.disabled || loading}
+    >
+      {loading ? <Icon name="loader" size={size === 'sm' ? 16 : 18} /> : icon && <Icon name={icon} size={size === 'sm' ? 16 : 18} />}
+      {!iconOnly && text != null && <span className="fl-btn__text">{text}</span>}
+      {iconEnd && !loading && <Icon name={iconEnd} size={size === 'sm' ? 16 : 18} />}
+    </button>
+  );
+}
+
+// ---------- Field (FlField): label, hint, control box, error ----------
+
+export function Field({ label, htmlFor, required, optional, locked, hint, error, children, className, hideLabel, id }) {
+  return (
+    <div className={cx('fl-field', error && 'fl-field--invalid', className)} id={id}>
+      <div className={cx('fl-field__head', hideLabel && 'fl-sr-only')}>
+        <label className="fl-field__label" htmlFor={htmlFor}>
+          {label}{required && <span className="fl-field__required" aria-hidden="true"> *</span>}
+        </label>
+        {optional && <span className="fl-field__aside">(اختياري)</span>}
+        {locked && <span className="fl-field__aside"><Icon name="lock" size={13} />{locked}</span>}
+      </div>
+      {hint && <div className="fl-field__hint">{hint}</div>}
+      {children}
+      {error && (
+        <div className="fl-field__error" role="alert">
+          <Icon name="alert-circle" size={15} /><span>{error}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// The bordered box around an input, with optional icon and trailing button
+// onIconClick makes the leading icon a button (e.g. a search field's magnifier that runs the search)
+export function InputBox({ icon, onIconClick, iconLabel, end, invalid, readOnly, disabled, children, className }) {
+  return (
+    <div className={cx('fl-box', invalid && 'fl-box--invalid', readOnly && 'fl-box--readonly', disabled && 'fl-box--disabled', className)}>
+      {icon && (onIconClick ? (
+        <button type="button" className="fl-box__icon fl-box__icon--button" aria-label={iconLabel} title={iconLabel} disabled={disabled} onClick={onIconClick}>
+          <Icon name={icon} size={18} />
+        </button>
+      ) : <span className="fl-box__icon"><Icon name={icon} size={18} /></span>)}
+      {children}
+      {end}
+    </div>
+  );
+}
+
+export function TextInput({ icon, onIconClick, iconLabel, invalid, className, ...rest }) {
+  return (
+    <InputBox icon={icon} onIconClick={onIconClick} iconLabel={iconLabel} invalid={invalid} readOnly={rest.readOnly} disabled={rest.disabled} className={className}>
+      <input className="fl-input" aria-invalid={invalid || undefined} {...rest} />
+    </InputBox>
+  );
+}
+
+export function PasswordInput({ invalid, ...rest }) {
+  const [shown, setShown] = useState(false);
+  return (
+    <InputBox
+      invalid={invalid}
+      end={(
+        <button type="button" className="fl-box__btn" onClick={() => setShown(!shown)} aria-pressed={shown}
+          aria-label={shown ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}>
+          <Icon name={shown ? 'eye-off' : 'eye'} size={18} />
+        </button>
+      )}
+    >
+      <input className="fl-input" dir="ltr" type={shown ? 'text' : 'password'} aria-invalid={invalid || undefined} {...rest} />
+    </InputBox>
+  );
+}
+
+export function TextArea({ invalid, rows = 3, ...rest }) {
+  return (
+    <InputBox invalid={invalid} readOnly={rest.readOnly} className="fl-box--area">
+      <textarea className="fl-input fl-textarea" rows={rows} aria-invalid={invalid || undefined} {...rest} />
+    </InputBox>
+  );
+}
+
+export function SearchInput({ value, onChange, placeholder, label, ...rest }) {
+  return (
+    <InputBox
+      icon="search"
+      end={value ? (
+        <button type="button" className="fl-box__btn" aria-label="مسح البحث" onClick={() => onChange('')}><Icon name="x" size={16} /></button>
+      ) : null}
+    >
+      <input className="fl-input" type="search" value={value} placeholder={placeholder} aria-label={label || placeholder}
+        onChange={(e) => onChange(e.target.value)} {...rest} />
+    </InputBox>
+  );
+}
+
+// ---------- Select (FlSelect): native select styled as a field ----------
+
+export function Select({ invalid, children, className, ...rest }) {
+  return (
+    <InputBox invalid={invalid} disabled={rest.disabled} className={cx('fl-box--select', className)}
+      end={<span className="fl-box__chevron" aria-hidden="true"><Icon name="chevron-down" size={18} /></span>}>
+      <select className="fl-input fl-select" aria-invalid={invalid || undefined} {...rest}>{children}</select>
+    </InputBox>
+  );
+}
+
+// ---------- Choice (FlChoice): option cards for radio or checkbox ----------
+
+export function Choice({ name, options, value, multiple, onChange, invalid, columns }) {
+  const chosen = multiple ? (Array.isArray(value) ? value : []) : value;
+  return (
+    <div className={cx('fl-choice', invalid && 'fl-choice--invalid')} role={multiple ? 'group' : 'radiogroup'}
+      style={columns ? { '--fl-choice-columns': columns } : undefined}>
+      {options.map((option) => {
+        const optionValue = typeof option === 'string' ? option : option.value;
+        const optionLabel = typeof option === 'string' ? option : option.label;
+        const checked = multiple ? chosen.includes(optionValue) : chosen === optionValue;
+        return (
+          <label key={optionValue} className={cx('fl-choice__item', checked && 'fl-choice__item--on')}>
+            <input
+              type={multiple ? 'checkbox' : 'radio'} name={name} checked={checked}
+              onChange={() => onChange(multiple
+                ? (checked ? chosen.filter((v) => v !== optionValue) : [...chosen, optionValue])
+                : optionValue)}
+            />
+            <span>{optionLabel}</span>
+          </label>
+        );
+      })}
+    </div>
+  );
+}
+
+export function Checkbox({ checked, onChange, children, disabled }) {
+  return (
+    <label className={cx('fl-check', disabled && 'fl-check--disabled')}>
+      <input type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
+      <span>{children}</span>
+    </label>
+  );
+}
+
+// ---------- Badge (FlBadge) and status badges ----------
+
+export function Badge({ tone = 'neutral', icon, children, title }) {
+  return (
+    <span className={`fl-badge fl-badge--${tone}`} title={title}>
+      {icon && <Icon name={icon} size={14} />}
+      <span className="fl-badge__text">{children}</span>
+    </span>
+  );
+}
+
+const REQUEST_STATUS = {
+  draft: ['neutral', 'edit', 'مسودة'],
+  submitted: ['info', 'send', 'قيد المراجعة'],
+  returned: ['warning', 'arrow-start', 'تحتاج تعديل'],
+  approved: ['success', 'check-circle', 'معتمد'],
+};
+
+export function StatusBadge({ status }) {
+  const [tone, icon, label] = REQUEST_STATUS[status] || ['neutral', null, status];
+  return <Badge tone={tone} icon={icon}>{label}</Badge>;
+}
+
+// ---------- Alert (FlAlert) ----------
+
+const ALERT_ICONS = { info: 'info', success: 'check-circle', warning: 'alert-triangle', error: 'alert-circle', neutral: 'info' };
+
+export function Alert({ tone = 'info', title, children, actions, onDismiss }) {
+  return (
+    <div className={`fl-alert fl-alert--${tone}`} role={tone === 'error' ? 'alert' : 'status'}>
+      <span className="fl-alert__icon"><Icon name={ALERT_ICONS[tone]} size={20} /></span>
+      <div className="fl-alert__body">
+        {title && <div className="fl-alert__title">{title}</div>}
+        {children && <div className="fl-alert__text">{children}</div>}
+        {actions && <div className="fl-alert__actions">{actions}</div>}
+      </div>
+      {onDismiss && <Button variant="ghost" size="sm" icon="x" iconOnly label="إغلاق" onClick={onDismiss} />}
+    </div>
+  );
+}
+
+// ---------- Tabs (FlTabs) with counts ----------
+
+export function Tabs({ tabs, value, onChange, label }) {
+  return (
+    <div className="fl-tabs" role="tablist" aria-label={label}>
+      {tabs.map((tab) => (
+        <button
+          key={tab.value} type="button" role="tab" aria-selected={tab.value === value}
+          className={cx('fl-tabs__tab', tab.value === value && 'fl-tabs__tab--on')} onClick={() => onChange(tab.value)}
+        >
+          <span>{tab.label}</span>
+          {tab.count != null && <span className="fl-tabs__count" data-fl-num>{tab.count}</span>}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ---------- Page header, empty state, loading ----------
+
+export function PageHeader({ title, subtitle, actions, children }) {
+  return (
+    <header className="fl-pagehead">
+      <div className="fl-pagehead__text">
+        <h1 className="fl-pagehead__title" tabIndex={-1}>{title}</h1>
+        {subtitle && <p className="fl-pagehead__sub">{subtitle}</p>}
+        {children}
+      </div>
+      {actions && <div className="fl-pagehead__actions">{actions}</div>}
+    </header>
+  );
+}
+
+export function EmptyState({ icon = 'inbox', title, children, action }) {
+  return (
+    <div className="fl-empty">
+      <span className="fl-empty__icon"><Icon name={icon} size={22} /></span>
+      <div className="fl-empty__title">{title}</div>
+      {children && <p className="fl-empty__text">{children}</p>}
+      {action}
+    </div>
+  );
+}
+
+export function Loading({ label = 'جارٍ التحميل…' }) {
+  return <p className="fl-loading" role="status"><Icon name="loader" size={18} />{label}</p>;
+}
+
+// ---------- Card and numbered collapsible section ----------
+
+export function Card({ title, actions, children, className }) {
+  return (
+    <section className={cx('fl-card', className)}>
+      {(title || actions) && (
+        <div className="fl-card__head">
+          {title && <h2 className="fl-card__title">{title}</h2>}
+          {actions && <div className="fl-card__actions">{actions}</div>}
+        </div>
+      )}
+      {children}
+    </section>
+  );
+}
+
+// A form section that folds away; folded content stays mounted so values and uploads survive
+export function Section({ number, title, summary, open, onToggle, children, invalid }) {
+  const bodyId = useId();
+  return (
+    <section className={cx('fl-section', invalid && 'fl-section--invalid')}>
+      <button type="button" className="fl-section__head" aria-expanded={open} aria-controls={bodyId} onClick={onToggle}>
+        {number != null && <span className="fl-section__num" data-fl-num>{number}</span>}
+        <span className="fl-section__titles">
+          <span className="fl-section__title">{title}</span>
+          {summary && <span className="fl-section__summary">{summary}</span>}
+        </span>
+        <span className="fl-section__chevron"><Icon name={open ? 'chevron-up' : 'chevron-down'} size={18} /></span>
+      </button>
+      <div id={bodyId} className="fl-section__body" hidden={!open}>{children}</div>
+    </section>
+  );
+}
+
+// Sticky bar at the bottom of a form
+export function ActionBar({ children, message }) {
+  return (
+    <div className="fl-actionbar">
+      {message && <div className="fl-actionbar__message">{message}</div>}
+      <div className="fl-actionbar__buttons">{children}</div>
+    </div>
+  );
+}
+
+// ---------- Drawer (FlDialog placement="drawer") ----------
+
+export function Drawer({ title, subtitle, onClose, children, footer, width }) {
+  const panel = useRef(null);
+  useEffect(() => {
+    const previous = document.activeElement;
+    panel.current?.querySelector('input:not([type=hidden]), select, textarea, button')?.focus();
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    document.body.classList.add('fl-noscroll');
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.classList.remove('fl-noscroll');
+      previous?.focus?.();
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <div className="fl-overlay">
+      <div className="fl-scrim" onClick={onClose} />
+      <aside ref={panel} className="fl-drawer" role="dialog" aria-modal="true" aria-label={title} style={width ? { inlineSize: width } : undefined}>
+        <header className="fl-drawer__head">
+          <div>
+            <h2 className="fl-drawer__title">{title}</h2>
+            {subtitle && <p className="fl-drawer__sub">{subtitle}</p>}
+          </div>
+          <Button variant="ghost" icon="x" iconOnly label="إغلاق" onClick={onClose} />
+        </header>
+        <div className="fl-drawer__body">{children}</div>
+        {footer && <footer className="fl-drawer__foot">{footer}</footer>}
+      </aside>
+    </div>
+  );
+}
+
+// ---------- Menu (FlMenu): a button that opens a list of actions ----------
+
+export function Menu({ label, icon, iconOnly, headerTitle, headerSubtitle, items, variant = 'ghost' }) {
+  const [open, setOpen] = useState(false);
+  const root = useRef(null);
+  const menuId = useId();
+  useEffect(() => {
+    if (!open) return undefined;
+    const close = (e) => { if (!root.current?.contains(e.target)) setOpen(false); };
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', close);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', onKey); };
+  }, [open]);
+  return (
+    <div className="fl-menu" ref={root}>
+      <Button variant={variant} icon={icon} iconEnd={iconOnly ? undefined : 'chevron-down'} iconOnly={iconOnly} label={label}
+        aria-haspopup="menu" aria-expanded={open} aria-controls={menuId} onClick={() => setOpen(!open)}>
+        {iconOnly ? undefined : label}
+      </Button>
+      {open && (
+        <div className="fl-menu__panel" role="menu" id={menuId}>
+          {headerTitle && (
+            <div className="fl-menu__header">
+              <div className="fl-menu__header-title">{headerTitle}</div>
+              {headerSubtitle && <div className="fl-menu__header-sub"><bdi>{headerSubtitle}</bdi></div>}
+            </div>
+          )}
+          {items.map((item) => (
+            <button key={item.label} type="button" role="menuitem" className={cx('fl-menu__item', item.danger && 'fl-menu__item--danger')}
+              onClick={() => { setOpen(false); item.onSelect(); }}>
+              {item.icon && <Icon name={item.icon} size={18} />}<span>{item.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------- Pagination (from FlTable) ----------
+
+export function Pager({ page, pageSize, total, onPage, onPageSize, sizes = [10, 20, 50] }) {
+  const pages = Math.max(1, Math.ceil(total / pageSize));
+  const first = total ? (page - 1) * pageSize + 1 : 0;
+  const last = Math.min(page * pageSize, total);
+  const numbers = [];
+  for (let n = Math.max(1, page - 2); n <= Math.min(pages, page + 2); n += 1) numbers.push(n);
+  return (
+    <div className="fl-pager">
+      {onPageSize && (
+        <label className="fl-pager__size">
+          <span>عدد الصفوف</span>
+          <select value={pageSize} onChange={(e) => onPageSize(Number(e.target.value))}>
+            {sizes.map((size) => <option key={size} value={size}>{size}</option>)}
+          </select>
+        </label>
+      )}
+      <span className="fl-pager__count" data-fl-num>عرض <bdi dir="ltr">{first}–{last}</bdi> من {total}</span>
+      <div className="fl-pager__pages">
+        <Button size="sm" icon="chevron-start" disabled={page <= 1} onClick={() => onPage(page - 1)}>السابق</Button>
+        {numbers.map((n) => (
+          <button key={n} type="button" className={cx('fl-pager__num', n === page && 'fl-pager__num--on')} aria-current={n === page ? 'page' : undefined}
+            onClick={() => onPage(n)}>{n}</button>
+        ))}
+        <Button size="sm" iconEnd="chevron-end" disabled={page >= pages} onClick={() => onPage(page + 1)}>التالي</Button>
+      </div>
+    </div>
+  );
+}
+
+// ---------- Container width (FL.observeWidth): layout follows the element, not the window ----------
+
+// Returns [ref, width]: put ref on the element whose width decides the layout
+export function useWidth() {
+  const [node, setNode] = useState(null);
+  const [width, setWidth] = useState(0);
+  useEffect(() => {
+    if (!node) return undefined;
+    const observer = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width));
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [node]);
+  return [setNode, width];
+}
+
+// ---------- Dialog (FlDialog): centred confirmation ----------
+
+export function Dialog({ title, children, confirmLabel, cancelLabel = 'إلغاء', tone = 'primary', onConfirm, onCancel, busy, confirmDisabled }) {
+  const box = useRef(null);
+  useEffect(() => {
+    const previous = document.activeElement;
+    (box.current?.querySelector('textarea, input') || box.current?.querySelector('[data-autofocus]'))?.focus();
+    const onKey = (e) => { if (e.key === 'Escape' && !busy) onCancel(); };
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('keydown', onKey); previous?.focus?.(); };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <div className="fl-overlay fl-overlay--center">
+      <div className="fl-scrim" />
+      <div ref={box} className="fl-dialog" role="alertdialog" aria-modal="true" aria-label={title}>
+        <h2 className="fl-dialog__title">{title}</h2>
+        <div className="fl-dialog__body">{children}</div>
+        <div className="fl-dialog__actions">
+          <Button variant={tone === 'danger' ? 'destructive' : 'primary'} loading={busy} disabled={confirmDisabled} onClick={onConfirm} data-autofocus>{confirmLabel}</Button>
+          <Button onClick={onCancel} disabled={busy}>{cancelLabel}</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
