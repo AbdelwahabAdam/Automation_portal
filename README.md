@@ -200,3 +200,92 @@ After changing `backend/app/models.py`, add a migration (from `backend/`):
 Form types and their fields live in `backend/app/forms.py`. The frontend renders
 whatever that file defines, and the backend validates submissions against it.
 `frontend/src/validation.js` repeats the same checks for instant feedback.
+
+## Deploying to AWS (EC2)
+
+`deploy/terraform` creates the server and `deploy/ansible` installs and updates the portal on it. The
+server is an m7i-flex.large with Ubuntu Pro 24.04, in me-central-1 (UAE), with a fixed public IP. The
+portal answers on plain HTTP at that IP. Run everything from WSL (Ubuntu), which needs:
+`sudo apt install ansible unzip`, [Terraform](https://developer.hashicorp.com/terraform/install), the
+AWS CLI (`aws configure` with a key allowed to manage EC2), and an SSH key (`ssh-keygen -t ed25519`
+if `~/.ssh/id_ed25519` doesn't exist).
+
+What runs on the server is `docker-compose.prod.yml`: Postgres, the backend, and Caddy. Caddy serves
+the built React app and passes `/api` on to the backend. Only ports 22 (from your IP) and 80 are open.
+
+**1. Create the server.** Do this once.
+
+```sh
+cd "/mnt/d/Hopa Work/Automation/portal/deploy/terraform"
+cp terraform.tfvars.example terraform.tfvars   # set ssh_allowed_cidrs to your IP/32
+terraform init
+terraform apply                                # prints public_ip and portal_url
+```
+
+This also writes `deploy/ansible/inventory.ini` with the server's IP. Keep `terraform.tfstate` safe: it
+is not committed, and Terraform needs it to change or destroy the server later.
+
+- **"No Ubuntu Pro image found":** subscribe to "Ubuntu Pro 24.04 LTS" in the AWS Marketplace. Put its
+  AMI id in `ami_id`.
+- **"m7i-flex.large is not supported":** that instance type isn't offered in your account or zone.
+  Set `instance_type`, e.g. `m7i.large`.
+
+**2. Settings and secrets.** Do this once.
+
+```sh
+cd ../ansible
+cp group_vars/all/vault.yml.example group_vars/all/vault.yml
+nano group_vars/all/vault.yml        # Daftra and SMTP values from the workspace .env; two new random secrets
+ansible-vault encrypt group_vars/all/vault.yml
+```
+
+`vault.yml` and `inventory.ini` are gitignored. Keep the vault password somewhere safe (a password
+manager).
+
+**3. Install and start the portal.** Run `site.yml` again after each push to deploy the new version.
+
+```sh
+export ANSIBLE_CONFIG=$PWD/ansible.cfg   # /mnt/d is world-writable, so Ansible won't read it on its own
+ansible-playbook site.yml --ask-vault-pass
+```
+
+`site.yml` does the following:
+- updates Ubuntu and turns on automatic security updates
+- sets the time to Asia/Dubai
+- installs Docker
+- checks out `portal_version` (default `main`) of the GitHub repo into `/opt/portal`, and writes
+  `/opt/portal/.env` from the vault
+- builds and starts the containers. The database migrations run when the backend starts.
+- sets up a nightly backup at 02:30 to `/opt/portal-backups`, kept 14 days:
+  `/usr/local/bin/portal-backup` dumps the database and the uploaded files.
+
+If the repository is private, the server needs read access to it: a deploy key, or an HTTPS token
+in `portal_repo`.
+
+**4. Load the data.** Do this once, on the fresh database.
+
+```sh
+ansible-playbook import.yml --ask-vault-pass -e import_source_dir="/mnt/d/Hopa Work/Automation"
+```
+
+It copies `Proposals/`, `products.json`, `clients.json` and `Maintenance_Invoice_Items.xlsx` to the
+server and runs:
+1. `import_packages_from_proposals`
+2. `import_maintenance_items`
+3. `import_clients`
+4. `create_user` for the first admin. It asks for the admin's name, email and password.
+
+The client categories (التصنيف) are copied from Daftra by the backend itself on its first start.
+
+The first admin login needs a code sent by email, so SMTP must work. Users and their Daftra staff
+links are then set up in الإدارة.
+
+**On the server:** `ssh ubuntu@<ip>`, then `cd /opt/portal` and run any of:
+- `docker compose -f docker-compose.prod.yml logs -f backend` to follow the backend's log
+- `docker compose -f docker-compose.prod.yml ps` to see the containers
+- `docker compose -f docker-compose.prod.yml exec backend python -m app.<command>` for the other
+  commands above
+
+**HTTPS later:** point a domain at the IP. In `frontend/Caddyfile`, replace `:80` with the domain.
+Open port 443 in `main.tf`, add `"443:443"` to the web service (plus a volume for Caddy's `/data`, which keeps the certificate), and set `portal_public_url` to
+`https://<domain>`. Then re-run `terraform apply` and `site.yml`. Caddy gets the certificate itself.

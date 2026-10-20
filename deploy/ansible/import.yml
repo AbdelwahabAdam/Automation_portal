@@ -1,0 +1,79 @@
+# First data load on a fresh server (run once, after site.yml):
+#   ansible-playbook import.yml --ask-vault-pass -e import_source_dir="/mnt/d/Hopa Work/Automation"
+# Copies the source files up and runs, in the backend container:
+#   1. the catalog (packages and products) from the quotation PDFs and Daftra's products.json
+#   2. the maintenance items from Maintenance_Invoice_Items.xlsx (after 1: it resets the catalog)
+#   3. the clients from Daftra's clients.json
+#   4. the first admin user
+# The client categories (التصنيف) need nothing: the portal copies them from Daftra by itself within a
+# few minutes of its first start.
+- name: FutureLife portal — first data load
+  hosts: portal
+  become: true
+  vars:
+    import_dir: "{{ portal_dir }}/imports"
+    compose: docker compose -f docker-compose.prod.yml exec -T backend
+  vars_prompt:
+    - name: admin_username
+      prompt: First admin's username (lowercase letters, digits, . _ -)
+      private: false
+    - name: admin_email
+      prompt: First admin's email (two-step login codes go there)
+      private: false
+    - name: admin_name
+      prompt: First admin's full name
+      private: false
+    - name: admin_password
+      prompt: First admin's password (8 characters or more)
+      private: true
+  pre_tasks:
+    - name: Where the source files are on this computer
+      ansible.builtin.assert:
+        that: import_source_dir is defined
+        fail_msg: 'Pass -e import_source_dir="/path/to/the/workspace/folder" (the folder with Proposals/ and products.json)'
+  tasks:
+    - name: Copy the quotation PDFs
+      ansible.builtin.copy:
+        src: "{{ import_source_dir }}/Proposals/"
+        dest: "{{ import_dir }}/Proposals/"
+        mode: "0644"
+
+    - name: Copy the data files
+      ansible.builtin.copy:
+        src: "{{ import_source_dir }}/{{ item }}"
+        dest: "{{ import_dir }}/{{ item }}"
+        mode: "0644"
+      loop: [products.json, clients.json, Maintenance_Invoice_Items.xlsx]
+
+    - name: Catalog — packages and their products
+      ansible.builtin.command:
+        cmd: "{{ compose }} python -m app.import_packages_from_proposals --proposals-dir /imports/Proposals --products-json /imports/products.json"
+        chdir: "{{ portal_dir }}"
+      register: catalog
+      changed_when: true
+
+    - name: Catalog — maintenance items
+      ansible.builtin.command:
+        cmd: "{{ compose }} python -m app.import_maintenance_items /imports/Maintenance_Invoice_Items.xlsx"
+        chdir: "{{ portal_dir }}"
+      register: maintenance
+      changed_when: true
+
+    - name: Clients
+      ansible.builtin.command:
+        cmd: "{{ compose }} python -m app.import_clients /imports/clients.json"
+        chdir: "{{ portal_dir }}"
+      register: clients
+      changed_when: true
+
+    - name: First admin user
+      ansible.builtin.command:
+        argv: [docker, compose, -f, docker-compose.prod.yml, exec, -T, backend, python, -m, app.create_user,
+               "{{ admin_username }}", "{{ admin_password }}", --admin, --name, "{{ admin_name }}", --email, "{{ admin_email }}"]
+        chdir: "{{ portal_dir }}"
+      no_log: true
+      changed_when: true
+
+    - name: What was imported
+      ansible.builtin.debug:
+        msg: "{{ (catalog.stdout_lines | last) }} | {{ (maintenance.stdout_lines | first) }} | {{ (clients.stdout_lines | last) }}"

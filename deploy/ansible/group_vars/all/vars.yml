@@ -1,0 +1,28 @@
+# Settings for the portal server. Secrets are in vault.yml (copy vault.yml.example, then encrypt it).
+
+portal_repo: https://github.com/AbdelwahabAdam/Automation_portal.git
+# Branch, tag or commit to deploy
+portal_version: main
+portal_dir: /opt/portal
+
+# The address users open the portal at; also used in the links sent by email
+portal_public_url: "http://{{ ansible_host }}"
+portal_timezone: Asia/Dubai
+# Admins log in with a code emailed after the password; needs working email
+portal_require_admin_mfa: true
+
+# Daily database + uploads backups, kept on the server this many days
+portal_backup_dir: /opt/portal-backups
+portal_backup_keep_days: 14
+
+# From the vault
+portal_postgres_password: "{{ vault_postgres_password }}"
+portal_jwt_secret: "{{ vault_jwt_secret }}"
+portal_daftra_subdomain: "{{ vault_daftra_subdomain }}"
+portal_daftra_api_key: "{{ vault_daftra_api_key }}"
+portal_smtp_host: "{{ vault_smtp_host }}"
+portal_smtp_port: "{{ vault_smtp_port }}"
+portal_smtp_user: "{{ vault_smtp_user }}"
+portal_smtp_password: "{{ vault_smtp_password }}"
+portal_smtp_starttls: "{{ vault_smtp_starttls }}"
+portal_mail_from: "{{ vault_mail_from }}"

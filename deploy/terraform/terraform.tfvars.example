@@ -1,0 +1,14 @@
+# Copy to terraform.tfvars (not committed) and adjust.
+
+# Your office's / home public IP, as /32 (find it at https://checkip.amazonaws.com)
+ssh_allowed_cidrs = ["203.0.113.7/32"]
+
+# region           = "me-central-1"
+# instance_type    = "m7i-flex.large"
+# root_volume_size = 40
+# ssh_public_key_path  = "~/.ssh/id_ed25519.pub"
+# ssh_private_key_path = "~/.ssh/id_ed25519"
+
+# Only if the automatic Ubuntu Pro lookup finds nothing in the region: the AMI id of
+# "Ubuntu Pro 24.04 LTS" from the AWS Marketplace (subscribe to it first).
+# ami_id = "ami-0123456789abcdef0"

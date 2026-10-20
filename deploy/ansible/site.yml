@@ -1,0 +1,10 @@
+# Set up the server and deploy (or update) the portal. Run again after every push to deploy it:
+#   ansible-playbook site.yml --ask-vault-pass
+- name: FutureLife portal
+  hosts: portal
+  become: true
+  roles:
+    - base
+    - docker
+    - portal
+    - backups

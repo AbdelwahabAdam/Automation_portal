@@ -1,0 +1,28 @@
+# Production web server (frontend/Dockerfile.prod). Plain HTTP on port 80; to get HTTPS once the portal
+# has a domain, replace ":80" with the domain name and open port 443: Caddy fetches the certificate itself.
+:80 {
+	encode gzip
+
+	# Uploads go up to 20 MB (backend MAX_UPLOAD_BYTES)
+	request_body {
+		max_size 25MB
+	}
+
+	handle /api/* {
+		reverse_proxy backend:8001
+	}
+
+	# The React app: any other path is one of its pages
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+}

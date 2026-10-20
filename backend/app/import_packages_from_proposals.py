@@ -94,6 +94,10 @@ def same_name(name: str) -> str:
     return "".join(name.split()).lower()
 
 
+# PDF item names whose words come out in another order than the Daftra product's name
+DAFTRA_NAME_ALIASES = {"tap 3 water dispenser with ro": "3 tap water dispenser with ro"}
+
+
 def daftra_key(name: str) -> str:
     """Looser than same_name: also drops punctuation, since pdfplumber sometimes reorders a
     name's parentheses around mixed Arabic/English text (e.g. "(20 (AL" for "20 (AL)")."""
@@ -224,7 +228,8 @@ def main():
         for item in items:
             key = same_name(item["name"])
             if key not in products_by_key:
-                match = daftra.get(key) or daftra_loose.get(daftra_key(item["name"]))
+                daftra_name = DAFTRA_NAME_ALIASES.get(item["name"], item["name"])
+                match = daftra.get(same_name(daftra_name)) or daftra_loose.get(daftra_key(daftra_name))
                 products_by_key[key] = {"name": item["name"], "unit_price": item["unit_price"], "daftra": match}
                 if match is None:
                     missing_in_daftra.add(item["name"])

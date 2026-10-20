@@ -5,3 +5,12 @@ node_modules/
 dist/
 uploads/
 db-backup-*.sql
+
+# Deployment: Terraform state and settings, the generated inventory, the Ansible vault, server import files
+deploy/terraform/.terraform/
+deploy/terraform/*.tfstate
+deploy/terraform/*.tfstate.*
+deploy/terraform/terraform.tfvars
+deploy/ansible/inventory.ini
+deploy/ansible/group_vars/all/vault.yml
+imports/

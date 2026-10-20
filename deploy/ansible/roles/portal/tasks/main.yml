@@ -1,0 +1,40 @@
+- name: Get the portal's code
+  ansible.builtin.git:
+    repo: "{{ portal_repo }}"
+    dest: "{{ portal_dir }}"
+    version: "{{ portal_version }}"
+    # Only tracked files are reset; .env and imports/ (not in git) are kept
+    force: true
+  register: portal_code
+
+- name: Write the portal's settings
+  ansible.builtin.template:
+    src: env.j2
+    dest: "{{ portal_dir }}/.env"
+    mode: "0600"
+  register: portal_env
+
+- name: Folder for the files the import commands read
+  ansible.builtin.file:
+    path: "{{ portal_dir }}/imports"
+    state: directory
+    mode: "0755"
+
+- name: Build and start the portal (database, backend, web server)
+  ansible.builtin.command:
+    cmd: docker compose -f docker-compose.prod.yml up -d --build --remove-orphans
+    chdir: "{{ portal_dir }}"
+  changed_when: portal_code.changed or portal_env.changed
+
+- name: Wait until the portal answers
+  ansible.builtin.uri:
+    url: http://127.0.0.1/api/auth/me
+    status_code: 401
+  register: portal_up
+  retries: 30
+  delay: 5
+  until: portal_up.status == 401
+
+- name: Remove unused Docker images left by earlier deploys
+  ansible.builtin.command: docker image prune -f
+  changed_when: false

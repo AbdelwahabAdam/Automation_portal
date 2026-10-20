@@ -1,0 +1,13 @@
+#!/bin/sh
+# Nightly backup of the portal (written by Ansible): the database and the uploaded files, kept
+# {{ portal_backup_keep_days }} days in {{ portal_backup_dir }}. Restore the database with:
+#   gunzip -c db-<date>.sql.gz | docker compose -f docker-compose.prod.yml exec -T db psql -U portal portal
+set -eu
+cd {{ portal_dir }}
+stamp=$(date +%Y-%m-%d_%H%M)
+docker compose -f docker-compose.prod.yml exec -T db pg_dump -U portal --clean --if-exists portal \
+  | gzip > {{ portal_backup_dir }}/db-$stamp.sql.gz
+docker compose -f docker-compose.prod.yml exec -T backend tar -C /app -czf - uploads \
+  > {{ portal_backup_dir }}/uploads-$stamp.tar.gz
+find {{ portal_backup_dir }} -type f -mtime +{{ portal_backup_keep_days }} -delete
+echo "$(date) backup $stamp done"

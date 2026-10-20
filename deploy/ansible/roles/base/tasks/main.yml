@@ -1,0 +1,32 @@
+- name: Wait for the new server to finish booting
+  ansible.builtin.wait_for_connection:
+    timeout: 300
+
+- name: Bring the system up to date
+  ansible.builtin.apt:
+    update_cache: true
+    upgrade: safe
+    cache_valid_time: 3600
+
+- name: Install what the deployment needs
+  ansible.builtin.apt:
+    name: [ca-certificates, curl, git, gnupg, unattended-upgrades]
+    state: present
+
+- name: Install security updates automatically
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    mode: "0644"
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+
+- name: Read the server's time zone
+  ansible.builtin.command: timedatectl show --property=Timezone --value
+  register: current_timezone
+  changed_when: false
+
+- name: Use UAE time (backup times, logs)
+  ansible.builtin.command: timedatectl set-timezone {{ portal_timezone }}
+  when: current_timezone.stdout != portal_timezone
+  changed_when: true

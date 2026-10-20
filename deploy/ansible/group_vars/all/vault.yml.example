@@ -1,0 +1,17 @@
+# Copy to vault.yml (never committed), fill in, then encrypt:
+#   ansible-vault encrypt group_vars/all/vault.yml
+# Values for Daftra and SMTP are the ones in the workspace .env (subdomain, apikey, SMTP_*, MAIL_FROM).
+
+# Make both long and random, e.g.: python3 -c "import secrets; print(secrets.token_urlsafe(48))"
+vault_postgres_password: ""
+vault_jwt_secret: ""
+
+vault_daftra_subdomain: "futurelifehome"
+vault_daftra_api_key: ""
+
+vault_smtp_host: ""
+vault_smtp_port: 587
+vault_smtp_user: ""
+vault_smtp_password: ""
+vault_smtp_starttls: true
+vault_mail_from: "FutureLife Portal <no-reply@example.com>"

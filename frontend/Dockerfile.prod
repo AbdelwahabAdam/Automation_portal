@@ -1,0 +1,11 @@
+# The built site, served by Caddy, which also passes /api on to the backend (docker-compose.prod.yml)
+FROM node:20-slim AS build
+WORKDIR /app
+COPY package.json package-lock.json* .npmrc* ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+FROM caddy:2.8-alpine
+COPY Caddyfile /etc/caddy/Caddyfile
+COPY --from=build /app/dist /srv
