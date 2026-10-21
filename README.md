@@ -298,6 +298,9 @@ ansible-playbook site.yml --ask-vault-pass
 - builds and starts the containers. The database migrations run when the backend starts.
 - sets up a nightly backup at 02:30 to `/opt/portal-backups`, kept 14 days:
   `/usr/local/bin/portal-backup` dumps the database and the uploaded files.
+- sets up a daily client sync at 23:55: `app.import_clients` (no path given, so it fetches live
+  from Daftra, not the one-off export) rebuilds the local clients/addresses tables, picking up
+  anyone added or changed in Daftra that day. Logged to `/var/log/portal-client-sync.log`.
 
 If the repository is private, the server needs read access to it: a deploy key, or an HTTPS token
 in `portal_repo`.

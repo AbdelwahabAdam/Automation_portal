@@ -1,29 +1,31 @@
-"""Load clients.json (a Daftra client export) into the local clients and addresses tables.
+"""Rebuild the local clients and addresses tables from Daftra.
 
-Usage: python -m app.import_clients [path-to-clients.json]
+Usage: python -m app.import_clients [path-to-a-client-export.json]
+
+With no argument, fetches every client live from Daftra (app.daftra.list_clients) — this is
+what the nightly cron job runs. With a path, reads a Daftra client export instead (the shape
+GET /clients.json returns, saved to a file), for offline use or a one-off re-import.
 
 Only clients with a phone number are kept, since phone is how the sales forms look one up.
 Each entry in Daftra's own "addresses" list for a client becomes one row in addresses (most
 clients have one; some have several), with the one matching Daftra's "default_address" marked
 is_default and given the client's Google Maps "link" (Daftra keeps one link per client, not
-per address). Safe to run again: both tables are emptied and rebuilt from the file each time,
-matched by Daftra's own client id — this is a straight reflection of the export, not a merge.
+per address). Safe to run again: both tables are emptied and rebuilt each time, matched by
+Daftra's own client id — this is a straight reflection of Daftra, not a merge.
 """
 
 import argparse
 import json
 
+from . import daftra
 from .daftra import address_from_daftra, local_phone
 from .database import SessionLocal, run_migrations
 from .models import Address, Client
 
 
-def client_rows(path: str) -> tuple[list[dict], int]:
-    with open(path, encoding="utf-8-sig") as f:
-        raw = json.load(f)["data"]
+def client_rows(raw_clients: list[dict]) -> list[dict]:
     rows = []
-    for entry in raw:
-        c = entry["Client"]
+    for c in raw_clients:
         phone, phone2 = local_phone(c.get("phone1")), local_phone(c.get("phone2"))
         if not phone:
             phone, phone2 = phone2, ""
@@ -46,15 +48,21 @@ def client_rows(path: str) -> tuple[list[dict], int]:
             "phone": phone, "phone2": phone2, "email": (c.get("email") or "").strip(),
             "is_active": c.get("suspend") != "1", "addresses": addresses,
         })
-    return rows, len(raw)
+    return rows
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("clients_json", nargs="?", default="../../clients.json")
+    parser.add_argument("clients_json", nargs="?", help="a saved Daftra client export; omit to fetch live from Daftra")
     args = parser.parse_args()
 
-    rows, total = client_rows(args.clients_json)
+    if args.clients_json:
+        with open(args.clients_json, encoding="utf-8-sig") as f:
+            raw_clients = [entry["Client"] for entry in json.load(f)["data"]]
+    else:
+        raw_clients = daftra.list_clients()
+
+    rows = client_rows(raw_clients)
     run_migrations()
     with SessionLocal() as db:
         db.query(Address).delete()
@@ -62,7 +70,7 @@ def main():
         db.add_all(Client(**row) for row in rows)
         db.commit()
     n_addresses = sum(len(row["addresses"]) for row in rows)
-    print(f"{len(rows)} of {total} clients kept (had a phone number) and loaded, with {n_addresses} addresses")
+    print(f"{len(rows)} of {len(raw_clients)} clients kept (had a phone number) and loaded, with {n_addresses} addresses")
 
 
 if __name__ == "__main__":

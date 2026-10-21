@@ -235,6 +235,11 @@ def list_staff() -> list[str]:
     return sorted({member["name"] for member in list_staff_members()})
 
 
+def list_clients() -> list[dict]:
+    """Every Daftra client, raw, for the nightly job that rebuilds our local copy (app.import_clients)."""
+    return _all("clients", "Client")
+
+
 def list_treasuries() -> list[dict]:
     """Active treasuries and bank accounts a payment can be received into."""
     def load():

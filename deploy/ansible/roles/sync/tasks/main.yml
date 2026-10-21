@@ -1,0 +1,9 @@
+- name: Fetch new Daftra clients every day at the end of the day
+  ansible.builtin.cron:
+    name: daftra client sync
+    minute: "55"
+    hour: "23"
+    job: >-
+      cd {{ portal_dir }} &&
+      docker compose -f docker-compose.prod.yml exec -T backend python -m app.import_clients
+      >> /var/log/portal-client-sync.log 2>&1

@@ -10,3 +10,4 @@
     - {role: portal, tags: portal}
     - {role: pipeline, tags: pipeline}
     - {role: backups, tags: backups}
+    - {role: sync, tags: sync}
