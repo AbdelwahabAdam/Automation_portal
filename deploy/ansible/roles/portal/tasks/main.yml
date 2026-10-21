@@ -35,6 +35,6 @@
   delay: 5
   until: portal_up.status == 401
 
-- name: Remove unused Docker images left by earlier deploys
-  ansible.builtin.command: docker image prune -f
+- name: Remove unused Docker images and the build cache left by earlier deploys (the disk is small)
+  ansible.builtin.shell: docker image prune -f && docker builder prune -af
   changed_when: false
