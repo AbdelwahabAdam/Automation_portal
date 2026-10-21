@@ -5,6 +5,7 @@ import { api, getToken, setToken } from './api.js';
 import { BRAND, LOGO_MARK } from './brand.js';
 import { Button, Icon, Loading, Menu } from './ds/index.jsx';
 import Login from './Login.jsx';
+import { useKeyboardOpen } from './hooks.js';
 import { PAGE_COMPONENTS, PAGE_ICONS } from './pages.jsx';
 import { pagePath } from './paths.js';
 import { useSalesData } from './salesData.js';
@@ -48,6 +49,8 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(Boolean(getToken()));
   const [moreOpen, setMoreOpen] = useState(false);
+  // While the phone's keyboard is open, the bars at the bottom get out of its way
+  useKeyboardOpen();
   const location = useLocation();
   const navigate = useNavigate();
   // Shown on the login screen, e.g. after setting a password

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { formatAmount, formatDay, localDay, matchesQuery, normalize } from '../src/formsMeta.js';
 import {
-  evaluateForm, groupLines, initialValues, linePrice, normalizePhone, packageColors, packageQuantity, today,
+  coordinatesFromLink, evaluateForm, groupLines, initialValues, linePrice, normalizePhone, packageColors, packageQuantity, today,
 } from '../src/validation.js';
 
 const families = [
@@ -128,4 +128,12 @@ test('amounts and dates are written the way the portal reads them', () => {
   assert.equal(formatDay('2026-10-21'), '21/10/2026');
   assert.equal(formatDay(''), '');
   assert.equal(formatDay('soon'), '');
+});
+
+test('coordinates are read out of a map link', () => {
+  assert.equal(coordinatesFromLink('https://maps.google.com/?q=24.17870,55.60451'), '24.17870, 55.60451');
+  assert.equal(coordinatesFromLink('https://www.google.com/maps/@25.2048,55.2708,15z'), '25.2048, 55.2708');
+  assert.equal(coordinatesFromLink('https://maps.app.goo.gl/T3hGmfZLFvtmhrdT9'), '');
+  assert.equal(coordinatesFromLink(''), '');
+  assert.equal(coordinatesFromLink(null), '');
 });

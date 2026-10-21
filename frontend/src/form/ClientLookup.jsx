@@ -3,11 +3,15 @@
 import { useRef, useState } from 'react';
 import { api } from '../api.js';
 import { Alert, Button, Select } from '../ds/index.jsx';
-import { normalizePhone } from '../validation.js';
+import { coordinatesFromLink, normalizePhone } from '../validation.js';
 
 // Form fields that an existing Daftra client can fill
 const CLIENT_FIELDS = ['client_code', 'customer_name', 'phone', 'emirate', 'area', 'street', 'house', 'location_url'];
 const ADDRESS_FIELDS = ['emirate', 'area', 'street', 'house', 'location_url'];
+// Belongs to the address as much as the fields above: the coordinates come from its link, and
+// التصنيف decides its المنطقة and الإمارة. A new address starts without any of them.
+const ADDRESS_ALSO = ['coordinates', 'category', 'category_name'];
+const BLANK_ADDRESS = Object.fromEntries([...ADDRESS_FIELDS, ...ADDRESS_ALSO].map((name) => [name, '']));
 // The fields a client is looked up by
 export const SEARCH_FIELDS = ['phone', 'client_code'];
 
@@ -24,6 +28,9 @@ export function useClientLookup(form) {
   // The found client as Daftra has them now: { status: 'loading' | 'ready' | 'error', category, open_invoices }
   const [clientInfo, setClientInfo] = useState(null);
   const lastLookup = useRef('');
+  // Set while a new address is being typed, so the client's category from Daftra — which may
+  // arrive after the user has already asked for a new address — does not fill it back in
+  const typingNewAddress = useRef(false);
 
   async function loadClientInfo(daftraId) {
     setClientInfo({ status: 'loading' });
@@ -32,8 +39,8 @@ export function useClientLookup(form) {
       setClientInfo({ status: 'ready', ...info });
       form.setValues((current) => {
         const next = { ...current };
-        // Their current التصنيف, unless one was already picked
-        if (form.fieldNames.has('category') && info.category && !current.category) {
+        // Their current التصنيف, unless one was already picked or a new address is being typed
+        if (form.fieldNames.has('category') && info.category && !current.category && !typingNewAddress.current) {
           next.category = String(info.category.id);
           next.category_name = info.category.name;
         }
@@ -67,6 +74,7 @@ export function useClientLookup(form) {
     });
     form.setErrors((current) => Object.fromEntries(Object.entries(current).filter(([name]) => !CLIENT_FIELDS.includes(name))));
     setLookup({ field, status: 'found', client });
+    typingNewAddress.current = false;
     if (form.needsClientInfo) loadClientInfo(client.daftra_id);
     const last = client.addresses?.[client.addresses.length - 1];
     setAddressChoice(last ? String(last.id) : null);
@@ -75,12 +83,19 @@ export function useClientLookup(form) {
   // Switches the address fields to one of the client's saved addresses, or clears them to type a new one
   function chooseAddress(choice) {
     setAddressChoice(choice);
+    typingNewAddress.current = choice === 'new';
     if (choice === 'new') {
-      form.setValues((current) => ({ ...current, ...Object.fromEntries(ADDRESS_FIELDS.map((f) => [f, ''])) }));
+      form.setValues((current) => ({ ...current, ...BLANK_ADDRESS }));
       return;
     }
     const address = lookup.client.addresses.find((a) => String(a.id) === choice);
-    if (address) form.setValues((current) => ({ ...current, ...Object.fromEntries(ADDRESS_FIELDS.map((f) => [f, address[f]])) }));
+    if (!address) return;
+    form.setValues((current) => ({
+      ...current,
+      ...Object.fromEntries(ADDRESS_FIELDS.map((name) => [name, address[name] ?? ''])),
+      // The coordinates of the address being left do not belong to this one
+      coordinates: coordinatesFromLink(address.location_url),
+    }));
   }
 
   async function saveNewAddress(values) {

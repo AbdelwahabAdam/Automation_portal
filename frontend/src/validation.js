@@ -87,6 +87,15 @@ export function linePrice(line, priceById) {
   return typeof line.unit_price === 'number' ? line.unit_price : priceById.get(Number(line.product_id)) || 0;
 }
 
+// A Google Maps link that carries the coordinates ("…@24.17870,55.60451…", "?q=24.17870,55.60451");
+// '' when it has none
+const COORDINATES_IN_LINK = /(-?\d{1,2}\.\d{3,})\s*,\s*(-?\d{1,3}\.\d{3,})/;
+
+export function coordinatesFromLink(url) {
+  const found = String(url ?? '').match(COORDINATES_IN_LINK);
+  return found ? `${found[1]}, ${found[2]}` : '';
+}
+
 // Lines from the same package pick stay together as one group, in the order first added; a product
 // picked on its own is a group of its own. Each group: { key, groupName (null for a product), rows: [{ line, index }] }
 export function groupLines(lines) {

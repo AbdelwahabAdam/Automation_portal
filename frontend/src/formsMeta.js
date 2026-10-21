@@ -23,27 +23,8 @@ export const FORM_META = {
 
 export const formMeta = (key) => FORM_META[key] || { icon: 'file', desc: '' };
 
-// Search that forgives Arabic spelling variants: diacritics, tatweel, alef forms, ى/ي, ة/ه, punctuation
-export function normalize(text) {
-  return String(text ?? '')
-    .toLowerCase()
-    .replace(/[ً-ٰٟـ]/g, '')
-    .replace(/[أإآٱ]/g, 'ا')
-    .replace(/ى/g, 'ي')
-    .replace(/ة/g, 'ه')
-    .replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d))
-    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-// Every word of the query appears somewhere in the texts
-export function matchesQuery(query, ...texts) {
-  const words = normalize(query).split(' ').filter(Boolean);
-  if (!words.length) return true;
-  const haystack = normalize(texts.join(' '));
-  return words.every((word) => haystack.includes(word));
-}
+// Searching text (the same matcher the dropdowns use)
+export { matchesQuery, normalize } from './ds/match.js';
 
 // The day an ISO time falls on here (2026-10-21), for comparing with a date picker's value
 export function localDay(iso) {

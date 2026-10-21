@@ -95,8 +95,6 @@ button, input, select, textarea { font-family: inherit; }
 .fl-input[dir="ltr"] { text-align: end; }
 .fl-input[type="search"]::-webkit-search-cancel-button { display: none; }
 .fl-textarea { padding-block: 10px; line-height: 1.55; resize: vertical; min-block-size: 88px; }
-.fl-select { appearance: none; padding-inline-end: 44px; cursor: pointer; }
-.fl-select:disabled { cursor: not-allowed; color: var(--fl-color-text-disabled); }
 input.fl-input[type="date"] { min-block-size: calc(var(--fl-field-height) - 2px); }
 
 /* Option cards (radio / checkbox) */
@@ -351,9 +349,6 @@ input.fl-input[type="date"] { min-block-size: calc(var(--fl-field-height) - 2px)
 .fl-suggest__item { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; inline-size: 100%; padding: var(--fl-space-3) var(--fl-space-4); border: 0; border-radius: var(--fl-radius-md); background: transparent; text-align: start; font: inherit; cursor: pointer; }
 .fl-suggest__item:hover { background: var(--fl-color-background-hover); }
 .fl-suggest__item--active { background: var(--fl-color-background-hover); outline: 2px solid var(--fl-color-focus-ring); outline-offset: -2px; }
-/* A drop-down with a tick box per option */
-.fl-multiselect__button { background: none; border: 0; cursor: pointer; text-align: start; min-block-size: 2.5rem; }
-.fl-multiselect__option { flex-direction: row; align-items: center; gap: var(--fl-space-3); }
 .fl-suggest__item small { font-size: var(--fl-type-caption-size); color: var(--fl-color-text-secondary); }
 .fl-suggest__empty { margin: 0; padding: var(--fl-space-3) var(--fl-space-4); color: var(--fl-color-text-secondary); }
 
@@ -622,3 +617,30 @@ ul.fl-catalog, ul.fl-cards { list-style: none; margin: 0; padding: 0; }
 .fl-camera { display: flex; align-items: center; justify-content: center; gap: var(--fl-space-3); flex: 0 1 auto; min-block-size: 56px; padding-inline: var(--fl-space-5); border: var(--fl-border-width-default) solid var(--fl-color-border-control); border-radius: var(--fl-radius-md); background: var(--fl-color-background-surface); color: var(--fl-color-text-link); font-weight: var(--fl-font-weight-semibold); cursor: pointer; }
 .fl-camera:hover { background: var(--fl-color-background-hover); }
 .fl-camera--busy { color: var(--fl-color-text-secondary); cursor: progress; }
+
+/* While the phone's keyboard is open: the bars at the bottom step out of its way, so what is being
+   typed into stays visible and nothing floats over the keys. They come back when it closes. */
+body.fl-keyboard .fl-bottomnav { display: none; }
+body.fl-keyboard .fl-actionbar { position: static; box-shadow: none; }
+body.fl-keyboard .fl-toasts { inset-block-end: var(--fl-space-4); }
+@media (max-width: 1023px) {
+  /* No room kept for a bottom bar that is not there */
+  body.fl-keyboard .fl-content { padding-block-end: var(--fl-space-6); }
+}
+
+/* A drop-down that can be searched (replaces the browser's own list) */
+.fl-select-wrap { position: relative; inline-size: 100%; }
+.fl-pick { display: flex; align-items: center; justify-content: space-between; gap: var(--fl-space-3); inline-size: 100%; min-block-size: var(--fl-field-height); padding-inline: 0; border: 0; background: none; color: inherit; font: inherit; font-size: var(--fl-type-input-size); text-align: start; cursor: pointer; }
+.fl-pick:disabled { cursor: not-allowed; color: var(--fl-color-text-disabled); }
+.fl-pick__value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fl-pick__empty { color: var(--fl-color-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fl-picklist { position: absolute; z-index: var(--fl-z-dropdown); inset-inline: 0; inset-block-start: calc(100% + 4px); display: flex; flex-direction: column; max-block-size: 320px; background: var(--fl-color-background-surface); border: var(--fl-border-width-default) solid var(--fl-color-border-default); border-radius: var(--fl-radius-lg); box-shadow: var(--fl-elevation-2); overflow: hidden; }
+.fl-picklist__search { display: flex; align-items: center; gap: var(--fl-space-3); padding: var(--fl-space-3) var(--fl-space-4); border-block-end: var(--fl-border-width-default) solid var(--fl-color-border-subtle); color: var(--fl-color-icon-default); }
+.fl-picklist__input { flex: 1 1 auto; min-inline-size: 0; border: 0; background: none; color: inherit; font: inherit; font-size: var(--fl-type-input-size); }
+.fl-picklist__input:focus { outline: none; }
+.fl-picklist__options { overflow-y: auto; padding: var(--fl-space-2); }
+.fl-picklist__option { display: flex; align-items: center; justify-content: space-between; gap: var(--fl-space-3); inline-size: 100%; min-block-size: var(--fl-touch-target); padding: var(--fl-space-2) var(--fl-space-4); border: 0; border-radius: var(--fl-radius-md); background: transparent; color: inherit; font: inherit; font-size: var(--fl-type-body-size); text-align: start; cursor: pointer; }
+.fl-picklist__option--active { background: var(--fl-color-background-hover); }
+.fl-picklist__option--on { color: var(--fl-color-text-selected); font-weight: var(--fl-font-weight-semibold); }
+.fl-picklist__option:disabled { color: var(--fl-color-text-disabled); cursor: not-allowed; }
+.fl-picklist__empty { margin: 0; padding: var(--fl-space-4); color: var(--fl-color-text-secondary); font-size: var(--fl-type-body-sm-size); }

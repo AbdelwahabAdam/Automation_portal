@@ -8,7 +8,8 @@ const problems = [];
 const log = (...args) => console.log(...args);
 
 async function newPage(browser, viewport) {
-  const context = await browser.newContext({ viewport, locale: 'ar-AE', timezoneId: 'Asia/Dubai' });
+  const touch = viewport.width < 900;
+  const context = await browser.newContext({ viewport, locale: 'ar-AE', timezoneId: 'Asia/Dubai', hasTouch: touch, isMobile: touch });
   // Only the app's own page: the mail preview is a sandboxed frame without storage
   await context.addInitScript((token) => { if (window === window.top) localStorage.setItem('portal_token', token); }, TOKEN);
   const page = await context.newPage();
@@ -48,16 +49,56 @@ async function salesForm(page, prefix) {
 
   // Client lookup by phone
   if (PHONE) {
+    // Pressing Enter searches; the magnifier is not the only way
     await page.locator('#phone').fill(PHONE);
-    await page.locator('#phone').blur();
-    await expectText(page, 'عميل مسجل', 'client lookup result');
+    await page.locator('#phone').press('Enter');
+    await expectText(page, 'عميل مسجل', 'client lookup after pressing Enter');
   }
-  // Category picks the area and emirate
+  // التصنيف is a long list, so its drop-down opens with a search box; picking one fills المنطقة and الإمارة
   const category = page.locator('#category');
   if (await category.count()) {
-    const options = await category.locator('option').all();
-    const withArea = options.length > 5 ? 5 : options.length - 1;
-    if (withArea > 0) await category.selectOption({ index: withArea });
+    await category.click();
+    const box = page.locator('.fl-picklist__input');
+    if (!(await box.count())) problems.push('[dropdown] التصنيف has no search box');
+    else {
+      await box.fill('العين');
+      await page.waitForTimeout(400);
+      await shot(page, `${prefix}-dropdown`, false);
+      const matches = page.locator('.fl-picklist__option');
+      const found = await matches.count();
+      const first = (await matches.first().textContent()) || '';
+      if (!found || !first.includes('العين')) problems.push(`[dropdown] searching «العين» gave ${found} rows, first «${first}»`);
+      else {
+        await matches.first().click();
+        await page.waitForTimeout(400);
+        const picked = (await category.textContent()) || '';
+        if (!picked.includes('العين')) problems.push(`[dropdown] after picking, التصنيف reads «${picked}»`);
+        const area = (await page.locator('#area').textContent()) || '';
+        if (!area.trim() || area.includes('بدون تحديد')) problems.push('[dropdown] picking a category did not fill المنطقة');
+        log(`${prefix} category search: ${found} match(es), picked «${first.trim()}», area «${area.trim()}»`);
+      }
+    }
+  }
+  // Asking for a new address empties the whole service address, التصنيف and the coordinates included
+  const addressPick = page.locator('.fl-lookup__actions .fl-pick').first();
+  if (await addressPick.count()) {
+    await page.locator('#coordinates').fill('24.1787, 55.6045');
+    await addressPick.click();
+    const newAddress = page.getByRole('option', { name: /عنوان جديد/ });
+    if (!(await newAddress.count())) problems.push('[address] «عنوان جديد» is not offered');
+    else {
+      await newAddress.first().click();
+      await page.waitForTimeout(400);
+      const category = ((await page.locator('#category').textContent()) || '').trim();
+      const area = ((await page.locator('#area').textContent()) || '').trim();
+      const street = await page.locator('#street').inputValue();
+      const coordinates = await page.locator('#coordinates').inputValue();
+      log(`${prefix} new address: category «${category}», area «${area}», street «${street}», coordinates «${coordinates}»`);
+      if (!category.includes('اختر')) problems.push(`[address] التصنيف kept «${category}»`);
+      if (!area.includes('بدون تحديد')) problems.push(`[address] المنطقة kept «${area}»`);
+      if (street) problems.push(`[address] الشارع kept «${street}»`);
+      if (coordinates) problems.push(`[address] الإحداثيات kept «${coordinates}»`);
+    }
   }
   await page.evaluate(() => window.scrollTo(0, 0));
   await shot(page, `${prefix}-form-top`, false);
@@ -90,6 +131,7 @@ async function salesForm(page, prefix) {
   await expectText(page, 'لديك تغييرات غير محفوظة', 'unsaved changes dialog on back');
   await shot(page, `${prefix}-form-leave`, false);
   await page.getByRole('button', { name: 'البقاء في النموذج' }).click();
+  await keyboardRoom(page, prefix);
 }
 
 // Every field each visible form defines is on the screen
@@ -109,6 +151,48 @@ async function everyField(page, prefix) {
     // Leave without saving (the form asks first, since nothing was typed it should not)
     await page.getByRole('button', { name: 'رجوع' }).first().click();
   }
+}
+
+// While the phone's keyboard is open, nothing may float over it
+async function keyboardRoom(page, prefix) {
+  await page.evaluate(() => document.body.classList.add('fl-keyboard'));
+  await page.waitForTimeout(200);
+  const bottomNav = await page.locator('.fl-bottomnav').isVisible().catch(() => false);
+  const barPosition = await page.locator('.fl-actionbar').evaluate((el) => getComputedStyle(el).position).catch(() => 'none');
+  if (bottomNav) problems.push(`[keyboard] ${prefix}: the bottom bar still shows over the keyboard`);
+  if (barPosition === 'sticky') problems.push(`[keyboard] ${prefix}: the action bar is still stuck over the keyboard`);
+  log(`${prefix} with the keyboard open: bottom bar ${bottomNav ? 'VISIBLE' : 'hidden'}, action bar ${barPosition}`);
+  await shot(page, `${prefix}-keyboard`, false);
+  await page.evaluate(() => document.body.classList.remove('fl-keyboard'));
+}
+
+// نوع الجهاز is picked the same way products are: search, add, and a row per pick
+async function devicePicker(page, prefix) {
+  await page.goto(`${BASE}/sales/new_request`);
+  await page.getByText('طلب صيانة وتبديل').first().click();
+  await expectText(page, 'تفاصيل الطلب', 'maintenance form');
+  const box = page.locator('#devices');
+  await box.click();
+  await box.fill('سقيا');
+  await page.waitForTimeout(400);
+  const matches = page.locator('.fl-suggest__item');
+  const found = await matches.count();
+  if (!found) { problems.push('[devices] searching «سقيا» found nothing'); return; }
+  await matches.first().click();
+  await page.waitForTimeout(300);
+  // A second one, to be sure the list stays open for more
+  await box.fill('فلتر');
+  await page.waitForTimeout(400);
+  if (await page.locator('.fl-suggest__item').count()) await page.locator('.fl-suggest__item').first().click();
+  await page.waitForTimeout(300);
+  const rows = await page.locator('#field-devices .fl-order-lines__row').count();
+  log(`${prefix} devices: ${found} match(es) for «سقيا», ${rows} picked`);
+  if (rows !== 2) problems.push(`[devices] expected 2 rows after two picks, found ${rows}`);
+  await shot(page, `${prefix}-devices`, false);
+  // Removing one takes its row away
+  await page.locator('#field-devices .fl-order-lines__row button').first().click();
+  await page.waitForTimeout(300);
+  if (await page.locator('#field-devices .fl-order-lines__row').count() !== 1) problems.push('[devices] removing a device did not take its row away');
 }
 
 async function pages(page, prefix) {
@@ -160,6 +244,7 @@ try {
   for (const [prefix, viewport] of [['desktop', { width: 1440, height: 900 }], ['phone', { width: 390, height: 844 }]]) {
     const page = await newPage(browser, viewport);
     await salesForm(page, prefix);
+    await devicePicker(page, prefix);
     await everyField(page, prefix);
     await pages(page, prefix);
     await page.context().close();

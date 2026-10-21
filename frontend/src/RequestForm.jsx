@@ -8,15 +8,12 @@ import { Control, DaftraListSelect, FileField, ProductPicker, guessFromProductNa
 import FormProgress, { Totals, formTotals } from './form/FormProgress.jsx';
 import OrderLines from './form/OrderLines.jsx';
 import { formatAmount, formatDay } from './formsMeta.js';
-import { DAFTRA_LIST_TYPES, allFields, evaluateForm, initialValues } from './validation.js';
+import { DAFTRA_LIST_TYPES, allFields, coordinatesFromLink, evaluateForm, initialValues } from './validation.js';
 
 // Sections open when a form starts; the rest are folded until needed
 const OPEN_AT_START = 4;
 // Field types that take a whole row of the form's grid
 const WIDE_TYPES = ['textarea', 'files', 'multiselect', 'order_lines'];
-// A Google Maps link that carries the coordinates ("…@24.17870,55.60451…", "?q=24.17870,55.60451")
-const COORDINATES_IN_LINK = /(-?\d{1,2}\.\d{3,})\s*,\s*(-?\d{1,3}\.\d{3,})/;
-
 const hasValue = (value) => value != null && value !== '' && !(Array.isArray(value) && !value.length);
 const without = (errors, ...names) => Object.fromEntries(Object.entries(errors).filter(([name]) => !names.includes(name)));
 
@@ -146,8 +143,8 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
       const next = { ...current, [name]: value };
       for (const spec of fields) {
         if (spec.coordinates_from === name) {
-          const found = String(value ?? '').match(COORDINATES_IN_LINK);
-          if (found) autoFill(current, next, spec.name, `${found[1]}, ${found[2]}`);
+          const found = coordinatesFromLink(value);
+          if (found) autoFill(current, next, spec.name, found);
         }
         // A field whose usual value follows this one (e.g. the treasury of a payment method) is filled in,
         // unless the user has already picked something else

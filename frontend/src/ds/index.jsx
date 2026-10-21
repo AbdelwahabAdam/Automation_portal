@@ -1,6 +1,7 @@
 // React versions of the Future Life design system components (Design/portal/Fl*.dc.html).
 // Styling lives in ds.css and uses the tokens in tokens.css only.
-import { createContext, useCallback, useContext, useEffect, useId, useRef, useState } from 'react';
+import { Children, createContext, isValidElement, useCallback, useContext, useEffect, useId, useRef, useState } from 'react';
+import { matchesQuery } from './match.js';
 import Icon from './Icon.jsx';
 
 export { Icon };
@@ -193,14 +194,130 @@ export function Combobox({
   );
 }
 
-// ---------- Select (FlSelect): native select styled as a field ----------
+// ---------- Select (FlSelect): a drop-down that can be searched ----------
 
-export function Select({ invalid, children, className, ...rest }) {
+// A list longer than this gets a search box; a short one is quicker to read than to type into
+const SEARCH_FROM = 7;
+
+// The text of an <option>, whatever it is written as ({name}, "a — b", a number)
+function optionText(node) {
+  if (node == null || node === false) return '';
+  if (Array.isArray(node)) return node.map(optionText).join('');
+  if (typeof node === 'object') return optionText(node.props?.children);
+  return String(node);
+}
+
+// The <option> children as plain data; an option with an empty value is the "nothing chosen" line
+function readOptions(children) {
+  return Children.toArray(children)
+    .filter((child) => isValidElement(child) && child.type === 'option')
+    .map((child) => {
+      const label = optionText(child.props.children);
+      return { value: child.props.value ?? label, label, disabled: Boolean(child.props.disabled) };
+    });
+}
+
+// Takes the same props as a plain <select>: value, onChange (e.target.value), disabled, and
+// <option> children. Opens a list that can be searched, instead of the browser's own drop-down.
+export function Select({ invalid, children, className, value, onChange, disabled, id, ...rest }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [active, setActive] = useState(-1);
+  const root = useRef(null);
+  const search = useRef(null);
+  const listId = useId();
+
+  const options = readOptions(children);
+  const chosen = options.find((option) => String(option.value) === String(value ?? ''));
+  const placeholder = options.find((option) => String(option.value) === '');
+  const shown = query ? options.filter((option) => matchesQuery(query, option.label)) : options;
+  const withSearch = options.length > SEARCH_FROM;
+
+  useEffect(() => {
+    if (!open) return undefined;
+    setQuery('');
+    setActive(shown.findIndex((option) => option === chosen));
+    search.current?.focus();
+    const close = (e) => { if (!root.current?.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (open && active >= 0) document.getElementById(`${listId}-${active}`)?.scrollIntoView({ block: 'nearest' });
+  }, [open, active, listId]);
+
+  function pick(option) {
+    if (option.disabled) return;
+    onChange?.({ target: { value: String(option.value) } });
+    setOpen(false);
+    root.current?.querySelector('.fl-pick')?.focus();
+  }
+
+  function onKeyDown(e) {
+    if (disabled) return;
+    if (e.key === 'Escape' && open) {
+      e.preventDefault();
+      // Closes the list only: a drawer or dialog behind it stays open
+      e.stopPropagation();
+      setOpen(false);
+      root.current?.querySelector('.fl-pick')?.focus();
+    } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (!open) return setOpen(true);
+      if (shown.length) setActive((current) => (current + (e.key === 'ArrowDown' ? 1 : shown.length - 1) + shown.length) % shown.length);
+    } else if ((e.key === 'Enter' || e.key === ' ') && !open) {
+      e.preventDefault();
+      setOpen(true);
+    } else if (e.key === 'Enter' && open) {
+      e.preventDefault();
+      if (shown[active]) pick(shown[active]);
+    }
+  }
+
   return (
-    <InputBox invalid={invalid} disabled={rest.disabled} className={cx('fl-box--select', className)}
-      end={<span className="fl-box__chevron" aria-hidden="true"><Icon name="chevron-down" size={18} /></span>}>
-      <select className="fl-input fl-select" aria-invalid={invalid || undefined} {...rest}>{children}</select>
-    </InputBox>
+    <div className={cx('fl-select-wrap', className)} ref={root} onKeyDown={onKeyDown}>
+      <InputBox invalid={invalid} disabled={disabled} className="fl-box--select"
+        end={<span className="fl-box__chevron" aria-hidden="true"><Icon name={open ? 'chevron-up' : 'chevron-down'} size={18} /></span>}>
+        <button
+          type="button" id={id} className="fl-input fl-pick" disabled={disabled} aria-invalid={invalid || undefined}
+          role="combobox" aria-expanded={open} aria-haspopup="listbox" aria-controls={listId} {...rest}
+          onClick={() => !disabled && setOpen(!open)}
+        >
+          {chosen && chosen !== placeholder
+            ? <span className="fl-pick__value">{chosen.label}</span>
+            : <span className="fl-pick__empty">{placeholder?.label || 'اختر…'}</span>}
+        </button>
+      </InputBox>
+      {open && !disabled && (
+        <div className="fl-picklist">
+          {withSearch && (
+            <div className="fl-picklist__search">
+              <Icon name="search" size={16} />
+              <input
+                ref={search} type="text" value={query} className="fl-picklist__input" placeholder="ابحث…"
+                aria-label="ابحث في القائمة" aria-controls={listId} autoComplete="off"
+                onChange={(e) => { setQuery(e.target.value); setActive(0); }}
+              />
+            </div>
+          )}
+          <div className="fl-picklist__options" role="listbox" id={listId} aria-activedescendant={active >= 0 ? `${listId}-${active}` : undefined}>
+            {shown.map((option, index) => (
+              <button
+                key={`${option.value}-${index}`} id={`${listId}-${index}`} type="button" role="option" tabIndex={-1}
+                aria-selected={option === chosen} disabled={option.disabled}
+                className={cx('fl-picklist__option', option === chosen && 'fl-picklist__option--on', index === active && 'fl-picklist__option--active')}
+                onMouseEnter={() => setActive(index)} onMouseDown={(e) => e.preventDefault()} onClick={() => pick(option)}
+              >
+                <span>{option.label}</span>
+                {option === chosen && <Icon name="check" size={16} />}
+              </button>
+            ))}
+            {!shown.length && <p className="fl-picklist__empty">لا يوجد ما يطابق البحث.</p>}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

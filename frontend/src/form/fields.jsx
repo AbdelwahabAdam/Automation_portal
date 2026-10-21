@@ -1,7 +1,8 @@
 // The controls a request form is made of, one per field type in backend/app/forms/.
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { FileRow } from '../attachments.jsx';
-import { Button, Choice, Combobox, Icon, InputBox, Select, TextArea, TextInput } from '../ds/index.jsx';
+import { Button, Choice, Combobox, Icon, Select, TextArea, TextInput } from '../ds/index.jsx';
+import { matchesQuery } from '../ds/match.js';
 
 const ACCEPT = '.jpg,.jpeg,.png,.webp,.heic,.pdf,.mp4,.mov,.doc,.docx';
 // Selects with this many options or fewer show as option cards, as in the design
@@ -97,39 +98,40 @@ export function ProductPicker({ spec, value, invalid, catalog, onType, onPick })
   );
 }
 
-// A drop-down where several options can be ticked; shows the chosen ones, opens a list with a tick box each
-export function MultiSelectDropdown({ spec, value, invalid, onChange }) {
-  const [open, setOpen] = useState(false);
-  const box = useRef(null);
+// Several things picked from a long list, the same way products and packages are picked: search,
+// add, and each pick becomes a row that can be removed.
+export function MultiSelectPicker({ spec, value, invalid, onChange }) {
+  const [query, setQuery] = useState('');
   const chosen = Array.isArray(value) ? value : [];
-  useEffect(() => {
-    if (!open) return undefined;
-    const close = (e) => { if (box.current && !box.current.contains(e.target)) setOpen(false); };
-    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
-    document.addEventListener('mousedown', close);
-    document.addEventListener('keydown', onKey);
-    return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', onKey); };
-  }, [open]);
-  const toggle = (option) => onChange(spec.name, chosen.includes(option) ? chosen.filter((v) => v !== option) : [...chosen, option]);
+  // Something already added is not offered again
+  const left = spec.options.filter((option) => !chosen.includes(option));
+  const matches = query ? left.filter((option) => matchesQuery(query, option)) : left;
+
+  const add = (option) => { onChange(spec.name, [...chosen, option]); setQuery(''); };
+  const remove = (option) => onChange(spec.name, chosen.filter((kept) => kept !== option));
+
   return (
-    <div className="fl-suggest" ref={box}>
-      <InputBox invalid={invalid} className="fl-box--select"
-        end={<span className="fl-box__chevron" aria-hidden="true"><Icon name={open ? 'chevron-up' : 'chevron-down'} size={18} /></span>}>
-        <button type="button" id={spec.name} className="fl-input fl-multiselect__button" aria-haspopup="listbox" aria-expanded={open}
-          onClick={() => setOpen(!open)}>
-          {chosen.length ? chosen.join('، ') : <span className="fl-muted">اختر جهازًا أو أكثر…</span>}
-        </button>
-      </InputBox>
-      {open && (
-        <div className="fl-suggest__list" role="listbox" aria-multiselectable="true">
-          {spec.options.map((option) => (
-            <label key={option} className="fl-suggest__item fl-multiselect__option">
-              <input type="checkbox" checked={chosen.includes(option)} onChange={() => toggle(option)} />
-              <span>{option}</span>
-            </label>
+    <div className="fl-stack fl-stack--sm">
+      {chosen.length > 0 && (
+        <div className="fl-order-lines">
+          {chosen.map((option) => (
+            <div key={option} className="fl-order-lines__item">
+              <div className="fl-order-lines__row">
+                <Icon name="tool" size={18} />
+                <bdi className="fl-order-lines__name">{option}</bdi>
+                <Button type="button" size="sm" variant="ghost" icon="trash" iconOnly label={`إزالة ${option}`} onClick={() => remove(option)} />
+              </div>
+            </div>
           ))}
         </div>
       )}
+      <Combobox
+        id={spec.name} value={query} onInput={setQuery} items={matches} itemKey={(option) => option}
+        onPick={add} closeOnPick={false} invalid={invalid && !chosen.length}
+        placeholder={chosen.length ? 'إضافة جهاز آخر…' : 'ابحث عن الجهاز لإضافته'}
+        emptyText={left.length ? 'لا يوجد ما يطابق البحث.' : 'تمت إضافة كل الأجهزة.'}
+        renderItem={(option) => <bdi>{option}</bdi>}
+      />
     </div>
   );
 }
@@ -150,7 +152,8 @@ export function Stepper({ id, label, min, max, value, onChange }) {
   );
 }
 
-// The control for one plain field. onSearch: the field looks the client up, and its magnifier runs the search
+// The control for one plain field. onSearch: the field looks the client up; both its magnifier and
+// the keyboard's own search key run the search
 export function Control({ spec, value, invalid, onChange, onBlur, onSearch }) {
   const common = {
     id: spec.name,
@@ -172,19 +175,31 @@ export function Control({ spec, value, invalid, onChange, onBlur, onSearch }) {
   }
   if (spec.type === 'multiselect') {
     return spec.dropdown
-      ? <MultiSelectDropdown spec={spec} value={value} invalid={invalid} onChange={onChange} />
+      ? <MultiSelectPicker spec={spec} value={value} invalid={invalid} onChange={onChange} />
       : <Choice name={spec.name} multiple options={spec.options} value={value} invalid={invalid} onChange={(v) => onChange(spec.name, v)} />;
   }
   if (spec.type === 'textarea') return <TextArea {...common} rows={3} />;
   if (spec.type === 'date') return <TextInput {...common} type="date" dir="ltr" />;
   const inputMode = { number: spec.integer ? 'numeric' : 'decimal', phone: 'tel' }[spec.type];
+  // A field the client is looked up by: its keyboard says «بحث», and digits are what gets typed
+  const searching = Boolean(onSearch);
   const list = spec.type === 'staff' ? 'staff-list' : spec.suggestions ? `${spec.name}-suggestions` : undefined;
   const icon = spec.type === 'phone' || onSearch ? 'search' : undefined;
   return (
     <>
+      {/* A phone keeps its number pad, and the client code is digits too; on both, the keyboard's own
+          Enter key says «بحث» and runs the search */}
       <TextInput
-        {...common} icon={icon} type="text" inputMode={inputMode} dir={inputMode ? 'ltr' : 'auto'} list={list} autoComplete="off"
+        {...common} icon={icon} type="text" dir={inputMode || searching ? 'ltr' : 'auto'} list={list} autoComplete="off"
+        inputMode={inputMode ?? (searching ? 'numeric' : undefined)} enterKeyHint={searching ? 'search' : undefined}
         onIconClick={onSearch && (() => onSearch(spec.name, value ?? ''))} iconLabel={onSearch && `بحث عن العميل بـ${spec.label}`}
+        onKeyDown={onSearch && ((e) => {
+          if (e.key !== 'Enter') return;
+          // Enter searches instead of doing nothing; the form is never sent by a keystroke
+          e.preventDefault();
+          onSearch(spec.name, e.target.value);
+          e.target.blur();
+        })}
       />
       {spec.suggestions && <datalist id={list}>{spec.suggestions.map((text) => <option key={text} value={text} />)}</datalist>}
     </>
