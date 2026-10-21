@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 from pydantic import AliasChoices, Field
@@ -7,8 +8,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # that folder does not exist once the backend runs from a Docker image, hence the length check.
 _HERE = Path(__file__).resolve()
 WORKSPACE_ENV = _HERE.parents[3] / ".env" if len(_HERE.parents) > 3 else _HERE.parent / ".env"
-# Request attachments, one folder per request
-UPLOAD_DIR = _HERE.parent.parent / "uploads"
+# Request attachments, one folder per request (UPLOAD_DIR moves them, e.g. for the tests)
+UPLOAD_DIR = Path(os.environ.get("UPLOAD_DIR") or _HERE.parent.parent / "uploads")
 
 
 class Settings(BaseSettings):
