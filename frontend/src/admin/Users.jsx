@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api.js';
 import {
-  Alert, Badge, Button, Checkbox, Choice, Drawer, EmptyState, Field, Loading, PageHeader, Pager, SearchInput, Select, TextInput,
+  Alert, Badge, Button, Checkbox, Choice, Drawer, EmptyState, Field, Filters, Loading, PageHeader, Pager, SearchInput, Select, TextInput,
+  useConfirm, useWidth,
 } from '../ds/index.jsx';
 import { formatDate, matchesQuery } from '../formsMeta.js';
 import { useAction } from '../hooks.js';
+import { TABLE_MIN_WIDTH } from '../RequestList.jsx';
 
 const EMPTY = { username: '', email: '', full_name: '', role_ids: [], manages: [], is_admin: false, is_active: true, daftra_staff_id: null };
 
@@ -19,6 +21,7 @@ function UserDrawer({ user, roles, departments, staff, isSelf, onSaved, onDelete
     user ? { ...EMPTY, ...user, email: user.email || '', role_ids: user.roles.map((role) => role.id) } : EMPTY,
   );
   const { error, busy, run } = useAction();
+  const [confirmDialog, confirm] = useConfirm();
   const set = (name, value) => setValues((current) => ({ ...current, [name]: value }));
 
   function submit(e) {
@@ -38,13 +41,21 @@ function UserDrawer({ user, roles, departments, staff, isSelf, onSaved, onDelete
     });
   }
 
-  function resetMfa() {
-    if (!window.confirm(`إيقاف التحقق بخطوتين للمستخدم ${user.username}؟`)) return;
+  async function resetMfa() {
+    const yes = await confirm({
+      title: `إيقاف التحقق بخطوتين للمستخدم ${user.username}؟`, body: 'يدخل بعدها بكلمة المرور وحدها، ويستطيع تفعيله من جديد من «حسابي».',
+      confirmLabel: 'إيقاف التحقق بخطوتين',
+    });
+    if (!yes) return;
     run('mfa', async () => onSaved(await api(`/admin/users/${user.id}/mfa-reset`, { method: 'POST' })));
   }
 
-  function remove() {
-    if (!window.confirm(`حذف المستخدم ${user.username} نهائيًا؟ لا يمكن التراجع.`)) return;
+  async function remove() {
+    const yes = await confirm({
+      title: `حذف المستخدم ${user.username}؟`, body: 'يُحذف الحساب نهائيًا ولا يمكن التراجع. لإيقافه مؤقتًا أزل «الحساب نشط» بدلًا من ذلك.',
+      confirmLabel: 'حذف المستخدم', tone: 'danger',
+    });
+    if (!yes) return;
     run('delete', async () => {
       await api(`/admin/users/${user.id}`, { method: 'DELETE' });
       onDeleted(user);
@@ -52,6 +63,8 @@ function UserDrawer({ user, roles, departments, staff, isSelf, onSaved, onDelete
   }
 
   return (
+    <>
+    {confirmDialog}
     <Drawer
       title={user ? 'تعديل مستخدم' : 'إضافة مستخدم'}
       subtitle={user ? user.username : 'ستصله دعوة بالبريد فيها رابط لتعيين كلمة المرور.'}
@@ -119,6 +132,7 @@ function UserDrawer({ user, roles, departments, staff, isSelf, onSaved, onDelete
         </div>
       </form>
     </Drawer>
+    </>
   );
 }
 
@@ -156,6 +170,9 @@ export default function Users({ user: me }) {
   const [statusFilter, setStatusFilter] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [confirmDialog, confirm] = useConfirm();
+  // A table on a wide area, cards on a narrow one
+  const [area, areaWidth] = useWidth();
 
   useEffect(() => {
     Promise.all([api('/admin/users'), api('/admin/roles'), api('/admin/departments')])
@@ -187,7 +204,7 @@ export default function Users({ user: me }) {
     const question = user.has_password
       ? `إرسال رابط لتعيين كلمة مرور جديدة إلى ${user.email}؟`
       : `إعادة إرسال الدعوة إلى ${user.email}؟`;
-    if (!window.confirm(question)) return;
+    if (!(await confirm({ title: question, body: 'تصله رسالة فيها رابط صالح 72 ساعة.', confirmLabel: 'إرسال' }))) return;
     open(null);
     setSendingTo(user.id);
     try {
@@ -218,21 +235,107 @@ export default function Users({ user: me }) {
     <PageHeader title="المستخدمون" subtitle="عرض حسابات الموظفين وإضافة مستخدم جديد"
       actions={<Button variant="primary" icon="plus" onClick={() => open({ mode: 'new' })}>إضافة مستخدم</Button>} />
   );
-  if (!users) return <div className="fl-stack">{header}{error ? <Alert tone="error">{error}</Alert> : <Loading />}</div>;
+  if (!users) return <div className="fl-stack" ref={area}>{header}{error ? <Alert tone="error">{error}</Alert> : <Loading />}</div>;
 
   const shown = filtered.slice((page - 1) * pageSize, page * pageSize);
+  const permissions = (user) => (
+    <div className="fl-badges">
+      {user.is_admin && <Badge tone="warning" icon="shield">مدير النظام</Badge>}
+      {user.manages.map((key) => <Badge key={key} tone="success">مدير {departmentLabels[key] || key}</Badge>)}
+      {user.roles.map((role) => <Badge key={role.id} tone="brand">{role.name}</Badge>)}
+      {!user.is_admin && !user.roles.length && !user.manages.length && <span className="fl-muted">بدون صلاحيات</span>}
+    </div>
+  );
+  const accountState = (user) => (
+    <div className="fl-badges">{statusOf(user)}{user.two_step && user.is_active && <Badge tone="info" icon="shield">بخطوتين</Badge>}</div>
+  );
+  const actions = (user) => (
+    <>
+      <Button size="sm" icon="edit" onClick={() => open({ mode: 'edit', user })}>تعديل</Button>
+      {user.is_active && user.email && (
+        <Button size="sm" variant="tertiary" icon="mail" loading={sendingTo === user.id} onClick={() => sendLink(user)}>
+          {user.has_password ? 'رابط كلمة المرور' : 'إعادة الدعوة'}
+        </Button>
+      )}
+    </>
+  );
+  const pager = <Pager page={page} pageSize={pageSize} total={filtered.length} onPage={setPage} onPageSize={setPageSize} />;
+
+  let list;
+  if (!filtered.length) {
+    list = <EmptyState icon="users" title="لا يوجد مستخدم مطابق">غيّر البحث أو الفلاتر.</EmptyState>;
+  } else if (areaWidth >= TABLE_MIN_WIDTH) {
+    list = (
+      <div className="fl-table-wrap">
+        <div className="fl-table-scroll">
+          <table className="fl-table">
+            <thead>
+              <tr><th>الاسم الكامل</th><th>البريد الإلكتروني</th><th>الصلاحيات</th><th>حالة الحساب</th><th>تاريخ الإضافة</th><th>الإجراء</th></tr>
+            </thead>
+            <tbody>
+              {shown.map((user) => (
+                <tr key={user.id} className={user.is_active ? undefined : 'fl-row--off'}>
+                  <td className="fl-cell--wrap">
+                    <strong><bdi>{user.full_name}</bdi></strong>
+                    <span className="fl-cell__sub"><bdi dir="ltr">{user.username}</bdi></span>
+                  </td>
+                  <td>{user.email ? <bdi dir="ltr">{user.email}</bdi> : <Badge tone="error">لا يوجد</Badge>}</td>
+                  <td className="fl-cell--wrap">{permissions(user)}</td>
+                  <td>{accountState(user)}</td>
+                  <td className="fl-cell--nowrap"><bdi dir="ltr">{formatDate(user.created_at)}</bdi></td>
+                  <td className="fl-cell--actions">{actions(user)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {pager}
+      </div>
+    );
+  } else {
+    list = (
+      <>
+        <ul className="fl-cards" role="list">
+          {shown.map((user) => (
+            <li key={user.id} className={user.is_active ? 'fl-rowcard' : 'fl-rowcard fl-rowcard--off'}>
+              <div className="fl-rowcard__head">
+                <span className="fl-rowcard__title">
+                  <bdi>{user.full_name}</bdi>
+                  <span className="fl-cell__sub"><bdi dir="ltr">{user.username}</bdi></span>
+                </span>
+                {accountState(user)}
+              </div>
+              <dl>
+                <div className="fl-rowcard__item">
+                  <dt>البريد</dt>
+                  <dd>{user.email ? <bdi dir="ltr">{user.email}</bdi> : <Badge tone="error">لا يوجد</Badge>}</dd>
+                </div>
+                <div className="fl-rowcard__item"><dt>الصلاحيات</dt><dd>{permissions(user)}</dd></div>
+                <div className="fl-rowcard__item"><dt>أضيف</dt><dd><bdi dir="ltr">{formatDate(user.created_at)}</bdi></dd></div>
+              </dl>
+              <div className="fl-row">{actions(user)}</div>
+            </li>
+          ))}
+        </ul>
+        <div className="fl-table-wrap">{pager}</div>
+      </>
+    );
+  }
+
   return (
-    <div className="fl-stack">
+    <div className="fl-stack" ref={area}>
       {header}
       {notice && <Alert tone="success" onDismiss={() => setNotice('')}>{notice}</Alert>}
       {error && <Alert tone="error">{error}</Alert>}
       {invite && <InviteResult key={invite.link || invite.user.id} invite={invite} onDismiss={() => setInvite(null)} />}
-      <div className="fl-filters">
-        <div className="fl-filters__search">
+      <Filters
+        active={[roleFilter, statusFilter].filter(Boolean).length}
+        search={(
           <Field label="بحث" htmlFor="users_search" hideLabel>
             <SearchInput id="users_search" value={query} onChange={setQuery} placeholder="ابحث بالاسم أو اسم المستخدم أو البريد الإلكتروني" />
           </Field>
-        </div>
+        )}
+      >
         <Field label="الدور" htmlFor="users_role">
           <Select id="users_role" value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
             <option value="">كل الأدوار</option>
@@ -248,53 +351,10 @@ export default function Users({ user: me }) {
             <option value="inactive">موقوف</option>
           </Select>
         </Field>
-      </div>
+      </Filters>
       <p className="fl-results">النتائج: {filtered.length} من {users.length}</p>
-      {!filtered.length ? (
-        <EmptyState icon="users" title="لا يوجد مستخدم مطابق">غيّر البحث أو الفلاتر.</EmptyState>
-      ) : (
-        <div className="fl-table-wrap">
-          <div className="fl-table-scroll">
-            <table className="fl-table">
-              <thead>
-                <tr><th>الاسم الكامل</th><th>البريد الإلكتروني</th><th>الصلاحيات</th><th>حالة الحساب</th><th>تاريخ الإضافة</th><th>الإجراء</th></tr>
-              </thead>
-              <tbody>
-                {shown.map((user) => (
-                  <tr key={user.id} className={user.is_active ? undefined : 'fl-row--off'}>
-                    <td className="fl-cell--wrap">
-                      <strong><bdi>{user.full_name}</bdi></strong>
-                      <span className="fl-cell__sub"><bdi dir="ltr">{user.username}</bdi></span>
-                    </td>
-                    <td>{user.email ? <bdi dir="ltr">{user.email}</bdi> : <Badge tone="error">لا يوجد</Badge>}</td>
-                    <td className="fl-cell--wrap">
-                      <div className="fl-badges">
-                        {user.is_admin && <Badge tone="warning" icon="shield">مدير النظام</Badge>}
-                        {user.manages.map((key) => <Badge key={key} tone="success">مدير {departmentLabels[key] || key}</Badge>)}
-                        {user.roles.map((role) => <Badge key={role.id} tone="brand">{role.name}</Badge>)}
-                        {!user.is_admin && !user.roles.length && !user.manages.length && <span className="fl-muted">بدون صلاحيات</span>}
-                      </div>
-                    </td>
-                    <td>
-                      <div className="fl-badges">{statusOf(user)}{user.two_step && user.is_active && <Badge tone="info" icon="shield">بخطوتين</Badge>}</div>
-                    </td>
-                    <td className="fl-cell--nowrap"><bdi dir="ltr">{formatDate(user.created_at)}</bdi></td>
-                    <td className="fl-cell--actions">
-                      <Button size="sm" icon="edit" onClick={() => open({ mode: 'edit', user })}>تعديل</Button>
-                      {user.is_active && user.email && (
-                        <Button size="sm" variant="tertiary" icon="mail" loading={sendingTo === user.id} onClick={() => sendLink(user)}>
-                          {user.has_password ? 'رابط كلمة المرور' : 'إعادة الدعوة'}
-                        </Button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <Pager page={page} pageSize={pageSize} total={filtered.length} onPage={setPage} onPageSize={setPageSize} />
-        </div>
-      )}
+      {list}
+      {confirmDialog}
       {panel && (
         <UserDrawer
           key={panel.user?.id ?? 'new'}

@@ -235,6 +235,12 @@ sh run-tests.sh -k review  # pytest arguments are passed on
 Frontend: `sh check.sh` from `frontend/` runs the tests in `frontend/tests/` (`node --test`,
 no extra packages) and a production build.
 
+Browser check: `sh frontend/ui-check/run.sh` drives the running local stack in a headless browser
+(the Playwright image) at a desktop and a phone width. Every page must render without an error,
+the new-sale form must work end to end, and every field of every visible form must be on the
+screen. It signs in with a token made in the backend container and blocks every call that would
+change data. Screenshots land in `frontend/ui-check/shots/`.
+
 ## Deploying to AWS (EC2)
 
 `deploy/terraform` creates the server and `deploy/ansible` installs and updates the portal on it. The

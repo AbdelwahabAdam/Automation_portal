@@ -3,6 +3,7 @@ import { api, uploadAttachment } from './api.js';
 import { ActionBar, Alert, Badge, Button, Dialog, Field, Loading, PageHeader, Section, TextInput } from './ds/index.jsx';
 import { ClientLookupNote, SEARCH_FIELDS, useClientLookup } from './form/ClientLookup.jsx';
 import { Control, DaftraListSelect, FileField, ProductPicker, guessFromProductName, showsAsChoice } from './form/fields.jsx';
+import FormProgress, { Totals, formTotals } from './form/FormProgress.jsx';
 import OrderLines from './form/OrderLines.jsx';
 import { DAFTRA_LIST_TYPES, allFields, evaluateForm, initialValues } from './validation.js';
 
@@ -29,6 +30,10 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
   const [message, setMessage] = useState(null);
   const [submitted, setSubmitted] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  // Asking whether to save before going back, when there are changes not saved yet
+  const [leaving, setLeaving] = useState(false);
+  // The values as last saved (or as the form started), to tell whether there is anything unsaved
+  const [savedSnapshot, setSavedSnapshot] = useState(() => JSON.stringify(formType && !requestId ? initialValues(formType) : {}));
   const [open, setOpen] = useState(() => new Set((formType?.sections || []).slice(0, OPEN_AT_START).map((s) => s.title)));
   // What each field was last filled with by a search or a pick, so a later one may replace it but not the user's typing
   const autoFilled = useRef({});
@@ -52,7 +57,12 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
   useEffect(() => {
     if (!requestId) return;
     api(`/requests/${requestId}`)
-      .then((request) => { setValues(request.data); setAttachments(request.attachments); setSaved({ status: request.status, returned_reason: request.returned_reason }); })
+      .then((request) => {
+        setValues(request.data);
+        setSavedSnapshot(JSON.stringify(request.data));
+        setAttachments(request.attachments);
+        setSaved({ status: request.status, returned_reason: request.returned_reason });
+      })
       .catch((err) => setMessage({ error: err.message }))
       .finally(() => setLoading(false));
   }, [requestId]);
@@ -66,6 +76,15 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
     () => (formType ? evaluateForm(formType, values, fileCounts, catalog) : null),
     [formType, values, fileCounts, catalog],
   );
+
+  const dirty = !submitted && JSON.stringify(values) !== savedSnapshot;
+  // Closing the tab or reloading with unsaved changes asks first
+  useEffect(() => {
+    if (!dirty) return undefined;
+    const warn = (e) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [dirty]);
 
   // A saved draft looks its client up again, so those fields have their choices back
   const lookedUpDraft = useRef(false);
@@ -185,6 +204,7 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
       ? await api(`/requests/${id}`, { method: 'PUT', body })
       : await api('/requests', { method: 'POST', body });
     setId(result.id);
+    setSavedSnapshot(JSON.stringify(body.data));
     return result;
   }
 
@@ -206,9 +226,36 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
     setErrors(found);
     const withErrors = formType.sections.filter((section) => section.fields.some((spec) => found[spec.name]));
     setOpen((current) => new Set([...current, ...withErrors.map((section) => section.title)]));
-    const first = fields.find((spec) => found[spec.name]);
-    setTimeout(() => document.getElementById('field-' + first?.name)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
+    goToFirstError(found);
   }
+
+  function goToFirstError(found = errors) {
+    const first = fields.find((spec) => found[spec.name]);
+    setTimeout(() => {
+      const target = document.getElementById('field-' + first?.name);
+      target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      target?.querySelector('input, select, textarea, button')?.focus({ preventScroll: true });
+    }, 50);
+  }
+
+  // Opens a section and brings it into view (from the progress list or a section's «التالي»)
+  function jumpTo(index) {
+    const section = formType.sections[index];
+    setOpen((current) => new Set([...current, section.title]));
+    setTimeout(() => document.getElementById(`section-${index}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+  }
+
+  // Going back with unsaved changes asks whether to keep them
+  function back() {
+    if (dirty) setLeaving(true);
+    else onBack();
+  }
+
+  const saveAndLeave = () => run('draft', async () => {
+    await save('draft');
+    setLeaving(false);
+    onBack();
+  });
 
   const saveDraft = () => run('draft', async () => {
     await save('draft');
@@ -277,13 +324,35 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
   const allOpen = formType.sections.every((section) => open.has(section.title));
   const errorCount = Object.keys(errors).length;
 
+  const isFilled = (spec) => (spec.type === 'files' ? fileCounts[spec.name] : hasValue(values[spec.name]));
+  const inputsOf = (section) => section.fields.filter((spec) => spec.type !== 'auto_user' && !spec.computed);
+
   function summary(section) {
-    const inputs = section.fields.filter((spec) => spec.type !== 'auto_user' && !spec.computed);
+    const inputs = inputsOf(section);
     const sectionErrors = section.fields.filter((spec) => errors[spec.name]).length;
     if (sectionErrors) return `${sectionErrors} حقل يحتاج تصحيحًا`;
-    const filled = inputs.filter((spec) => (spec.type === 'files' ? fileCounts[spec.name] : hasValue(values[spec.name]))).length;
+    const filled = inputs.filter(isFilled).length;
     return filled ? `${filled} من ${inputs.length} مُعبأ` : 'لم تُعبأ بعد';
   }
+
+  // Each section's state: 'error' (corrections asked for), 'done' (nothing required is missing),
+  // 'partial', 'todo', or 'optional' (nothing in it is required). Sections with required fields
+  // count towards the progress.
+  const sectionStates = formType.sections.map((section) => {
+    if (section.fields.some((spec) => errors[spec.name])) return 'error';
+    const needed = section.fields.some((spec) => evaluation.required.has(spec.name));
+    const missing = section.fields.some((spec) => evaluation.errors[spec.name]);
+    const filled = inputsOf(section).some(isFilled);
+    if (!needed && !missing) return filled ? 'done' : 'optional';
+    if (!missing) return 'done';
+    return filled ? 'partial' : 'todo';
+  });
+  const counted = formType.sections.map((section) => section.fields.some((spec) => evaluation.required.has(spec.name)));
+  const progress = {
+    done: sectionStates.filter((state, index) => counted[index] && state === 'done').length,
+    total: counted.filter(Boolean).length,
+  };
+  const totals = formTotals(fieldNames, evaluation.clean);
 
   // The control for one field of the form, with what its Field shows around it
   function controlFor(spec) {
@@ -362,9 +431,10 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
   }
 
   return (
-    <form className="fl-narrow fl-stack" onSubmit={(e) => e.preventDefault()} noValidate>
+    <div className="fl-formlayout">
+      <form className="fl-formlayout__main fl-stack" onSubmit={(e) => e.preventDefault()} noValidate>
       <datalist id="staff-list">{catalog.staff.map((name) => <option key={name} value={name} />)}</datalist>
-      <Button className="fl-back" variant="tertiary" icon="arrow-start" onClick={onBack}>رجوع</Button>
+      <Button className="fl-back" variant="tertiary" icon="arrow-start" onClick={back}>رجوع</Button>
       <PageHeader title={formType.label}>
         <div className="fl-row fl-small fl-muted">
           <span>رقم الطلب:</span>
@@ -375,28 +445,49 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
       {saved.status === 'returned' && saved.returned_reason && (
         <Alert tone="warning" title="أُعيد الطلب للتعديل">{saved.returned_reason}</Alert>
       )}
-      <div>
+      <div className="fl-form-toolbar">
+        <span className="fl-small fl-muted"><span className="fl-field__required" aria-hidden="true">*</span> حقل مطلوب</span>
         <Button variant="tertiary" size="sm" iconEnd={allOpen ? 'chevron-up' : 'chevron-down'}
           onClick={() => setOpen(allOpen ? new Set() : new Set(formType.sections.map((s) => s.title)))}>
           {allOpen ? 'طي كل الأقسام' : 'فتح كل الأقسام'}
         </Button>
       </div>
 
-      {formType.sections.map((section, index) => (
-        <Section
-          key={section.title} number={index + 1} title={section.title} summary={summary(section)}
-          open={open.has(section.title)} onToggle={() => toggle(section.title)}
-          invalid={section.fields.some((spec) => errors[spec.name])}
-        >
-          {section.note && <Alert tone="info">{section.note}</Alert>}
-          <div className="fl-grid">{section.fields.map(fieldRow)}</div>
-        </Section>
-      ))}
+      {formType.sections.map((section, index) => {
+        const next = formType.sections[index + 1];
+        return (
+          <Section
+            key={section.title} id={`section-${index}`} number={index + 1} title={section.title} summary={summary(section)}
+            open={open.has(section.title)} onToggle={() => toggle(section.title)} state={sectionStates[index]}
+            invalid={section.fields.some((spec) => errors[spec.name])}
+          >
+            {section.note && <Alert tone="info">{section.note}</Alert>}
+            <div className="fl-grid">{section.fields.map(fieldRow)}</div>
+            {next && (
+              <div className="fl-section__next">
+                <Button variant="tertiary" size="sm" iconEnd="chevron-end" onClick={() => jumpTo(index + 1)}>
+                  التالي: {next.title}
+                </Button>
+              </div>
+            )}
+          </Section>
+        );
+      })}
 
       <ActionBar
+        summary={(
+          <>
+            <span className="fl-actionbar__progress" data-fl-num>{progress.done} من {progress.total} أقسام مكتملة</span>
+            <Totals totals={totals.filter((total) => total.name !== 'subtotal_amount')} compact />
+          </>
+        )}
         message={(errorCount > 0 || message) && (
           <>
-            {errorCount > 0 && <Alert tone="error">يوجد {errorCount} حقل يحتاج إلى تصحيح قبل الإرسال.</Alert>}
+            {errorCount > 0 && (
+              <Alert tone="error" actions={<Button size="sm" variant="secondary" icon="arrow-start" onClick={() => goToFirstError()}>الانتقال إلى أول خطأ</Button>}>
+                يوجد {errorCount} حقل يحتاج إلى تصحيح قبل الإرسال.
+              </Alert>
+            )}
             {message?.error && <Alert tone="error">{message.error}</Alert>}
             {message?.ok && <Alert tone="success">{message.ok}</Alert>}
           </>
@@ -419,6 +510,17 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
           بعد الإرسال لا يمكن تعديل الطلب، ويصل إلى مدير المبيعات للمراجعة.
         </Dialog>
       )}
-    </form>
+      {leaving && (
+        <Dialog
+          title="لديك تغييرات غير محفوظة" confirmLabel={saved.status === 'returned' ? 'حفظ التعديلات والخروج' : 'حفظ المسودة والخروج'}
+          altLabel="الخروج دون حفظ" onAlt={() => { setLeaving(false); onBack(); }} cancelLabel="البقاء في النموذج"
+          busy={busy === 'draft'} onConfirm={saveAndLeave} onCancel={() => setLeaving(false)}
+        >
+          {message?.error || 'احفظ ما كتبته كمسودة لتعود إليه من «طلباتي»، أو اخرج دون حفظ.'}
+        </Dialog>
+      )}
+      </form>
+      <FormProgress sections={formType.sections} states={sectionStates} progress={progress} totals={totals} onJump={jumpTo} />
+    </div>
   );
 }

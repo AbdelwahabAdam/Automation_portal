@@ -329,6 +329,16 @@ export function Loading({ label = 'جارٍ التحميل…' }) {
   return <p className="fl-loading" role="status"><Icon name="loader" size={18} />{label}</p>;
 }
 
+// A thin bar filled to value / max, with its meaning for screen readers
+export function ProgressBar({ value, max, label }) {
+  const percent = max ? Math.round((value / max) * 100) : 0;
+  return (
+    <div className="fl-progress" role="progressbar" aria-valuemin={0} aria-valuemax={max} aria-valuenow={value} aria-label={label}>
+      <span className="fl-progress__fill" style={{ inlineSize: `${percent}%` }} />
+    </div>
+  );
+}
+
 // ---------- Card and numbered collapsible section ----------
 
 export function Card({ title, actions, children, className }) {
@@ -345,13 +355,19 @@ export function Card({ title, actions, children, className }) {
   );
 }
 
-// A form section that folds away; folded content stays mounted so values and uploads survive
-export function Section({ number, title, summary, open, onToggle, children, invalid }) {
+// A form section that folds away; folded content stays mounted so values and uploads survive.
+// state: 'done' shows a tick instead of its number, 'error' marks it as needing corrections
+export function Section({ id, number, title, summary, open, onToggle, children, invalid, state }) {
   const bodyId = useId();
+  const done = state === 'done' && !invalid;
   return (
-    <section className={cx('fl-section', invalid && 'fl-section--invalid')}>
+    <section id={id} className={cx('fl-section', invalid && 'fl-section--invalid', done && 'fl-section--done', open && 'fl-section--open')}>
       <button type="button" className="fl-section__head" aria-expanded={open} aria-controls={bodyId} onClick={onToggle}>
-        {number != null && <span className="fl-section__num" data-fl-num>{number}</span>}
+        {number != null && (
+          <span className="fl-section__num" data-fl-num aria-label={done ? `${number} — مكتمل` : undefined}>
+            {done ? <Icon name="check" size={16} /> : number}
+          </span>
+        )}
         <span className="fl-section__titles">
           <span className="fl-section__title">{title}</span>
           {summary && <span className="fl-section__summary">{summary}</span>}
@@ -363,12 +379,33 @@ export function Section({ number, title, summary, open, onToggle, children, inva
   );
 }
 
-// Sticky bar at the bottom of a form
-export function ActionBar({ children, message }) {
+// Sticky bar at the bottom of a form. summary: a line of status beside the buttons (e.g. the totals)
+export function ActionBar({ children, message, summary }) {
   return (
     <div className="fl-actionbar">
       {message && <div className="fl-actionbar__message">{message}</div>}
-      <div className="fl-actionbar__buttons">{children}</div>
+      <div className="fl-actionbar__row">
+        <div className="fl-actionbar__buttons">{children}</div>
+        {summary && <div className="fl-actionbar__summary">{summary}</div>}
+      </div>
+    </div>
+  );
+}
+
+// ---------- Filters above a list: the search always, the rest folded behind a button on a phone ----------
+
+// search: the search field; active: how many of the other filters are set (shown on the button)
+export function Filters({ search, active = 0, children }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className={cx('fl-filters', open && 'fl-filters--open')}>
+      <div className="fl-filters__search">
+        {search}
+        <Button className="fl-filters__toggle" icon="filter" aria-expanded={open} onClick={() => setOpen(!open)}>
+          {active ? `الفلاتر (${active})` : 'الفلاتر'}
+        </Button>
+      </div>
+      {children}
     </div>
   );
 }
@@ -381,6 +418,8 @@ export function Drawer({ title, subtitle, onClose, children, footer, width }) {
     const previous = document.activeElement;
     panel.current?.querySelector('input:not([type=hidden]), select, textarea, button')?.focus();
     const onKey = (e) => {
+      // A confirmation open over the drawer answers the keys itself
+      if (document.querySelector('.fl-overlay--center')) return;
       if (e.key === 'Escape') onClose();
       trapTab(e, panel.current);
     };
@@ -498,7 +537,10 @@ export function useWidth() {
 
 // ---------- Dialog (FlDialog): centred confirmation ----------
 
-export function Dialog({ title, children, confirmLabel, cancelLabel = 'إلغاء', tone = 'primary', onConfirm, onCancel, busy, confirmDisabled }) {
+// altLabel/onAlt: a third choice between confirming and cancelling (e.g. «حفظ والخروج»)
+export function Dialog({
+  title, children, confirmLabel, cancelLabel = 'إلغاء', tone = 'primary', onConfirm, onCancel, busy, confirmDisabled, altLabel, onAlt,
+}) {
   const box = useRef(null);
   // Read by the Escape handler, which is set up once: a dialog that is working cannot be dismissed
   const busyRef = useRef(busy);
@@ -526,9 +568,27 @@ export function Dialog({ title, children, confirmLabel, cancelLabel = 'إلغا�
         <div className="fl-dialog__body">{children}</div>
         <div className="fl-dialog__actions">
           <Button variant={tone === 'danger' ? 'destructive' : 'primary'} loading={busy} disabled={confirmDisabled} onClick={onConfirm} data-autofocus>{confirmLabel}</Button>
-          <Button onClick={onCancel} disabled={busy}>{cancelLabel}</Button>
+          {altLabel && <Button onClick={onAlt} disabled={busy}>{altLabel}</Button>}
+          <Button variant={altLabel ? 'tertiary' : 'secondary'} onClick={onCancel} disabled={busy}>{cancelLabel}</Button>
         </div>
       </div>
     </div>
   );
+}
+
+// ---------- Confirmation asked in the portal's own dialog (instead of window.confirm) ----------
+
+// const [confirmDialog, confirm] = useConfirm(); … {confirmDialog} …
+// if (!(await confirm({ title, body, confirmLabel, tone: 'danger' }))) return;
+export function useConfirm() {
+  const [asking, setAsking] = useState(null);
+  const confirm = (question) => new Promise((resolve) => setAsking({ ...question, resolve }));
+  const answer = (yes) => { asking.resolve(yes); setAsking(null); };
+  const dialog = asking && (
+    <Dialog title={asking.title} confirmLabel={asking.confirmLabel || 'تأكيد'} tone={asking.tone} cancelLabel={asking.cancelLabel}
+      onConfirm={() => answer(true)} onCancel={() => answer(false)}>
+      {asking.body}
+    </Dialog>
+  );
+  return [dialog, confirm];
 }

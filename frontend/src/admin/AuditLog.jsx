@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState } from 'react';
 import { api, downloadFile } from '../api.js';
 import {
-  Alert, Badge, Button, EmptyState, Field, Loading, PageHeader, Pager, SearchInput, Select, TextInput,
+  Alert, Badge, Button, EmptyState, Field, Filters, Loading, PageHeader, Pager, SearchInput, Select, TextInput,
 } from '../ds/index.jsx';
 import { formatDate } from '../formsMeta.js';
 
@@ -98,12 +98,14 @@ export default function AuditLog() {
   return (
     <div className="fl-stack">
       {header}
-      <div className="fl-filters">
-        <div className="fl-filters__search">
+      <Filters
+        active={[filters.user_id, filters.action, filters.entity_type, filters.date_from, filters.date_to].filter(Boolean).length}
+        search={(
           <Field label="بحث" htmlFor="f_search" hideLabel>
             <SearchInput id="f_search" value={filters.search} onChange={(v) => setFilter('search', v)} placeholder="ابحث باسم المستخدم أو العميل أو رقم الطلب" />
           </Field>
-        </div>
+        )}
+      >
         <Field label="المستخدم" htmlFor="f_user">
           <Select id="f_user" value={filters.user_id} onChange={(e) => setFilter('user_id', e.target.value)}>
             <option value="">كل المستخدمين</option>
@@ -130,7 +132,7 @@ export default function AuditLog() {
         <Field label="إلى تاريخ" htmlFor="f_to">
           <TextInput id="f_to" type="date" dir="ltr" value={filters.date_to} onChange={(e) => setFilter('date_to', e.target.value)} />
         </Field>
-      </div>
+      </Filters>
       {error && <Alert tone="error">{error}</Alert>}
       {!result ? (
         <Loading />

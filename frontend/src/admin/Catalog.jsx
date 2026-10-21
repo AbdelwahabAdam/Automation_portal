@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api.js';
 import {
   Alert, Badge, Button, Checkbox, Drawer, EmptyState, Field, Loading, PageHeader, Pager, SearchInput, Select, Tabs, TextArea, TextInput,
+  useConfirm,
 } from '../ds/index.jsx';
 import { formatMoney as money, matchesQuery } from '../formsMeta.js';
 import { useAction } from '../hooks.js';
@@ -21,6 +22,7 @@ function ProductDrawer({ product, onSaved, onDeleted, onClose }) {
     buy_price: product.buy_price ?? '', stock_balance: product.stock_balance ?? '', daftra_id: product.daftra_id ?? '',
   } : { ...NEW_PRODUCT, tax_percent: 5 });
   const { error, busy, run } = useAction();
+  const [confirmDialog, confirm] = useConfirm();
   // What is missing before the product can be saved, said here rather than by the server
   const [problem, setProblem] = useState('');
   const set = (name, value) => setValues((current) => ({ ...current, [name]: value }));
@@ -45,8 +47,9 @@ function ProductDrawer({ product, onSaved, onDeleted, onClose }) {
     });
   }
 
-  function remove() {
-    if (!window.confirm(`حذف المنتج «${product.name}» نهائيًا؟`)) return;
+  async function remove() {
+    const yes = await confirm({ title: `حذف المنتج «${product.name}»؟`, body: 'يُحذف المنتج نهائيًا من الكتالوج.', confirmLabel: 'حذف المنتج', tone: 'danger' });
+    if (!yes) return;
     run('delete', async () => {
       await api(`/admin/products/${product.id}`, { method: 'DELETE' });
       onDeleted(product);
@@ -54,6 +57,8 @@ function ProductDrawer({ product, onSaved, onDeleted, onClose }) {
   }
 
   return (
+    <>
+    {confirmDialog}
     <Drawer
       title={product ? 'تعديل منتج' : 'إضافة منتج'}
       subtitle="المنتج وحدة واحدة لا يدخل فيها شيء آخر."
@@ -130,6 +135,7 @@ function ProductDrawer({ product, onSaved, onDeleted, onClose }) {
         </div>
       </form>
     </Drawer>
+    </>
   );
 }
 
@@ -149,6 +155,8 @@ function Products({ products, onChange }) {
   }
 
   const shown = products.filter((product) => matchesQuery(search, product.name, product.name_ar, product.maintenance_group || ''));
+  // The SKU column only when some product has one (the proposals import leaves it empty)
+  const withSku = products.some((product) => product.sku);
   return (
     <>
       <div className="fl-row fl-row--spread">
@@ -163,19 +171,27 @@ function Products({ products, onChange }) {
           <div className="fl-table-scroll">
             <table className="fl-table">
               <thead>
-                <tr><th>SKU</th><th>المنتج</th><th>بالعربية</th><th>كود المنتج</th><th>التصنيف</th><th>بند صيانة</th><th>سعر الوحدة</th><th>الضريبة</th><th>المخزون</th><th>في كم باقة</th><th>الحالة</th><th>الإجراء</th></tr>
+                <tr>
+                  {withSku && <th>SKU</th>}
+                  <th>المنتج</th><th>كود المنتج</th><th>التصنيف</th><th>بند صيانة</th><th>سعر الوحدة</th><th>المخزون</th>
+                  <th>في كم باقة</th><th>الحالة</th><th>الإجراء</th>
+                </tr>
               </thead>
               <tbody>
                 {shown.slice((page - 1) * pageSize, page * pageSize).map((product) => (
                   <tr key={product.id} className={product.is_active ? undefined : 'fl-row--off'}>
-                    <td className="fl-cell--id"><bdi dir="ltr">{product.sku || '—'}</bdi></td>
-                    <td className="fl-cell--wrap"><strong><bdi>{product.name}</bdi></strong></td>
-                    <td className="fl-cell--wrap">{product.name_ar || '—'}</td>
+                    {withSku && <td className="fl-cell--id"><bdi dir="ltr">{product.sku || '—'}</bdi></td>}
+                    <td className="fl-cell--wrap">
+                      <strong><bdi>{product.name}</bdi></strong>
+                      {product.name_ar && <span className="fl-cell__sub">{product.name_ar}</span>}
+                    </td>
                     <td className="fl-cell--id"><bdi dir="ltr">{product.product_code || '—'}</bdi></td>
                     <td className="fl-cell--wrap">{product.category || '—'}</td>
                     <td className="fl-cell--wrap">{product.maintenance_group || '—'}</td>
-                    <td data-fl-num><bdi dir="ltr">{money(product.unit_price)}</bdi></td>
-                    <td className="fl-cell--nowrap">{product.price_includes_tax ? 'شامل' : 'غير شامل'} <bdi dir="ltr">{money(product.tax_rate * 100)}%</bdi></td>
+                    <td className="fl-cell--nowrap" data-fl-num>
+                      <bdi dir="ltr">{money(product.unit_price)}</bdi>
+                      <span className="fl-cell__sub">{product.price_includes_tax ? 'شامل' : 'غير شامل'} <bdi dir="ltr">{money(product.tax_rate * 100)}%</bdi></span>
+                    </td>
                     <td data-fl-num>{product.stock_balance ?? '—'}</td>
                     <td data-fl-num>{product.package_count}</td>
                     <td>{product.is_active ? <Badge tone="success">مفعّل</Badge> : <Badge>موقوف</Badge>}</td>
@@ -213,6 +229,7 @@ function PackageDrawer({ pack, products, onSaved, onDeleted, onClose }) {
   const [nextKey, setNextKey] = useState(pack ? pack.items.length : 0);
   const [adding, setAdding] = useState('');
   const { error, busy, run } = useAction();
+  const [confirmDialog, confirm] = useConfirm();
   const [problem, setProblem] = useState('');
   const byId = Object.fromEntries(products.map((product) => [product.id, product]));
   const set = (name, value) => setValues((current) => ({ ...current, [name]: value }));
@@ -248,8 +265,9 @@ function PackageDrawer({ pack, products, onSaved, onDeleted, onClose }) {
     });
   }
 
-  function remove() {
-    if (!window.confirm(`حذف الباقة «${pack.name}» نهائيًا؟ المنتجات نفسها لا تُحذف.`)) return;
+  async function remove() {
+    const yes = await confirm({ title: `حذف الباقة «${pack.name}»؟`, body: 'تُحذف الباقة نهائيًا؛ المنتجات نفسها لا تُحذف.', confirmLabel: 'حذف الباقة', tone: 'danger' });
+    if (!yes) return;
     run('delete', async () => {
       await api(`/admin/packages/${pack.id}`, { method: 'DELETE' });
       onDeleted(pack);
@@ -260,6 +278,8 @@ function PackageDrawer({ pack, products, onSaved, onDeleted, onClose }) {
   const available = products.filter((product) => product.is_active && !used.has(product.id));
   const total = lines.reduce((sum, line) => sum + lineTotal(line, byId[line.product_id]), 0);
   return (
+    <>
+    {confirmDialog}
     <Drawer
       title={pack ? 'تعديل باقة' : 'إضافة باقة'}
       subtitle="الباقة منتج أو أكثر تُباع معًا، ولكل منتج فيها كميته وسعره وخصمه."
@@ -331,6 +351,7 @@ function PackageDrawer({ pack, products, onSaved, onDeleted, onClose }) {
         </Field>
       </form>
     </Drawer>
+    </>
   );
 }
 

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import Account from './Account.jsx';
 import { api, getToken, setToken } from './api.js';
-import { BRAND } from './brand.js';
+import { BRAND, LOGO_MARK } from './brand.js';
 import { Button, Icon, Loading, Menu } from './ds/index.jsx';
 import Login from './Login.jsx';
 import { PAGE_COMPONENTS, PAGE_ICONS } from './pages.jsx';
@@ -106,13 +106,13 @@ export default function App() {
   return (
     <div className="fl-app">
       <nav className="fl-sidenav" aria-label="التنقل الرئيسي">
-        <div className="fl-brand">{BRAND}</div>
+        <div className="fl-brand"><img className="fl-brand__logo" src={LOGO_MARK} alt="" />{BRAND}</div>
         <NavGroups departments={departments} />
       </nav>
 
       <div className="fl-main-col">
         <header className="fl-topbar">
-          <div className="fl-brand fl-topbar__brand">{BRAND}</div>
+          <div className="fl-brand fl-topbar__brand"><img className="fl-brand__logo" src={LOGO_MARK} alt="" />{BRAND}</div>
           <div className="fl-topbar__end">
             <span className="fl-topbar__menu-wide">{accountMenu(false)}</span>
             <span className="fl-topbar__menu-narrow">{accountMenu(true)}</span>

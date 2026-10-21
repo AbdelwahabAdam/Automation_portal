@@ -464,3 +464,131 @@ ul.fl-catalog, ul.fl-cards { list-style: none; margin: 0; padding: 0; }
 .fl-timeline__note { margin-block-start: var(--fl-space-2); padding: var(--fl-space-3) var(--fl-space-4); border-radius: var(--fl-radius-md); background: var(--fl-color-status-warning-background); color: var(--fl-color-status-warning-text); white-space: pre-wrap; overflow-wrap: anywhere; }
 /* A note under a table row (e.g. why a request was returned) */
 .fl-rownote { display: block; margin-block-start: var(--fl-space-2); font-size: var(--fl-type-caption-size); color: var(--fl-color-status-warning-text); white-space: normal; }
+
+/* ---------- Request form: layout, progress, totals ---------- */
+/* The form with its progress beside it on a wide screen; the progress folds into the action bar below 1200px */
+.fl-formlayout { display: grid; grid-template-columns: minmax(0, var(--fl-container-form)); justify-content: center; gap: var(--fl-space-7); align-items: start; }
+.fl-formlayout__main { min-inline-size: 0; }
+.fl-progress-rail { display: none; }
+@media (min-width: 1200px) {
+  .fl-formlayout { grid-template-columns: minmax(0, var(--fl-container-form)) 272px; }
+  .fl-progress-rail {
+    position: sticky; inset-block-start: calc(56px + var(--fl-space-6)); display: flex; flex-direction: column; gap: var(--fl-space-4);
+    max-block-size: calc(100dvh - 56px - 2 * var(--fl-space-6)); overflow-y: auto;
+    padding: var(--fl-space-5); background: var(--fl-color-background-surface);
+    border: var(--fl-border-width-default) solid var(--fl-color-border-default); border-radius: var(--fl-radius-lg); box-shadow: var(--fl-elevation-1);
+  }
+  .fl-actionbar__progress { display: none; }
+}
+.fl-progress-rail__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--fl-space-3); }
+.fl-progress-rail__title { font-weight: var(--fl-font-weight-semibold); }
+.fl-progress-rail__count { font-size: var(--fl-type-body-sm-size); color: var(--fl-color-text-secondary); }
+.fl-progress-rail__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.fl-progress-rail__item {
+  display: flex; align-items: center; gap: var(--fl-space-3); inline-size: 100%; min-block-size: 36px; padding: var(--fl-space-2) var(--fl-space-3);
+  border: 0; border-radius: var(--fl-radius-md); background: transparent; color: var(--fl-color-text-primary); font: inherit;
+  font-size: var(--fl-type-body-sm-size); text-align: start; cursor: pointer;
+  transition: background var(--fl-motion-duration-fast) var(--fl-motion-easing-standard);
+}
+.fl-progress-rail__item:hover { background: var(--fl-color-background-hover); }
+.fl-progress-rail__icon { display: flex; color: var(--fl-color-icon-disabled); }
+.fl-progress-rail__item--done .fl-progress-rail__icon { color: var(--fl-color-status-success-icon); }
+.fl-progress-rail__item--partial .fl-progress-rail__icon { color: var(--fl-color-status-warning-icon); }
+.fl-progress-rail__item--error { color: var(--fl-color-text-error); font-weight: var(--fl-font-weight-semibold); }
+.fl-progress-rail__item--error .fl-progress-rail__icon { color: var(--fl-color-status-error-icon); }
+.fl-progress-rail__item--optional { color: var(--fl-color-text-secondary); }
+.fl-progress-rail__totals { padding-block-start: var(--fl-space-4); border-block-start: var(--fl-border-width-default) solid var(--fl-color-border-subtle); }
+
+.fl-progress { position: relative; block-size: 6px; border-radius: var(--fl-radius-full); background: var(--fl-color-background-subtle); overflow: hidden; }
+.fl-progress__fill { position: absolute; inset-block: 0; inset-inline-start: 0; border-radius: inherit; background: var(--fl-color-action-primary-background); transition: inline-size var(--fl-motion-duration-slow) var(--fl-motion-easing-standard); }
+
+/* Amounts worked out as the form is filled in */
+.fl-totals { display: flex; flex-direction: column; gap: var(--fl-space-3); margin: 0; }
+.fl-totals__item { display: flex; align-items: baseline; justify-content: space-between; gap: var(--fl-space-3); }
+.fl-totals dt { font-size: var(--fl-type-body-sm-size); color: var(--fl-color-text-secondary); }
+.fl-totals dd { margin: 0; font-weight: var(--fl-font-weight-medium); }
+.fl-totals__item--strong dd { font-size: var(--fl-type-subsection-size); font-weight: var(--fl-font-weight-bold); color: var(--fl-color-text-brand); }
+.fl-totals__unit { font-size: var(--fl-type-caption-size); font-weight: var(--fl-font-weight-regular); color: var(--fl-color-text-secondary); }
+.fl-totals--compact { flex-direction: row; flex-wrap: wrap; column-gap: var(--fl-space-5); row-gap: var(--fl-space-2); }
+.fl-totals--compact .fl-totals__item { gap: var(--fl-space-2); }
+.fl-totals--compact .fl-totals__item--strong dd { font-size: var(--fl-type-body-size); }
+
+/* The action bar's buttons with a status line beside them */
+.fl-actionbar__row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--fl-space-3) var(--fl-space-5); }
+.fl-actionbar__summary { display: flex; align-items: center; flex-wrap: wrap; gap: var(--fl-space-2) var(--fl-space-5); font-size: var(--fl-type-body-sm-size); color: var(--fl-color-text-secondary); }
+@media (max-width: 639px) {
+  .fl-actionbar__row { flex-direction: column-reverse; align-items: stretch; }
+  .fl-actionbar__buttons { inline-size: 100%; }
+}
+
+.fl-form-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--fl-space-3); }
+
+/* Sections: a tick when complete, a clear open state, and «التالي» at the end */
+.fl-section { transition: border-color var(--fl-motion-duration-base) var(--fl-motion-easing-standard), box-shadow var(--fl-motion-duration-base) var(--fl-motion-easing-standard); scroll-margin-block-start: calc(56px + var(--fl-space-5)); }
+.fl-section--open { box-shadow: var(--fl-elevation-1); }
+.fl-section--done .fl-section__num { background: var(--fl-color-status-success-background); color: var(--fl-color-status-success-icon); }
+.fl-section--done .fl-section__summary { color: var(--fl-color-status-success-text); }
+.fl-section--invalid .fl-section__summary { color: var(--fl-color-text-error); font-weight: var(--fl-font-weight-medium); }
+.fl-section__next { display: flex; justify-content: flex-end; padding-block-start: var(--fl-space-3); border-block-start: var(--fl-border-width-default) solid var(--fl-color-border-subtle); }
+.fl-field { scroll-margin-block: calc(56px + var(--fl-space-7)) 160px; }
+.fl-rowcard--off { color: var(--fl-color-text-secondary); background: var(--fl-color-background-sunken); }
+
+/* A request at a glance, above its sections */
+.fl-summary { display: flex; flex-direction: column; gap: var(--fl-space-5); padding: var(--fl-card-padding); background: var(--fl-color-background-surface); border: var(--fl-border-width-default) solid var(--fl-color-border-default); border-inline-start: 4px solid var(--fl-color-brand-primary); border-radius: var(--fl-radius-lg); }
+.fl-summary dl { margin: 0; display: grid; gap: var(--fl-space-4); }
+.fl-summary__facts { grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)); }
+.fl-summary__money { grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr)); padding-block-start: var(--fl-space-4); border-block-start: var(--fl-border-width-default) solid var(--fl-color-border-subtle); }
+.fl-summary dt { font-size: var(--fl-type-caption-size); color: var(--fl-color-text-secondary); }
+.fl-summary dd { margin: 0; font-weight: var(--fl-font-weight-semibold); overflow-wrap: anywhere; }
+.fl-summary__money dd { font-size: var(--fl-type-section-title-size); color: var(--fl-color-text-brand); }
+.fl-summary__due dd { color: var(--fl-color-status-warning-text); }
+@media (max-width: 639px) {
+  /* One line on a phone: progress, the total and what is left */
+  .fl-actionbar__summary { flex-wrap: nowrap; justify-content: space-between; gap: var(--fl-space-3); font-size: var(--fl-type-caption-size); }
+  .fl-totals--compact { flex-wrap: nowrap; column-gap: var(--fl-space-3); }
+  .fl-totals--compact .fl-totals__item:not(.fl-totals__item--strong) { display: none; }
+  .fl-totals--compact .fl-totals__unit { display: none; }
+  .fl-actionbar { padding: var(--fl-space-3) var(--fl-space-4); gap: var(--fl-space-2); }
+}
+
+/* A request's page: its sections, with the Daftra documents and the history beside them on a wide screen */
+.fl-viewlayout { display: grid; grid-template-columns: minmax(0, var(--fl-container-form)); justify-content: center; gap: var(--fl-space-6); align-items: start; }
+.fl-viewlayout__main, .fl-viewlayout__side { min-inline-size: 0; }
+@media (min-width: 1200px) {
+  .fl-viewlayout { grid-template-columns: minmax(0, var(--fl-container-form)) 340px; }
+  /* Level with the summary, under the page title */
+  .fl-viewlayout__side { padding-block-start: 112px; }
+}
+
+/* A table wider than its box keeps its actions in reach: the last column stays at the edge */
+.fl-table td.fl-cell--actions { position: sticky; inset-inline-end: 0; background: var(--fl-color-background-surface); }
+.fl-table tbody tr:hover > td.fl-cell--actions { background: var(--fl-color-background-sunken); }
+.fl-table tr:has(> td.fl-cell--actions) > th:last-child { position: sticky; inset-inline-end: 0; background: var(--fl-color-background-sunken); }
+.fl-table-scroll .fl-table td.fl-cell--actions { box-shadow: inset 1px 0 0 var(--fl-color-border-subtle); }
+
+/* The forms to choose from: two wide cards a row, roomy enough to read at a glance */
+.fl-catalog { grid-template-columns: repeat(auto-fill, minmax(min(100%, 400px), 1fr)); }
+.fl-catalog-item { min-block-size: 84px; padding-block: var(--fl-space-5); transition: border-color var(--fl-motion-duration-fast) var(--fl-motion-easing-standard), box-shadow var(--fl-motion-duration-fast) var(--fl-motion-easing-standard); }
+.fl-catalog-item:hover { box-shadow: var(--fl-elevation-1); }
+.fl-catalog-item .fl-tile { inline-size: 48px; block-size: 48px; }
+.fl-catalog-item__title { font-size: var(--fl-type-subsection-size); }
+@media (max-width: 639px) {
+  /* Dialog choices stacked, each a full-width touch target */
+  .fl-dialog__actions { flex-direction: column; }
+  .fl-dialog__actions .fl-btn { inline-size: 100%; }
+}
+
+/* The company logo: a small square crop beside the name in the shell, the full logo on the sign-in card */
+.fl-brand__logo { inline-size: 30px; block-size: 30px; mix-blend-mode: multiply; }
+.fl-auth__brand { display: flex; justify-content: center; }
+.fl-auth__logo { block-size: 88px; inline-size: auto; max-inline-size: 100%; mix-blend-mode: multiply; }
+.fl-auth { background: radial-gradient(1200px 600px at 50% -10%, var(--fl-color-brand-subtle), transparent 70%), var(--fl-color-background-canvas); }
+
+/* Filters: the search with a «الفلاتر» button beside it on a phone, the other filters shown when it is pressed */
+.fl-filters__search { display: flex; align-items: flex-end; gap: var(--fl-space-3); }
+.fl-filters__search > .fl-field { flex: 1 1 auto; }
+.fl-filters__toggle { display: none; flex: 0 0 auto; min-block-size: var(--fl-field-height); }
+@media (max-width: 639px) {
+  .fl-filters__toggle { display: inline-flex; }
+  .fl-filters:not(.fl-filters--open) > :not(.fl-filters__search) { display: none; }
+}

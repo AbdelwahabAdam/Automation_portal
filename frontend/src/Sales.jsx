@@ -8,6 +8,9 @@ import { pagePath } from './paths.js';
 import RequestForm from './RequestForm.jsx';
 import RequestView from './RequestView.jsx';
 
+// Forms catalog: the search box shows once there are more forms than this
+const SEARCH_FROM = 6;
+
 // Shown in place of a sales page until the form definitions have loaded
 function notReady(sales) {
   if (sales.error) return <Alert tone="error" title="تعذر تحميل النماذج">{sales.error}</Alert>;
@@ -40,6 +43,7 @@ function FormsCatalog({ formTypes, onChoose }) {
   }, []);
 
   // Hidden forms take no new requests (VISIBLE_FORM_TYPES in backend/app/forms/definitions.py)
+  const available = formTypes.filter((type) => !type.hidden).length;
   const shown = formTypes.filter((type) => !type.hidden && matchesQuery(query, type.label, formMeta(type.key).desc));
   return (
     <section className="fl-stack" aria-labelledby="forms-title">
@@ -51,9 +55,12 @@ function FormsCatalog({ formTypes, onChoose }) {
       {counts.draft > 0 && (
         <Strip icon="edit" title="المسودات" count={counts.draft} action="استكمال" onClick={() => navigate(`${pagePath('sales.my_requests')}?tab=draft`)} />
       )}
-      <div className="fl-narrow-search">
-        <SearchInput value={query} onChange={setQuery} placeholder="ابحث عن نموذج" />
-      </div>
+      {/* A search is worth it only when there are many forms to choose from */}
+      {available > SEARCH_FROM && (
+        <div className="fl-narrow-search">
+          <SearchInput value={query} onChange={setQuery} placeholder="ابحث عن نموذج" />
+        </div>
+      )}
       {shown.length ? (
         <ul className="fl-catalog" role="list">
           {shown.map((type) => {

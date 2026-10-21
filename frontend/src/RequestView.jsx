@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, openAttachment } from './api.js';
 import {
-  ActionBar, Alert, Button, Card, Dialog, Field, Icon, Loading, PageHeader, StatusBadge, TextArea,
+  ActionBar, Alert, Badge, Button, Card, Dialog, Field, Icon, Loading, PageHeader, StatusBadge, TextArea,
 } from './ds/index.jsx';
 import { formatDate, formatMoney } from './formsMeta.js';
 import { DAFTRA_LIST_TYPES, groupLines } from './validation.js';
@@ -39,6 +39,49 @@ function DaftraCard({ request }) {
         ))}
       </dl>
     </Card>
+  );
+}
+
+// The request at a glance, above its sections: who it is for and what it comes to
+const SUMMARY_MONEY = [['total_amount', 'الإجمالي'], ['paid_amount', 'المدفوع'], ['remaining_amount', 'المتبقي']];
+
+function Summary({ request }) {
+  const data = request.data;
+  const place = [data.emirate, data.area].filter(Boolean).join('، ');
+  const facts = [
+    ['العميل', data.customer_name && <bdi>{data.customer_name}</bdi>],
+    ['الهاتف', data.phone && <bdi dir="ltr">{data.phone}</bdi>],
+    ['كود العميل', data.client_code && <bdi dir="ltr">{data.client_code}</bdi>],
+    ['المنطقة', place],
+  ].filter(([, value]) => value);
+  const money = SUMMARY_MONEY.filter(([name]) => typeof data[name] === 'number');
+  const daftra = [
+    ['الفاتورة', request.daftra_invoice_no], ['سند القبض', request.daftra_receipt_no], ['أمر الشغل', request.daftra_work_order_no],
+  ].filter(([, value]) => value);
+  if (!facts.length && !money.length) return null;
+  return (
+    <section className="fl-summary" aria-label="ملخص الطلب">
+      {facts.length > 0 && (
+        <dl className="fl-summary__facts">
+          {facts.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
+        </dl>
+      )}
+      {money.length > 0 && (
+        <dl className="fl-summary__money">
+          {money.map(([name, label]) => (
+            <div key={name} className={name === 'remaining_amount' && data[name] > 0 ? 'fl-summary__due' : undefined}>
+              <dt>{label}</dt>
+              <dd data-fl-num><bdi dir="ltr">{formatMoney(data[name])}</bdi> <span className="fl-totals__unit">درهم</span></dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {daftra.length > 0 && (
+        <div className="fl-badges">
+          {daftra.map(([label, value]) => <Badge key={label} tone="success" icon="check-circle">{label} <bdi dir="ltr">{value}</bdi></Badge>)}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -204,7 +247,8 @@ export default function RequestView({ requestId, formTypes, onBack, ownerName, r
   }
 
   return (
-    <div className="fl-narrow fl-stack">
+    <div className="fl-viewlayout">
+    <div className="fl-viewlayout__main fl-stack">
       {back}
       <PageHeader title={formType.label} actions={actions?.(request)}>
         <div className="fl-row fl-small fl-muted">
@@ -215,6 +259,7 @@ export default function RequestView({ requestId, formTypes, onBack, ownerName, r
           {request.submitted_at && <span>· أُرسل <bdi dir="ltr">{formatDate(request.submitted_at)}</bdi></span>}
         </div>
       </PageHeader>
+      <Summary request={request} />
       {request.status === 'returned' && request.returned_reason && (
         <Alert tone="warning" title="أُعيد الطلب للتعديل">{request.returned_reason}</Alert>
       )}
@@ -231,9 +276,13 @@ export default function RequestView({ requestId, formTypes, onBack, ownerName, r
           </Card>
         );
       })}
+      {review && <ReviewActions request={request} own={review.own(request)} daftraNote={formType.daftra_note} onDone={review.onDone} />}
+    </div>
+    {/* Beside the sections on a wide screen, under them on a narrow one */}
+    <div className="fl-viewlayout__side fl-stack">
       {formType.invoiced && <DaftraCard request={request} />}
       {events.length > 0 && <History events={events} />}
-      {review && <ReviewActions request={request} own={review.own(request)} daftraNote={formType.daftra_note} onDone={review.onDone} />}
+    </div>
     </div>
   );
 }

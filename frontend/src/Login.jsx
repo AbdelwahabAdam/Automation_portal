@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { api, setToken } from './api.js';
-import { BRAND } from './brand.js';
+import { BRAND, LOGO } from './brand.js';
 import { Alert, Button, Field, PasswordInput, TextInput } from './ds/index.jsx';
 
 export function AuthCard({ title, subtitle, children, footer, onSubmit }) {
   return (
     <main className="fl-auth">
       <form className="fl-auth__card" onSubmit={onSubmit} noValidate>
-        <div className="fl-auth__brand">{BRAND}</div>
+        <div className="fl-auth__brand"><img className="fl-auth__logo" src={LOGO} alt={BRAND} /></div>
         <h1 className="fl-auth__title">{title}</h1>
         {subtitle && <p className="fl-auth__sub">{subtitle}</p>}
         {children}

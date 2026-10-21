@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api } from './api.js';
 import {
-  Alert, Button, EmptyState, Field, Loading, PageHeader, SearchInput, Select, Tabs, TextInput, useWidth,
+  Alert, Button, EmptyState, Field, Filters, Loading, PageHeader, SearchInput, Select, Tabs, TextInput, useWidth,
 } from './ds/index.jsx';
 import { localDay, matchesQuery } from './formsMeta.js';
 import RequestList, { TABLE_MIN_WIDTH } from './RequestList.jsx';
@@ -95,12 +95,14 @@ export default function Review({ user, sales }) {
         onChange={(value) => setParams(value === 'submitted' ? {} : { tab: value }, { replace: true })}
         tabs={TABS.map((t) => ({ value: t.value, label: t.label, count: t.value === 'all' ? requests.length : requests.filter((r) => r.status === t.value).length }))}
       />
-      <div className="fl-filters">
-        <div className="fl-filters__search">
+      <Filters
+        active={[employee, formType, from, to].filter(Boolean).length}
+        search={(
           <Field label="بحث" htmlFor="review_search" hideLabel>
             <SearchInput id="review_search" value={query} onChange={setQuery} placeholder="ابحث برقم الطلب أو اسم العميل أو الهاتف أو كود العميل" />
           </Field>
-        </div>
+        )}
+      >
         <Field label="اسم الموظف" htmlFor="review_employee">
           <Select id="review_employee" value={employee} onChange={(e) => setEmployee(e.target.value)}>
             <option value="">كل الموظفين</option>
@@ -121,7 +123,7 @@ export default function Review({ user, sales }) {
         <Field label="تاريخ الإرسال إلى" htmlFor="review_to">
           <TextInput id="review_to" type="date" dir="ltr" value={to} onChange={(e) => setTo(e.target.value)} />
         </Field>
-      </div>
+      </Filters>
       <p className="fl-results">النتائج: {filtered.length} من {tab === 'all' ? requests.length : requests.filter((r) => r.status === tab).length}</p>
       {list}
     </div>

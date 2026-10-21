@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api } from './api.js';
-import { Alert, Button, EmptyState, Field, Loading, PageHeader, SearchInput, Select, Tabs, useWidth } from './ds/index.jsx';
+import { Alert, Button, EmptyState, Field, Loading, PageHeader, SearchInput, Select, Tabs, useConfirm, useWidth } from './ds/index.jsx';
 import { matchesQuery } from './formsMeta.js';
 import RequestList, { TABLE_MIN_WIDTH } from './RequestList.jsx';
 
@@ -28,6 +28,7 @@ export default function MyRequests({ formTypes, onNew, onEdit, onView }) {
   const wide = areaWidth >= TABLE_MIN_WIDTH;
   const tab = TABS.some((t) => t.value === params.get('tab')) ? params.get('tab') : 'all';
   const labels = Object.fromEntries(formTypes.map((type) => [type.key, type.label]));
+  const [confirmDialog, confirm] = useConfirm();
 
   useEffect(() => {
     api('/requests/mine').then(setRequests).catch((err) => setError(err.message));
@@ -39,7 +40,10 @@ export default function MyRequests({ formTypes, onNew, onEdit, onView }) {
   ), [requests, tab, formType, query]);
 
   async function remove(request) {
-    if (!window.confirm(`حذف المسودة رقم ${request.id}؟ لا يمكن التراجع.`)) return;
+    const yes = await confirm({
+      title: `حذف المسودة رقم ${request.id}؟`, body: 'تُحذف المسودة ومرفقاتها، ولا يمكن التراجع.', confirmLabel: 'حذف المسودة', tone: 'danger',
+    });
+    if (!yes) return;
     setError('');
     try {
       await api(`/requests/${request.id}`, { method: 'DELETE' });
@@ -115,6 +119,7 @@ export default function MyRequests({ formTypes, onNew, onEdit, onView }) {
       {notice && <Alert tone="success" onDismiss={() => setNotice('')}>{notice}</Alert>}
       {error && <Alert tone="error">{error}</Alert>}
       {list}
+      {confirmDialog}
     </div>
   );
 }

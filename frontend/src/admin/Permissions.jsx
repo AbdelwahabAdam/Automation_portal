@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import {
-  Alert, Badge, Button, Choice, Drawer, EmptyState, Field, Loading, PageHeader, SearchInput, TextInput,
+  Alert, Badge, Button, Choice, Drawer, EmptyState, Field, Loading, PageHeader, SearchInput, TextInput, useConfirm,
 } from '../ds/index.jsx';
 import { matchesQuery } from '../formsMeta.js';
 import { useAction } from '../hooks.js';
@@ -10,6 +10,7 @@ function RoleDrawer({ role, departments, onSaved, onDeleted, onClose }) {
   const [name, setName] = useState(role?.name || '');
   const [pages, setPages] = useState(role?.pages || []);
   const { error, busy, run } = useAction();
+  const [confirmDialog, confirm] = useConfirm();
 
   const submit = (e) => {
     e?.preventDefault();
@@ -19,8 +20,8 @@ function RoleDrawer({ role, departments, onSaved, onDeleted, onClose }) {
     });
   };
 
-  const remove = () => {
-    if (!window.confirm(`حذف الدور «${role.name}»؟`)) return;
+  const remove = async () => {
+    if (!(await confirm({ title: `حذف الدور «${role.name}»؟`, body: 'يُحذف الدور نهائيًا.', confirmLabel: 'حذف الدور', tone: 'danger' }))) return;
     run('delete', async () => {
       await api(`/admin/roles/${role.id}`, { method: 'DELETE' });
       onDeleted(role);
@@ -34,6 +35,8 @@ function RoleDrawer({ role, departments, onSaved, onDeleted, onClose }) {
   };
 
   return (
+    <>
+    {confirmDialog}
     <Drawer
       title={role ? 'تعديل دور' : 'إضافة دور'}
       subtitle="الدور قائمة صفحات؛ من يفتح الصفحة يستطيع كل ما فيها. صفحات الإدارة لمدير النظام فقط."
@@ -69,6 +72,7 @@ function RoleDrawer({ role, departments, onSaved, onDeleted, onClose }) {
         {role?.user_count > 0 && <p className="fl-field__hint">لا يمكن حذف دور مُسند لمستخدمين؛ أزله عنهم أولًا.</p>}
       </form>
     </Drawer>
+    </>
   );
 }
 

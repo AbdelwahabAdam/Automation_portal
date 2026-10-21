@@ -161,7 +161,57 @@ These would change behaviour or need a decision, so they were left for you. Most
       assume.
     - The test client warns that `httpx` is deprecated in favour of `httpx2`; harmless for now.
 
-## Next
+## Design pass (UX)
 
-The design pass (UX) comes next. It is limited to the local frontend: no form field is removed,
-and nothing is deployed to the server.
+The look is unchanged: same logo, colours, typography and right-to-left layout. The work went into
+how easy the screens are to use. No form field was removed: the browser check confirms that every
+field of the four visible forms is on screen (33, 30, 29 and 14 fields), on desktop and phone.
+These changes are local only; nothing was deployed to the server.
+
+**Request form**
+
+- **Progress panel** beside the form on wide screens:
+  - how many sections are complete, with a progress bar;
+  - every section with its state (done, in progress, not started, has errors, optional); click
+    one to open it and scroll there;
+  - the amounts so far (before discount, total, paid, remaining).
+- **Section headers:** a completed section's number becomes a green tick.
+- **«التالي»:** each section ends with a button that moves on to the next one, which saves
+  hunting on a phone.
+- **Action bar:** shows the progress and the total and remaining amounts next to the buttons; on
+  a phone, one line.
+- **Errors:** when there are errors, «الانتقال إلى أول خطأ» scrolls to and focuses the first one.
+- **Unsaved changes:**
+  - leaving with «رجوع» asks whether to save the draft, leave without saving, or stay;
+  - closing or reloading the tab asks the browser's own question.
+- **Keyboard:** search lists move with the arrow keys and pick with Enter.
+
+**Lists, pages and dialogs**
+
+- **Confirmations:** the browser's plain confirm boxes are now the portal's own dialogs, with
+  clear wording and a red button for deletions:
+  - delete draft;
+  - delete user;
+  - delete role, product or package;
+  - send a password link;
+  - turn off two-step login.
+- **Users page on phone:** cards instead of a table cut off at the side.
+- **Filters on phone:** the review, users and audit-log filters fold behind a «الفلاتر» button
+  showing how many are set. The search stays visible.
+- **Products table:**
+  - 12 columns became 9: the Arabic name sits under the name, price and tax share a column, and
+    the empty SKU column is hidden;
+  - the edit button no longer falls off the side at 1440px.
+- **Table actions:** the actions column of every table stays at the edge when a table scrolls
+  sideways.
+- **Request view:**
+  - a summary card at the top: client, phone, code, area, the amounts (remaining in amber when
+    something is due) and the Daftra document numbers;
+  - on wide screens the Daftra card and history move to a side column.
+- **Forms catalog:**
+  - two wide cards a row;
+  - the search box appears only when there are more than six forms (there are four).
+- **Branding:**
+  - the company logo is on the login card, and its «F» mark is in the sidebar, the phone top bar
+    and the browser tab;
+  - dialog buttons stack full width on a phone.
