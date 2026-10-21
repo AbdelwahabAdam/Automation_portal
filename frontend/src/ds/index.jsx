@@ -7,6 +7,19 @@ export { Icon };
 
 const cx = (...names) => names.filter(Boolean).join(' ');
 
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type=hidden]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+// Keeps Tab and Shift+Tab inside a dialog while it is open
+function trapTab(e, container) {
+  if (e.key !== 'Tab' || !container) return;
+  const items = [...container.querySelectorAll(FOCUSABLE)].filter((el) => el.offsetParent !== null || el === document.activeElement);
+  if (!items.length) return;
+  const first = items[0];
+  const last = items[items.length - 1];
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+}
+
 // ---------- Button (FlButton) ----------
 
 export function Button({
@@ -128,6 +141,9 @@ export function Combobox({
   const listId = useId();
   const shown = open && Boolean(items);
   useEffect(() => setActive(-1), [items]);
+  useEffect(() => {
+    if (active >= 0) document.getElementById(`${listId}-${active}`)?.scrollIntoView({ block: 'nearest' });
+  }, [active, listId]);
 
   function pick(item) {
     onPick(item);
@@ -364,7 +380,10 @@ export function Drawer({ title, subtitle, onClose, children, footer, width }) {
   useEffect(() => {
     const previous = document.activeElement;
     panel.current?.querySelector('input:not([type=hidden]), select, textarea, button')?.focus();
-    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    const onKey = (e) => {
+      if (e.key === 'Escape') onClose();
+      trapTab(e, panel.current);
+    };
     document.addEventListener('keydown', onKey);
     document.body.classList.add('fl-noscroll');
     return () => {
@@ -481,12 +500,23 @@ export function useWidth() {
 
 export function Dialog({ title, children, confirmLabel, cancelLabel = 'إلغاء', tone = 'primary', onConfirm, onCancel, busy, confirmDisabled }) {
   const box = useRef(null);
+  // Read by the Escape handler, which is set up once: a dialog that is working cannot be dismissed
+  const busyRef = useRef(busy);
+  busyRef.current = busy;
   useEffect(() => {
     const previous = document.activeElement;
     (box.current?.querySelector('textarea, input') || box.current?.querySelector('[data-autofocus]'))?.focus();
-    const onKey = (e) => { if (e.key === 'Escape' && !busy) onCancel(); };
+    const onKey = (e) => {
+      if (e.key === 'Escape' && !busyRef.current) onCancel();
+      trapTab(e, box.current);
+    };
     document.addEventListener('keydown', onKey);
-    return () => { document.removeEventListener('keydown', onKey); previous?.focus?.(); };
+    document.body.classList.add('fl-noscroll');
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.classList.remove('fl-noscroll');
+      previous?.focus?.();
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div className="fl-overlay fl-overlay--center">

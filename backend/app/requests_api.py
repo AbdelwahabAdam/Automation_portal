@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi import Request as HttpRequest
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from . import catalog, daftra, daftra_sync, review
@@ -186,6 +186,13 @@ def my_requests(user: User = Depends(sales_user), db: Session = Depends(get_db))
         select(Request).where(Request.created_by_id == user.id).options(selectinload(Request.attachments))
         .order_by(Request.updated_at.desc()).limit(200)
     ).all()
+
+
+@router.get("/requests/mine/counts")
+def my_request_counts(user: User = Depends(sales_user), db: Session = Depends(get_db)):
+    """How many of the user's requests are in each status, e.g. for «المسودات 3» on the forms page."""
+    rows = db.execute(select(Request.status, func.count()).where(Request.created_by_id == user.id).group_by(Request.status))
+    return {"draft": 0, "submitted": 0, "returned": 0, "approved": 0, **dict(rows.all())}
 
 
 @router.post("/requests", response_model=RequestOut, status_code=status.HTTP_201_CREATED)

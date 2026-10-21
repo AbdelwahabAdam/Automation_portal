@@ -3,9 +3,18 @@ const TOKEN_KEY = 'portal_token';
 export const getToken = () => localStorage.getItem(TOKEN_KEY);
 export const setToken = (token) => (token ? localStorage.setItem(TOKEN_KEY, token) : localStorage.removeItem(TOKEN_KEY));
 
+// What to tell the user when the server's answer carries no message of its own
+function messageFor(status, detail) {
+  if (typeof detail === 'string' && detail) return detail;
+  // FastAPI's own check of the request's shape (a list of problems, in English)
+  if (status === 422 && Array.isArray(detail)) return 'بعض البيانات المرسلة غير صالحة. حدّث الصفحة وحاول مرة أخرى.';
+  if (status >= 500) return 'حدث خطأ في الخادم. حاول مرة أخرى بعد قليل.';
+  return 'تعذر تنفيذ الطلب';
+}
+
 export class ApiError extends Error {
   constructor(status, detail) {
-    super(typeof detail === 'string' ? detail : 'تعذر تنفيذ الطلب');
+    super(messageFor(status, detail));
     this.status = status;
     this.fieldErrors = detail?.errors || null;
   }
@@ -13,15 +22,21 @@ export class ApiError extends Error {
 
 async function request(path, { method = 'GET', body, file } = {}) {
   const token = getToken();
-  const res = await fetch('/api' + path, {
-    method,
-    headers: {
-      ...(body ? { 'Content-Type': 'application/json' } : {}),
-      ...(file ? { 'Content-Type': 'application/octet-stream' } : {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: file || (body ? JSON.stringify(body) : undefined),
-  });
+  let res;
+  try {
+    res = await fetch('/api' + path, {
+      method,
+      headers: {
+        ...(body ? { 'Content-Type': 'application/json' } : {}),
+        ...(file ? { 'Content-Type': 'application/octet-stream' } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: file || (body ? JSON.stringify(body) : undefined),
+    });
+  } catch {
+    // No answer at all: offline, or the server is down
+    throw new ApiError(0, 'تعذر الاتصال بالخادم. تحقق من اتصالك بالإنترنت وحاول مرة أخرى.');
+  }
   if (!res.ok) {
     const data = await res.json().catch(() => null);
     // An expired or invalid session sends the user back to the login screen
@@ -29,7 +44,7 @@ async function request(path, { method = 'GET', body, file } = {}) {
       setToken(null);
       window.location.reload();
     }
-    throw new ApiError(res.status, data?.detail ?? res.statusText);
+    throw new ApiError(res.status, data?.detail);
   }
   return res;
 }

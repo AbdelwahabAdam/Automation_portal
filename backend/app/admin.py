@@ -9,7 +9,7 @@ from datetime import date, datetime, time, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from .audit import ACTIONS, ENTITY_TYPES, FIELD_LABELS, VALUE_LABELS, Audit, changes, role_snapshot, user_snapshot
 from . import daftra, mail, mfa
@@ -78,7 +78,8 @@ def manageable_departments():
 
 @router.get("/roles", response_model=list[RoleOut])
 def list_roles(db: Session = Depends(get_db)):
-    return [role_out(role) for role in db.scalars(select(Role).order_by(Role.name))]
+    roles = db.scalars(select(Role).options(selectinload(Role.users)).order_by(Role.name))
+    return [role_out(role) for role in roles]
 
 
 @router.post("/roles", response_model=RoleOut, status_code=status.HTTP_201_CREATED)
@@ -213,7 +214,7 @@ def existing_user(user_id: int, db: Session = Depends(get_db)) -> User:
 
 @router.get("/users", response_model=list[AdminUserOut])
 def list_users(db: Session = Depends(get_db)):
-    return db.scalars(select(User).order_by(User.is_active.desc(), User.username)).all()
+    return db.scalars(select(User).options(selectinload(User.roles)).order_by(User.is_active.desc(), User.username)).all()
 
 
 @router.get("/daftra/staff")

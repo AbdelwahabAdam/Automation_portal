@@ -8,6 +8,7 @@
 - admin, catalog: the admin pages
 """
 
+import logging
 import threading
 from contextlib import asynccontextmanager
 
@@ -15,12 +16,19 @@ from fastapi import FastAPI
 from sqlalchemy import func, select
 
 from . import account, admin, auth, catalog, daftra, import_client_categories, lookups, requests_api, review
+from .config import settings
 from .database import SessionLocal, run_migrations
 from .models import ClientCategory
+
+log = logging.getLogger(__name__)
+# Below this, the secret that signs logins is guessable (HS256 wants at least 32 bytes)
+MIN_SECRET_BYTES = 32
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if len(settings.jwt_secret.encode()) < MIN_SECRET_BYTES:
+        log.warning("JWT_SECRET is shorter than %s bytes; set a long random one in .env", MIN_SECRET_BYTES)
     run_migrations()
     # Loading the Daftra lists takes several seconds, so start before the first user asks
     threading.Thread(target=warm_daftra_lists, daemon=True).start()

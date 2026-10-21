@@ -9,7 +9,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from .audit import Audit, changes
 from .database import get_db
@@ -261,7 +261,10 @@ def apply_package(package: Package, body: PackageIn, db: Session):
 
 @router.get("/packages")
 def list_packages(db: Session = Depends(get_db)):
-    return [package_out(package) for package in db.scalars(select(Package).order_by(Package.code, Package.name))]
+    packages = db.scalars(
+        select(Package).options(selectinload(Package.items).selectinload(PackageItem.product)).order_by(Package.code, Package.name)
+    )
+    return [package_out(package) for package in packages]
 
 
 @router.post("/packages", status_code=status.HTTP_201_CREATED)

@@ -49,7 +49,7 @@ def user_for_password_token(token: str, db: Session) -> User:
         payload = jwt.decode(token, settings.jwt_secret, algorithms=[ALGORITHM])
     except jwt.PyJWTError:
         raise invalid
-    if payload.get("use") != "set_password":
+    if payload.get("use") != "set_password" or not str(payload.get("sub", "")).isdigit():
         raise invalid
     user = db.get(User, int(payload["sub"]))
     if user is None or not user.is_active or payload.get("ver") != _password_version(user):
@@ -69,7 +69,7 @@ def get_current_user(
     except jwt.PyJWTError:
         raise unauthorized
     # A password link is not a login
-    if "use" in payload:
+    if "use" in payload or not str(payload.get("sub", "")).isdigit():
         raise unauthorized
     user = db.get(User, int(payload["sub"]))
     if user is None or not user.is_active:

@@ -122,3 +122,29 @@ def test_mail_test_page(client, admin, outbox):
 def test_daftra_staff_for_linking_users(client, admin):
     staff = client.get("/api/admin/daftra/staff", headers=auth(admin)).json()
     assert staff == [{"id": 40, "name": "Manager One"}, {"id": 71, "name": "Sales One"}]
+
+
+def count_queries(client, path, headers):
+    from sqlalchemy import event
+
+    from app.database import engine
+    statements = []
+    listener = lambda *args: statements.append(args[2])  # noqa: E731
+    event.listen(engine, "before_cursor_execute", listener)
+    try:
+        assert client.get(path, headers=headers).status_code == 200
+    finally:
+        event.remove(engine, "before_cursor_execute", listener)
+    return len(statements)
+
+
+def test_lists_load_in_a_fixed_number_of_queries(client, db, admin, sales):
+    seed.catalog(db)
+    for n in range(8):
+        make_user(db, f"extra{n}", pages=["sales.new_request"])
+        db.add(Request(form_type="new_sale", data={"customer_name": str(n)}, status="submitted", created_by_id=sales.id))
+    db.commit()
+    headers = auth(admin)
+    for path in ("/api/admin/users", "/api/admin/roles", "/api/admin/packages", "/api/review/requests",
+                 "/api/catalog/picker"):
+        assert count_queries(client, path, headers) <= 6, path

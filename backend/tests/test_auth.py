@@ -107,3 +107,13 @@ def test_turning_two_step_on_and_off(client, db, sales, outbox):
     assert off.json()["mfa_enabled"] is False
     db.expire_all()
     assert db.get(User, sales.id).mfa_enabled is False
+
+
+def test_a_signed_token_without_a_user_is_no_login(client):
+    import jwt
+
+    from app.config import settings
+    for payload in ({}, {"sub": "abc"}, {"sub": "999"}):
+        token = jwt.encode(payload, settings.jwt_secret, algorithm="HS256")
+        assert client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"}).status_code == 401
+        assert client.get("/api/auth/password-link", params={"token": token}).status_code == 400

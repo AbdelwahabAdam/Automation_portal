@@ -18,6 +18,8 @@ from .text import day_month_year, digits, squash
 
 TIMEOUT_SECONDS = 20
 CACHE_SECONDS = 15 * 60
+# Daftra (or the way to it) briefly unavailable: worth asking again
+RETRY_STATUSES = {502, 503, 504}
 
 # Our payment methods as Daftra's payment method keys, as found on the account's existing payments
 # (Tabby payments are recorded there as "visa" into the «مدفوعات تابي» treasury)
@@ -60,14 +62,24 @@ def _call(method: str, path: str, params: dict | None = None, body: dict | list 
         data = json.dumps(body, ensure_ascii=False).encode("utf-8")
         headers["Content-Type"] = "application/json"
     request = urllib.request.Request(url, data=data, method=method, headers=headers)
-    try:
-        with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
-            return json.load(response)
-    except urllib.error.HTTPError as error:
-        message = _error_message(error.read())
-        raise (NotFound if error.code == 404 else DaftraError)(f"HTTP {error.code}: {message}") from error
-    except (urllib.error.URLError, TimeoutError, ValueError) as error:
-        raise DaftraError(str(error)) from error
+    # A read that fails on the way (network, timeout, Daftra briefly unavailable) is tried once more;
+    # a write is not, since it may have been saved even though no answer came back
+    attempts = 2 if method == "GET" else 1
+    for attempt in range(1, attempts + 1):
+        try:
+            with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
+                return json.load(response)
+        except urllib.error.HTTPError as error:
+            if error.code in RETRY_STATUSES and attempt < attempts:
+                continue
+            message = _error_message(error.read())
+            raise (NotFound if error.code == 404 else DaftraError)(f"HTTP {error.code}: {message}") from error
+        except (urllib.error.URLError, TimeoutError) as error:
+            if attempt < attempts:
+                continue
+            raise DaftraError(str(error)) from error
+        except ValueError as error:
+            raise DaftraError(str(error)) from error
 
 
 def get(resource: str, params: dict | None = None) -> dict:

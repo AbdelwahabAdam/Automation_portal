@@ -52,3 +52,21 @@ def test_clients_import_keeps_clients_with_a_phone(db, tmp_path, monkeypatch):
     assert [(a.emirate, a.street, a.link, a.is_default) for a in first.addresses] == [("دبي", "x", "https://m", True)]
     assert second.customer_name == "B C" and second.phone == "0522222222"
     assert (second.addresses[0].emirate, second.addresses[0].area) == ("أبوظبي", "العين")
+
+
+def test_create_user_from_the_command_line(db, monkeypatch, capsys):
+    import pytest
+
+    from app import create_user
+    from app.models import User
+    monkeypatch.setattr(sys, "argv", ["create_user", "Boss", "long-password", "--admin", "--name", "Big Boss",
+                                      "--email", "Boss@Example.com"])
+    create_user.main()
+    user = db.query(User).filter_by(username="boss").one()
+    assert user.is_admin and user.email == "boss@example.com" and user.full_name == "Big Boss"
+    for argv in (["create_user", "a@b.c", "long-password"], ["create_user", "ok.name", "short"],
+                 ["create_user", "ok.name", "long-password", "--email", "nope"]):
+        monkeypatch.setattr(sys, "argv", argv)
+        with pytest.raises(SystemExit):
+            create_user.main()
+    assert db.query(User).count() == 1

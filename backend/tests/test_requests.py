@@ -152,3 +152,14 @@ def test_adding_an_address_is_labelled_in_the_audit_log(client, db, sales, admin
     client.post("/api/clients/4053/addresses", json={"emirate": "عجمان"}, headers=auth(sales))
     options = client.get("/api/admin/audit/options", headers=auth(admin)).json()
     assert options["actions"]["client.address.add"] and options["entity_types"]["client"] == "عميل"
+
+
+def test_my_request_counts(client, db, sales):
+    seed.catalog(db)
+    create(client, sales, {"customer_name": "a"})
+    create(client, sales, {"customer_name": "b"})
+    submitted_sale(client, db, sales)
+    other = make_user(db, "sales2", pages=["sales.new_request"])
+    create(client, other, {"customer_name": "c"})
+    counts = client.get("/api/requests/mine/counts", headers=auth(sales)).json()
+    assert counts == {"draft": 2, "submitted": 1, "returned": 0, "approved": 0}

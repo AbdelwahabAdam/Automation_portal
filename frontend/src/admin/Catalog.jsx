@@ -21,10 +21,15 @@ function ProductDrawer({ product, onSaved, onDeleted, onClose }) {
     buy_price: product.buy_price ?? '', stock_balance: product.stock_balance ?? '', daftra_id: product.daftra_id ?? '',
   } : { ...NEW_PRODUCT, tax_percent: 5 });
   const { error, busy, run } = useAction();
+  // What is missing before the product can be saved, said here rather than by the server
+  const [problem, setProblem] = useState('');
   const set = (name, value) => setValues((current) => ({ ...current, [name]: value }));
 
   function submit(e) {
     e?.preventDefault();
+    if (!values.name.trim()) return setProblem('اكتب اسم المنتج كما يظهر في الفاتورة.');
+    if (String(values.unit_price).trim() === '' || Number(values.unit_price) < 0) return setProblem('اكتب سعر الوحدة (صفر أو أكثر).');
+    setProblem('');
     run('save', async () => {
       const body = {
         name: values.name, name_ar: values.name_ar, description: values.description, unit_price: Number(values.unit_price),
@@ -66,7 +71,7 @@ function ProductDrawer({ product, onSaved, onDeleted, onClose }) {
       )}
     >
       <form className="fl-stack fl-stack--sm" onSubmit={submit} noValidate>
-        {error && <Alert tone="error">{error}</Alert>}
+        {(problem || error) && <Alert tone="error">{problem || error}</Alert>}
         <Field label="الاسم كما يظهر في الفاتورة" htmlFor="p_name" required>
           <TextInput id="p_name" dir="auto" value={values.name} onChange={(e) => set('name', e.target.value)} maxLength={200} />
         </Field>
@@ -208,6 +213,7 @@ function PackageDrawer({ pack, products, onSaved, onDeleted, onClose }) {
   const [nextKey, setNextKey] = useState(pack ? pack.items.length : 0);
   const [adding, setAdding] = useState('');
   const { error, busy, run } = useAction();
+  const [problem, setProblem] = useState('');
   const byId = Object.fromEntries(products.map((product) => [product.id, product]));
   const set = (name, value) => setValues((current) => ({ ...current, [name]: value }));
   const setLine = (key, name, value) => setLines((current) => current.map((line) => (line.key === key ? { ...line, [name]: value } : line)));
@@ -226,6 +232,10 @@ function PackageDrawer({ pack, products, onSaved, onDeleted, onClose }) {
 
   function submit(e) {
     e?.preventDefault();
+    if (!values.name.trim()) return setProblem('اكتب اسم الباقة.');
+    const bad = lines.find((line) => !(Number(line.quantity) >= 1) || String(line.unit_price).trim() === '' || Number(line.unit_price) < 0);
+    if (bad) return setProblem(`راجع كمية «${byId[bad.product_id]?.name || bad.product_name}» وسعرها: الكمية 1 أو أكثر والسعر صفر أو أكثر.`);
+    setProblem('');
     run('save', async () => {
       const body = {
         ...values,
@@ -269,7 +279,7 @@ function PackageDrawer({ pack, products, onSaved, onDeleted, onClose }) {
       )}
     >
       <form className="fl-stack fl-stack--sm" onSubmit={submit} noValidate>
-        {error && <Alert tone="error">{error}</Alert>}
+        {(problem || error) && <Alert tone="error">{problem || error}</Alert>}
         <div className="fl-grid">
           <Field label="اسم الباقة" htmlFor="k_name" required>
             <TextInput id="k_name" dir="auto" value={values.name} onChange={(e) => set('name', e.target.value)} maxLength={200} />

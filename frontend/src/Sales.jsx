@@ -36,12 +36,7 @@ function FormsCatalog({ formTypes, onChoose }) {
   const [counts, setCounts] = useState({ returned: 0, draft: 0 });
 
   useEffect(() => {
-    api('/requests/mine')
-      .then((requests) => setCounts({
-        returned: requests.filter((request) => request.status === 'returned').length,
-        draft: requests.filter((request) => request.status === 'draft').length,
-      }))
-      .catch(() => {});
+    api('/requests/mine/counts').then(setCounts).catch(() => {});
   }, []);
 
   // Hidden forms take no new requests (VISIBLE_FORM_TYPES in backend/app/forms/definitions.py)

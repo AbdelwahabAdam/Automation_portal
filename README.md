@@ -57,8 +57,8 @@ The first admin is created from the command line (from `backend/`):
 
 Everything after that is done in the portal, under the الإدارة tab:
 
-- **المستخدمون** — add users, edit them, stop an account, set a new password.
-- **الصلاحيات** — roles. A role is a list of pages; a user opens the pages of all their roles.
+- **المستخدمون** — add users, edit them, stop an account, send a link to set a new password.
+- **الأدوار والصلاحيات** — roles. A role is a list of pages; a user opens the pages of all their roles.
 - **سجل النشاط** — every login, change and file download, with the values before and after.
 
 A new user gets an email with a link to set their own password (valid 72 hours, single use),
@@ -67,7 +67,7 @@ and then logs in with their email or username. "نسيت كلمة المرور؟
 the admin is shown the link to pass on by hand.
 
 A user can be made manager of one or more departments. A manager opens every page of the
-department, including its manager pages (marked `"manager": True` in `pages.py`, e.g. طلبات الفريق
+department, including its manager pages (marked `"manager": True` in `pages.py`, e.g. المراجعة
 in sales), which cannot be put in a role.
 
 Every user has a حسابي page (their name in the header): name, password and two-step login.
@@ -105,33 +105,32 @@ each with its own quantity, price and line discount). Admins manage both under
 الإدارة → المنتجات والباقات. The sales forms' product field searches this catalog
 (`GET /api/products`), not Daftra's live product list, which carries many duplicate names.
 
-**`Products.xlsx` (repo root, sheets "Packages" and "Items") is the catalog's single source of
-truth.** To load it (from `backend/`):
+**The catalog is built from the Proposal quotation PDFs and Daftra's `products.json`** (both in
+the workspace folder, next to `portal/`). Each PDF is the Daftra quotation of one package; its
+lines give the package's products, quantities and prices, and each product is matched to Daftra's
+by name to carry its Daftra id (which the invoices need). From `backend/`, read the report of a dry
+run first, then run it for real:
 
 ```
-.venv\Scripts\python -m app.import_final_catalog "..\..\Products.xlsx"
+.venv\Scripts\python -m app.import_packages_from_proposals --dry-run
+.venv\Scripts\python -m app.import_packages_from_proposals
 ```
 
 This **replaces** the whole catalog: every product, package and product-to-package link is
-deleted and rebuilt from the workbook, so run it only when the workbook should overwrite the
-catalog, not add to it. Products are matched by their `اسم البند الموحد`'s SKU column
-(`FL-I0xx`, stored as `products.sku`) and packages by their package SKU (`FL-P0xx...`), so a
-rerun after only editing the workbook reassigns the same database ids. Anything added by hand
-in the portal since the last import (an admin-created product, a role-managed package, etc.)
-does not survive a rerun.
+deleted and rebuilt, so anything added by hand in the portal since does not survive a rerun. The
+maintenance items are then added on top (see طلب صيانة وتبديل below), and on the server both run
+from `deploy/ansible/import.yml`.
 
-Two older, narrower import scripts still exist for other sources: `import_products.py` fills the
-catalog by merging in a quotation-lines workbook without deleting anything, and
-`import_daftra_priced.py` folds in the handful of Daftra products that carry a real price
-(`python -m app.import_daftra_priced "..\..\products.json"`). Neither is the source of truth —
-`import_final_catalog.py` is — so re-running either after it will reintroduce products that
-are not in `Products.xlsx`.
+Three older import scripts are kept for reference but are no longer the catalog's source:
+`import_final_catalog.py` (the `Products.xlsx` workbook), `import_products.py` (a quotation-lines
+workbook, merged in) and `import_daftra_priced.py` (Daftra products that carry a price). Running
+any of them after the proposals import changes the catalog away from the quotations.
 
 ## Daftra invoices on approval
 
 Approving one of these requests creates its documents in Daftra (`app/daftra_sync/`). The invoice PDF and
-the receipt PDF are attached to the request. The receipt PDF is drawn by the portal (`app/receipt_pdf.py`),
-since Daftra's API has none:
+the receipt PDF are attached to the request. The receipt and work order PDFs are drawn by the portal
+(`app/printouts.py`, templates in `app/templates/pdf/`), since Daftra's API has none:
 
 - **طلب بيع لعميل جديد**: the client when new, the invoice, and the receipt (سند قبض) for the amount paid.
   When «إنشاء أمر الشغل» is نعم, it also creates the installation work order, and attaches a PDF of it
@@ -149,8 +148,8 @@ since Daftra's API has none:
 - **طلب تسديد مبلغ متبقي**: a receipt on the invoice picked from the client's invoices that still have money due.
 - **طلب صيانة وتبديل**: the client when new, an invoice of the items picked under «إضافة بند», and a receipt
   when something was paid (it must be paid in full).
-  - The invoice notes list the devices, the service and the visit date; the general «service» item carries
-    «وصف الخدمة».
+  - The invoice notes list the devices, the service and the visit date. (Requests from before «وصف الخدمة»
+    was removed from the form still put it on the general «service» item.)
   - The items are the catalog products with a maintenance group, at their catalog price. Prices and groups
     are edited in الإدارة ← المنتجات والباقات. They came from `Maintenance_Invoice_Items.xlsx`:
     `.venv\Scripts\python -m app.import_maintenance_items`.
@@ -197,9 +196,44 @@ After changing `backend/app/models.py`, add a migration (from `backend/`):
 
 ## Forms
 
-Form types and their fields live in `backend/app/forms/definitions.py` (built from the blocks in `fields.py` and the choices in `options.py`; `validation.py` checks a submission). The frontend renders
-whatever that file defines, and the backend validates submissions against it.
+Form types and their fields live in `backend/app/forms/definitions.py`, written with the
+building blocks in `fields.py` and the choices in `options.py`. The frontend renders whatever
+the definitions say, and `validation.py` checks a submission against them.
 `frontend/src/validation.js` repeats the same checks for instant feedback.
+
+## Code layout
+
+Backend (`backend/app/`):
+
+- `main.py` starts the app and includes the routers: `auth.py` (login, two-step codes, password
+  links), `requests_api.py` (a salesperson's requests and attachments), `lookups.py` (clients,
+  catalog and Daftra lists for the forms), `review.py` (approve or return), `account.py`,
+  `admin.py` and `catalog.py` (the admin pages).
+- `forms/` — the form definitions and their validation; `daftra.py` — the Daftra API client and
+  its cached lists; `daftra_sync/` — what approving creates in Daftra (client, invoice and
+  receipt, work order); `printouts.py` — the PDFs the portal draws; `mail.py` and
+  `templates/email/` — the emails; `text.py` — small shared helpers (Arabic digits, UAE time).
+- `import_*.py`, `create_user.py` — command-line jobs (`python -m app.<name>`).
+
+Frontend (`frontend/src/`): `App.jsx` (layout and navigation), `pages.jsx` (which screen each
+page key opens), `Sales.jsx` + `RequestForm.jsx` + `form/` (the forms), `RequestList.jsx`,
+`RequestView.jsx`, `MyRequests.jsx`, `Review.jsx`, `admin/` (the admin pages), `ds/` (the design
+system's components, tokens and styles), `api.js` (calls to the backend).
+
+## Tests
+
+Backend tests run in Docker against a separate `portal_test` database of the local stack, with
+Daftra replaced by an in-memory fake that records every call (a test cannot reach the network)
+and email caught in a list. They pin, among the rest, the exact payloads sent to Daftra for each
+invoiced form. With the stack up (`docker compose up -d`), from `backend/`:
+
+```
+sh run-tests.sh            # pyflakes, then every test
+sh run-tests.sh -k review  # pytest arguments are passed on
+```
+
+Frontend: `sh check.sh` from `frontend/` runs the tests in `frontend/tests/` (`node --test`,
+no extra packages) and a production build.
 
 ## Deploying to AWS (EC2)
 
