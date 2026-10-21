@@ -7,7 +7,7 @@ import { ClientLookupNote, SEARCH_FIELDS, useClientLookup } from './form/ClientL
 import { Control, DaftraListSelect, FileField, ProductPicker, guessFromProductName, showsAsChoice } from './form/fields.jsx';
 import FormProgress, { Totals, formTotals } from './form/FormProgress.jsx';
 import OrderLines from './form/OrderLines.jsx';
-import { formatAmount, formatDay } from './formsMeta.js';
+import { formatAmount } from './formsMeta.js';
 import { DAFTRA_LIST_TYPES, allFields, coordinatesFromLink, evaluateForm, initialValues } from './validation.js';
 
 // Sections open when a form starts; the rest are folded until needed
@@ -54,6 +54,37 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
 
   const toast = useToast();
   const client = useClientLookup({ fieldNames, needsClientInfo, setValues, setErrors, setMessage, autoFill, autoFilled, toast });
+
+  // Where a التصنيف's clients live
+  const categories = catalog.daftraLists?.daftra_client_category;
+  const locationOfCategory = (id) => {
+    const row = categories?.find((option) => String(option.id) === String(id));
+    return row?.area && row?.emirate ? { area: row.area, emirate: row.emirate } : null;
+  };
+
+  // المنطقة and الإمارة follow التصنيف however it was set — picked by hand, or taken from Daftra
+  // when a client is found, whose own address holds Daftra's neighbourhood names, which are not
+  // among the areas this form offers. Runs again if the list of categories arrives later.
+  const placedBy = useRef('');
+  useEffect(() => {
+    const id = values.category;
+    if (!id || placedBy.current === String(id)) return;
+    const place = locationOfCategory(id);
+    if (!place) return;
+    // Decided out here, not inside the update: an update may be run more than once, and reading
+    // what was auto-filled while also writing it would make the second run change its mind
+    const takeArea = !values.area || values.area === autoFilled.current.area;
+    const takeEmirate = !values.emirate || values.emirate === autoFilled.current.emirate;
+    placedBy.current = String(id);
+    if (!takeArea && !takeEmirate) return;
+    if (takeArea) autoFilled.current.area = place.area;
+    if (takeEmirate) autoFilled.current.emirate = place.emirate;
+    setValues((current) => ({
+      ...current,
+      ...(takeArea ? { area: place.area } : {}),
+      ...(takeEmirate ? { emirate: place.emirate } : {}),
+    }));
+  }, [values.category, categories]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!requestId) return;
@@ -407,9 +438,8 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
       return { control: <Control spec={{ ...spec, options, dropdown: true }} value={values.area} invalid={invalid} onChange={(_, v) => chooseArea(v)} /> };
     }
     const searchable = SEARCH_FIELDS.includes(spec.name);
-    const day = spec.type === 'date' ? formatDay(values[spec.name]) : '';
     return {
-      hint: searchable ? 'يُبحث عن العميل بعد الكتابة، أو اضغط أيقونة البحث.' : (day ? `التاريخ المختار: ${day}` : null),
+      hint: searchable ? 'يُبحث عن العميل بعد الكتابة، أو اضغط أيقونة البحث.' : null,
       control: <Control spec={spec} value={values[spec.name]} invalid={invalid} onChange={change}
         onBlur={searchable ? client.lookupClient : undefined} onSearch={searchable ? client.searchNow : undefined} />,
     };

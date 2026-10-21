@@ -345,6 +345,32 @@ it, make a new pair, put the public half in `portal_ci_public_key` in `group_var
 
 Deploying by hand is still `ansible-playbook site.yml`, or `sudo portal-deploy` on the server.
 
+### Which version is running
+
+`VERSION` in the repo root holds the number, e.g. `1.0.0`. Bump it in the same commit as the change
+it describes:
+
+| Change | Example |
+|---|---|
+| A fix, nothing new | 1.0.0 → 1.0.**1** |
+| Something new that breaks nothing | 1.0.1 → 1.**1**.0 |
+| Something staff must be told about or retrained on | 1.1.0 → **2**.0.0 |
+
+Nothing breaks if you forget: every deploy also stamps a **build number** (how many commits the
+branch has), the commit and the time it was built, so two deploys are never confused even when the
+number is the same. Those three are set by `portal-deploy`, which passes them into the image as it
+builds it; an image built by hand reads as `dev`.
+
+It is shown at the foot of the الإدارة pages — staff never see it — and returned by
+`GET /api/admin/version`:
+
+```json
+{"version": "1.0.0", "build": "15", "commit": "a7c7354", "built_at": "2026-10-21 20:30"}
+```
+
+So, to see what is live: open any الإدارة page, or read the last `=== deployed` line in
+`/var/log/portal-deploy.log` on the server, or the newest run in GitHub's Actions tab.
+
 **On the server:** `ssh ubuntu@<ip>`, then `cd /opt/portal` and run any of:
 - `docker compose -f docker-compose.prod.yml logs -f backend` to follow the backend's log
 - `docker compose -f docker-compose.prod.yml ps` to see the containers

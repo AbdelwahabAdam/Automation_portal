@@ -127,10 +127,10 @@ export default function AuditLog() {
           </Select>
         </Field>
         <Field label="من تاريخ" htmlFor="f_from">
-          <TextInput id="f_from" type="date" dir="ltr" value={filters.date_from} onChange={(e) => setFilter('date_from', e.target.value)} />
+          <TextInput id="f_from" type="date" value={filters.date_from} onChange={(e) => setFilter('date_from', e.target.value)} />
         </Field>
         <Field label="إلى تاريخ" htmlFor="f_to">
-          <TextInput id="f_to" type="date" dir="ltr" value={filters.date_to} onChange={(e) => setFilter('date_to', e.target.value)} />
+          <TextInput id="f_to" type="date" value={filters.date_to} onChange={(e) => setFilter('date_to', e.target.value)} />
         </Field>
       </Filters>
       {error && <Alert tone="error">{error}</Alert>}

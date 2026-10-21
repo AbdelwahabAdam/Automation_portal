@@ -35,10 +35,12 @@ class FakeDaftra:
         self.next_id += 1
         return self.next_id
 
-    def add_client(self, client_id, phone, name="Existing", category_id=None, client_number=None):
+    def add_client(self, client_id, phone, name="Existing", category_id=None, client_number=None, custom=None):
+        # custom: the required custom fields, as a client added through the portal has them
         self.clients[client_id] = {"id": str(client_id), "business_name": name, "phone1": phone, "phone2": "",
                                    "client_number": client_number or f"{client_id:06d}",
-                                   "category_id": str(category_id) if category_id else "", "category": ""}
+                                   "category_id": str(category_id) if category_id else "", "category": "",
+                                   "custom": custom}
 
     def add_invoice(self, client_id, total, paid=0.0, no=None, draft="0"):
         invoice_id = self._new_id()
@@ -110,7 +112,15 @@ class FakeDaftra:
         return {"data": {"Client": client}}
 
     def update_client(self, client_id, params, body):
-        self.clients[int(client_id)].update(body["Client"])
+        client = self.clients[int(client_id)]
+        custom = body.get("le_custom_data_client") or client.get("custom")
+        # The account demands these on every save; empty means refused, as Daftra does
+        if not (custom or {}).get("test") or not (custom or {}).get("coordinates_text"):
+            raise DaftraError('HTTP 400: Bad Request — {"اسم الجهاز": ["هذا الحقل مطلوب ولا يمكن ان يكون فارغ"], '
+                              '"Coordinates": ["هذا الحقل مطلوب ولا يمكن ان يكون فارغ"]}')
+        client.update(body["Client"])
+        if body.get("le_custom_data_client"):
+            client["custom"] = body["le_custom_data_client"]
         return {"result": "successful"}
 
     # ---------- invoices ----------

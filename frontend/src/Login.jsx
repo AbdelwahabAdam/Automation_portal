@@ -50,7 +50,7 @@ function ForgotPassword({ initial, onBack }) {
       ) : (
         <>
           <Field label="البريد الإلكتروني أو اسم المستخدم" htmlFor="forgot_user" error={error}>
-            <TextInput id="forgot_user" dir="ltr" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" autoFocus invalid={Boolean(error)} />
+            <TextInput id="forgot_user" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" autoFocus invalid={Boolean(error)} />
           </Field>
           <Button type="submit" variant="primary" size="lg" full loading={busy}>إرسال الرابط</Button>
         </>
@@ -130,7 +130,7 @@ export default function Login({ onLogin, notice }) {
         )}
       >
         <Field label="رمز التحقق" htmlFor="login_code" error={error} hint={resent || null}>
-          <TextInput id="login_code" dir="ltr" inputMode="numeric" autoComplete="one-time-code" maxLength={8} value={code}
+          <TextInput id="login_code" inputMode="numeric" autoComplete="one-time-code" maxLength={8} value={code}
             onChange={(e) => setCode(e.target.value)} placeholder="123456" autoFocus invalid={Boolean(error)} />
         </Field>
         <Button type="submit" variant="primary" size="lg" full loading={busy}>تأكيد</Button>
@@ -153,7 +153,7 @@ export default function Login({ onLogin, notice }) {
       {notice && <Alert tone="success">{notice}</Alert>}
       {error && <Alert tone="error">{error}</Alert>}
       <Field label="البريد الإلكتروني أو اسم المستخدم" htmlFor="login_user">
-        <TextInput id="login_user" dir="ltr" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" autoFocus />
+        <TextInput id="login_user" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" autoFocus />
       </Field>
       <Field label="كلمة المرور" htmlFor="login_password">
         <PasswordInput id="login_password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />

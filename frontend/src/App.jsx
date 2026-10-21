@@ -6,6 +6,7 @@ import { BRAND, LOGO_MARK } from './brand.js';
 import { Button, Icon, Loading, Menu } from './ds/index.jsx';
 import Login from './Login.jsx';
 import { useKeyboardOpen } from './hooks.js';
+import Version from './admin/Version.jsx';
 import { PAGE_COMPONENTS, PAGE_ICONS } from './pages.jsx';
 import { pagePath } from './paths.js';
 import { useSalesData } from './salesData.js';
@@ -147,6 +148,8 @@ export default function App() {
               <Route path="*" element={<Navigate to={pagePath(pages[0].key)} replace />} />
             </Routes>
           )}
+          {/* Only on the الإدارة pages */}
+          {location.pathname.startsWith('/admin/') && <Version />}
         </main>
       </div>
 

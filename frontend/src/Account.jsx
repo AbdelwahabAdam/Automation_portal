@@ -35,10 +35,10 @@ function Profile({ account, onChange }) {
             <TextInput id="acc_name" value={fullName} onChange={(e) => setFullName(e.target.value)} maxLength={120} required />
           </Field>
           <Field label="اسم المستخدم" htmlFor="acc_username" locked="للقراءة فقط">
-            <TextInput id="acc_username" dir="ltr" value={account.username} readOnly />
+            <TextInput id="acc_username" value={account.username} readOnly />
           </Field>
           <Field label="البريد الإلكتروني" htmlFor="acc_email" locked="للقراءة فقط" hint="لتغيير البريد أو اسم المستخدم تواصل مع مدير النظام.">
-            <TextInput id="acc_email" dir="ltr" value={account.email || 'لا يوجد'} readOnly />
+            <TextInput id="acc_email" value={account.email || 'لا يوجد'} readOnly />
           </Field>
           <Field label="الصلاحيات"><Permissions account={account} /></Field>
         </div>
@@ -135,7 +135,7 @@ function TwoStep({ account, onChange }) {
     body = (
       <form onSubmit={enable} noValidate className="fl-stack fl-stack--sm">
         <Field label="رمز التحقق" htmlFor="on_code" hint={<>أرسلنا رمزًا من 6 أرقام إلى <bdi dir="ltr">{hint}</bdi>. اكتبه هنا للتأكد من أن البريد يصلك.</>}>
-          <TextInput id="on_code" dir="ltr" inputMode="numeric" autoComplete="one-time-code" maxLength={8} value={code}
+          <TextInput id="on_code" inputMode="numeric" autoComplete="one-time-code" maxLength={8} value={code}
             onChange={(e) => setCode(e.target.value)} placeholder="123456" autoFocus />
         </Field>
         <Feedback state={state} />

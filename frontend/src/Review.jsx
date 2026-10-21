@@ -117,10 +117,10 @@ export default function Review({ user, sales }) {
           </Select>
         </Field>
         <Field label="تاريخ الإرسال من" htmlFor="review_from">
-          <TextInput id="review_from" type="date" dir="ltr" value={from} onChange={(e) => setFrom(e.target.value)} />
+          <TextInput id="review_from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
         </Field>
         <Field label="تاريخ الإرسال إلى" htmlFor="review_to">
-          <TextInput id="review_to" type="date" dir="ltr" value={to} onChange={(e) => setTo(e.target.value)} />
+          <TextInput id="review_to" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
         </Field>
       </Filters>
       <p className="fl-results">النتائج: {filtered.length} من {tab === 'all' ? requests.length : requests.filter((r) => r.status === tab).length}</p>

@@ -285,3 +285,70 @@ def test_the_pdfs_saved_on_approval_cannot_be_deleted_by_the_owner(client, db, s
     request.status = "returned"
     db.commit()
     assert client.delete(f"/api/attachments/{invoice_pdf.id}", headers=auth(sales)).status_code == 409
+
+
+def client_updates(fake, client_id=4053):
+    """Every save Daftra was asked to make on that client, in order."""
+    return [body for method, path, _, body in fake.calls
+            if method == "PUT" and path == f"/api2/clients/{client_id}.json"]
+
+
+def renewal_request(client, db, sales, **overrides):
+    """A contract renewal for the existing client 4053, sent for review."""
+    data = seed.renewal_data(**overrides)
+    request_id = create(client, sales, data, form_type="contract_renewal").json()["id"]
+    upload(client, sales, request_id, "payment_proof")
+    sent = client.put(f"/api/requests/{request_id}", json={"data": data, "action": "submit"}, headers=auth(sales))
+    assert sent.status_code == 200, sent.json()
+    return request_id
+
+
+def test_the_client_category_is_left_alone_when_it_already_matches(client, db, fake_daftra, sales, manager):
+    seed.catalog(db)
+    seed.existing_client(db)
+    # Daftra already has this client in the category the form picked
+    fake_daftra.add_client(4053, "0509999999", category_id=5)
+    request_id = renewal_request(client, db, sales)
+    assert approve(client, manager, request_id).status_code == 200
+    assert client_updates(fake_daftra) == []
+
+
+def test_a_client_whose_required_fields_are_empty_is_still_given_its_category(client, db, fake_daftra, sales, manager):
+    """Daftra refuses any save that leaves اسم الجهاز and Coordinates empty, so they go with it."""
+    seed.catalog(db)
+    seed.existing_client(db)
+    fake_daftra.add_client(4053, "0509999999", category_id=1)
+    request_id = renewal_request(client, db, sales)
+    assert approve(client, manager, request_id).status_code == 200
+    saves = client_updates(fake_daftra)
+    # Asked plainly first, then again with the fields Daftra insists on
+    assert len(saves) == 2
+    assert "le_custom_data_client" not in saves[0]
+    assert saves[1]["le_custom_data_client"] == {"test": "N + F", "coordinates_text": "24.1, 55.6"}
+    assert saves[1]["Client"] == {"category_id": 5, "category": "العين العامره"}
+    assert fake_daftra.clients[4053]["category_id"] == 5
+
+
+def test_a_client_that_has_those_fields_keeps_what_is_in_them(client, db, fake_daftra, sales, manager):
+    seed.catalog(db)
+    seed.existing_client(db)
+    kept = {"test": "جهاز العميل الحقيقي", "coordinates_text": "25.0000, 55.0000"}
+    fake_daftra.add_client(4053, "0509999999", category_id=1, custom=kept)
+    request_id = renewal_request(client, db, sales)
+    assert approve(client, manager, request_id).status_code == 200
+    saves = client_updates(fake_daftra)
+    assert len(saves) == 1 and "le_custom_data_client" not in saves[0]
+    assert fake_daftra.clients[4053]["custom"] == kept
+
+
+def test_a_request_without_coordinates_says_so_instead_of_failing_in_daftra(client, db, fake_daftra, sales, manager):
+    seed.catalog(db)
+    seed.existing_client(db)
+    fake_daftra.add_client(4053, "0509999999", category_id=1)
+    request_id = renewal_request(client, db, sales)
+    # As an old request submitted before the form asked for them would be
+    request = db.get(Request, request_id)
+    request.data = {**request.data, "coordinates": ""}
+    db.commit()
+    response = approve(client, manager, request_id)
+    assert response.status_code == 409 and "الإحداثيات" in response.json()["detail"]

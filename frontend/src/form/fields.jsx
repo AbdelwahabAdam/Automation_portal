@@ -144,7 +144,7 @@ export function Stepper({ id, label, min, max, value, onChange }) {
     <div className="fl-stepper">
       <Button type="button" icon="minus" iconOnly label={`إنقاص ${label}`} disabled={current <= min} onClick={() => set(current - 1)} />
       <TextInput
-        id={id} dir="ltr" type="text" inputMode="numeric" className="fl-order-lines__qty fl-stepper__value" aria-label={label}
+        id={id} type="text" inputMode="numeric" className="fl-order-lines__qty fl-stepper__value" aria-label={label}
         value={current} onChange={(e) => set(e.target.value.replace(/[^\d]/g, ''))}
       />
       <Button type="button" icon="plus" iconOnly label={`زيادة ${label}`} disabled={current >= max} onClick={() => set(current + 1)} />
@@ -179,7 +179,7 @@ export function Control({ spec, value, invalid, onChange, onBlur, onSearch }) {
       : <Choice name={spec.name} multiple options={spec.options} value={value} invalid={invalid} onChange={(v) => onChange(spec.name, v)} />;
   }
   if (spec.type === 'textarea') return <TextArea {...common} rows={3} />;
-  if (spec.type === 'date') return <TextInput {...common} type="date" dir="ltr" />;
+  if (spec.type === 'date') return <TextInput {...common} type="date" />;
   const inputMode = { number: spec.integer ? 'numeric' : 'decimal', phone: 'tel' }[spec.type];
   // A field the client is looked up by: its keyboard says «بحث», and digits are what gets typed
   const searching = Boolean(onSearch);
@@ -190,7 +190,7 @@ export function Control({ spec, value, invalid, onChange, onBlur, onSearch }) {
       {/* A phone keeps its number pad, and the client code is digits too; on both, the keyboard's own
           Enter key says «بحث» and runs the search */}
       <TextInput
-        {...common} icon={icon} type="text" dir={inputMode || searching ? 'ltr' : 'auto'} list={list} autoComplete="off"
+        {...common} icon={icon} type="text" list={list} autoComplete="off"
         inputMode={inputMode ?? (searching ? 'numeric' : undefined)} enterKeyHint={searching ? 'search' : undefined}
         onIconClick={onSearch && (() => onSearch(spec.name, value ?? ''))} iconLabel={onSearch && `بحث عن العميل بـ${spec.label}`}
         onKeyDown={onSearch && ((e) => {

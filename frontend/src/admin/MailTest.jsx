@@ -67,7 +67,7 @@ export default function MailTest() {
               </Select>
             </Field>
             <Field label="إلى" htmlFor="mail_to" required>
-              <TextInput id="mail_to" dir="ltr" type="email" value={to} onChange={(e) => setTo(e.target.value)} maxLength={254} />
+              <TextInput id="mail_to" type="email" value={to} onChange={(e) => setTo(e.target.value)} maxLength={254} />
             </Field>
           </div>
           {error && <Alert tone="error">{error}</Alert>}

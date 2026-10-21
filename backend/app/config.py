@@ -34,6 +34,12 @@ class Settings(BaseSettings):
     # The اسم الجهاز every new client gets (Nabaa + food cooler); the form does not ask for it
     daftra_default_device_name: str = "N + F"
     daftra_client_coordinates_field: str = "coordinates_text"
+    # Which version is running, written into the image when it is built (see backend/Dockerfile).
+    # app_version is the number in the VERSION file; app_build counts the commits behind it.
+    app_version: str = "dev"
+    app_build: str = "0"
+    app_commit: str = ""
+    app_built_at: str = ""
     # Address of the portal as users open it; used for the links sent by email
     public_url: str = "http://localhost:5174"
     password_link_hours: int = 72

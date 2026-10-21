@@ -56,8 +56,9 @@ export function Field({ label, htmlFor, required, optional, locked, hint, error,
         {optional && <span className="fl-field__aside">(اختياري)</span>}
         {locked && <span className="fl-field__aside"><Icon name="lock" size={13} />{locked}</span>}
       </div>
-      {hint && <div className="fl-field__hint">{hint}</div>}
       {children}
+      {/* Under the control, not above it: a hint must not push its own field lower than the one beside it */}
+      {hint && <div className="fl-field__hint">{hint}</div>}
       {error && (
         <div className="fl-field__error" role="alert">
           <Icon name="alert-circle" size={15} /><span>{error}</span>
@@ -103,7 +104,7 @@ export function PasswordInput({ invalid, ...rest }) {
         </button>
       )}
     >
-      <input className="fl-input" dir="ltr" type={shown ? 'text' : 'password'} aria-invalid={invalid || undefined} {...rest} />
+      <input className="fl-input" type={shown ? 'text' : 'password'} aria-invalid={invalid || undefined} {...rest} />
     </InputBox>
   );
 }
@@ -170,7 +171,7 @@ export function Combobox({
   return (
     <div className="fl-suggest">
       <TextInput
-        id={id} icon={icon} dir="auto" autoComplete="off" value={value ?? ''} invalid={invalid} placeholder={placeholder}
+        id={id} icon={icon} autoComplete="off" value={value ?? ''} invalid={invalid} placeholder={placeholder}
         role="combobox" aria-expanded={shown} aria-autocomplete="list" aria-controls={listId}
         aria-activedescendant={shown && active >= 0 ? `${listId}-${active}` : undefined}
         onChange={(e) => { onInput(e.target.value); setOpen(true); }}
@@ -230,6 +231,9 @@ export function Select({ invalid, children, className, value, onChange, disabled
   const options = readOptions(children);
   const chosen = options.find((option) => String(option.value) === String(value ?? ''));
   const placeholder = options.find((option) => String(option.value) === '');
+  // A saved value the list does not offer (an old client's area, a renamed category). It is shown
+  // as it stands rather than silently looking empty, so a refusal to submit makes sense.
+  const stray = !chosen && value != null && String(value) !== '' ? String(value) : '';
   const shown = query ? options.filter((option) => matchesQuery(query, option.label)) : options;
   const withSearch = options.length > SEARCH_FROM;
 
@@ -284,9 +288,9 @@ export function Select({ invalid, children, className, value, onChange, disabled
           role="combobox" aria-expanded={open} aria-haspopup="listbox" aria-controls={listId} {...rest}
           onClick={() => !disabled && setOpen(!open)}
         >
-          {chosen && chosen !== placeholder
-            ? <span className="fl-pick__value">{chosen.label}</span>
-            : <span className="fl-pick__empty">{placeholder?.label || 'اختر…'}</span>}
+          {chosen && chosen !== placeholder && <span className="fl-pick__value">{chosen.label}</span>}
+          {stray && <span className="fl-pick__value fl-pick__stray" title="هذه القيمة ليست من القائمة">{stray}</span>}
+          {!stray && (!chosen || chosen === placeholder) && <span className="fl-pick__empty">{placeholder?.label || 'اختر…'}</span>}
         </button>
       </InputBox>
       {open && !disabled && (

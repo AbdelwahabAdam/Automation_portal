@@ -148,3 +148,13 @@ def test_lists_load_in_a_fixed_number_of_queries(client, db, admin, sales):
     for path in ("/api/admin/users", "/api/admin/roles", "/api/admin/packages", "/api/review/requests",
                  "/api/catalog/picker"):
         assert count_queries(client, path, headers) <= 6, path
+
+
+def test_the_running_version_is_reported_to_admins_only(client, admin, sales, monkeypatch):
+    from app.config import settings
+    for name, value in [("app_version", "1.2.3"), ("app_build", "87"), ("app_commit", "a7c7354"),
+                        ("app_built_at", "2026-10-21 19:58")]:
+        monkeypatch.setattr(settings, name, value)
+    assert client.get("/api/admin/version", headers=auth(sales)).status_code == 403
+    assert client.get("/api/admin/version", headers=auth(admin)).json() == {
+        "version": "1.2.3", "build": "87", "commit": "a7c7354", "built_at": "2026-10-21 19:58"}

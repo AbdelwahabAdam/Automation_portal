@@ -149,7 +149,7 @@ export default function OrderLines({ spec, value, invalid, catalog, onChange, li
           <bdi className="fl-order-lines__name">{line.name}</bdi>
           <span className="fl-small fl-muted fl-cell--nowrap" data-fl-num>{formatMoney(linePrice(line, priceById))} درهم</span>
           <TextInput
-            dir="ltr" type="number" min="1" inputMode="numeric" className="fl-order-lines__qty"
+            type="number" min="1" inputMode="numeric" className="fl-order-lines__qty"
             aria-label={`الكمية — ${line.name}`} value={line.quantity}
             onChange={(e) => setQuantity(index, Math.max(1, Number(e.target.value) || 1))}
           />

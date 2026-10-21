@@ -6,7 +6,9 @@ html { scroll-padding-block: 72px 96px; }
 button, input, select, textarea { font-family: inherit; }
 :focus-visible { outline: 2px solid var(--fl-color-focus-ring); outline-offset: 2px; }
 .fl-sr-only { position: absolute !important; inline-size: 1px; block-size: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* Held still behind a drawer or a dialog (the page scrolls inside .fl-main-col, not the document) */
 .fl-noscroll { overflow: hidden; }
+.fl-noscroll .fl-main-col { overflow: hidden; }
 [data-fl-num] { font-variant-numeric: tabular-nums; }
 
 .fl-icon { display: block; flex: 0 0 auto; }
@@ -353,7 +355,10 @@ input.fl-input[type="date"] { min-block-size: calc(var(--fl-field-height) - 2px)
 .fl-suggest__empty { margin: 0; padding: var(--fl-space-3) var(--fl-space-4); color: var(--fl-color-text-secondary); }
 
 /* ---------- App shell ---------- */
-.fl-app { display: flex; align-items: stretch; min-block-size: 100dvh; }
+/* The app fills the screen and never scrolls itself: the page scrolls inside .fl-main-col. That
+   keeps the bottom bar truly still on a phone, where scrolling the document itself lets a fixed
+   bar drift as the browser's own address bar comes and goes. */
+.fl-app { display: flex; align-items: stretch; block-size: 100dvh; overflow: hidden; }
 .fl-sidenav {
   position: sticky; inset-block-start: 0; align-self: flex-start; block-size: 100dvh; flex: 0 0 var(--fl-sidebar-width);
   display: flex; flex-direction: column; gap: var(--fl-space-5); padding: var(--fl-space-5) var(--fl-space-4);
@@ -373,7 +378,7 @@ input.fl-input[type="date"] { min-block-size: calc(var(--fl-field-height) - 2px)
 .fl-navlink.active { background: var(--fl-color-background-selected); border-inline-start-color: var(--fl-color-border-selected); color: var(--fl-color-text-selected); font-weight: var(--fl-font-weight-bold); }
 .fl-navlink .fl-icon { color: currentColor; }
 
-.fl-main-col { flex: 1 1 auto; min-inline-size: 0; display: flex; flex-direction: column; }
+.fl-main-col { flex: 1 1 auto; min-inline-size: 0; display: flex; flex-direction: column; overflow-y: auto; overscroll-behavior-y: contain; }
 .fl-topbar {
   position: sticky; inset-block-start: 0; z-index: var(--fl-z-sticky); display: flex; align-items: center; gap: var(--fl-space-4); min-block-size: 56px;
   padding-inline: var(--fl-space-5) var(--fl-space-4); background: var(--fl-color-background-surface); border-block-end: var(--fl-border-width-default) solid var(--fl-color-border-default);
@@ -437,7 +442,7 @@ input.fl-input[type="date"] { min-block-size: calc(var(--fl-field-height) - 2px)
 .fl-dialog__body { color: var(--fl-color-text-secondary); }
 .fl-dialog__actions { display: flex; flex-wrap: wrap; gap: var(--fl-space-3); }
 /* Compact inputs inside a table row */
-.fl-mini { inline-size: 104px; min-block-size: var(--fl-control-height-sm); padding-inline: var(--fl-space-3); border: var(--fl-border-width-default) solid var(--fl-color-border-control); border-radius: var(--fl-radius-md); background: var(--fl-color-background-surface); font-size: var(--fl-type-body-size); text-align: end; }
+.fl-mini { inline-size: 104px; min-block-size: var(--fl-control-height-sm); padding-inline: var(--fl-space-3); border: var(--fl-border-width-default) solid var(--fl-color-border-control); border-radius: var(--fl-radius-md); background: var(--fl-color-background-surface); font-size: var(--fl-type-body-size); text-align: start; }
 .fl-mini:focus { outline: none; border-color: var(--fl-color-border-selected); box-shadow: 0 0 0 1px var(--fl-color-border-selected); }
 .fl-mini-check { inline-size: 18px; block-size: 18px; accent-color: var(--fl-color-action-primary-background); }
 ul.fl-catalog, ul.fl-cards { list-style: none; margin: 0; padding: 0; }
@@ -633,6 +638,8 @@ body.fl-keyboard .fl-toasts { inset-block-end: var(--fl-space-4); }
 .fl-pick { display: flex; align-items: center; justify-content: space-between; gap: var(--fl-space-3); inline-size: 100%; min-block-size: var(--fl-field-height); padding-inline: 0; border: 0; background: none; color: inherit; font: inherit; font-size: var(--fl-type-input-size); text-align: start; cursor: pointer; }
 .fl-pick:disabled { cursor: not-allowed; color: var(--fl-color-text-disabled); }
 .fl-pick__value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* A value that is not one of the choices: shown, but marked as needing a pick */
+.fl-pick__stray { color: var(--fl-color-status-warning-text); text-decoration: underline dotted; text-underline-offset: 3px; }
 .fl-pick__empty { color: var(--fl-color-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fl-picklist { position: absolute; z-index: var(--fl-z-dropdown); inset-inline: 0; inset-block-start: calc(100% + 4px); display: flex; flex-direction: column; max-block-size: 320px; background: var(--fl-color-background-surface); border: var(--fl-border-width-default) solid var(--fl-color-border-default); border-radius: var(--fl-radius-lg); box-shadow: var(--fl-elevation-2); overflow: hidden; }
 .fl-picklist__search { display: flex; align-items: center; gap: var(--fl-space-3); padding: var(--fl-space-3) var(--fl-space-4); border-block-end: var(--fl-border-width-default) solid var(--fl-color-border-subtle); color: var(--fl-color-icon-default); }
@@ -644,3 +651,6 @@ body.fl-keyboard .fl-toasts { inset-block-end: var(--fl-space-4); }
 .fl-picklist__option--on { color: var(--fl-color-text-selected); font-weight: var(--fl-font-weight-semibold); }
 .fl-picklist__option:disabled { color: var(--fl-color-text-disabled); cursor: not-allowed; }
 .fl-picklist__empty { margin: 0; padding: var(--fl-space-4); color: var(--fl-color-text-secondary); font-size: var(--fl-type-body-sm-size); }
+
+/* Which version is running, at the foot of the الإدارة pages */
+.fl-version { margin: 0; padding-block-start: var(--fl-space-4); border-block-start: var(--fl-border-width-default) solid var(--fl-color-border-subtle); color: var(--fl-color-text-secondary); font-size: var(--fl-type-caption-size); text-align: center; }

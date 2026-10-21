@@ -25,6 +25,13 @@ wait_until_up() {
 }
 
 build_and_start() {
+  # What this build is: the number staff read, a build that rises with every commit, and where it came from
+  APP_VERSION=$(cat VERSION 2>/dev/null || echo dev)
+  APP_BUILD=$(git rev-list --count HEAD)
+  APP_COMMIT=$(git rev-parse --short HEAD)
+  APP_BUILT_AT=$(date '+%Y-%m-%d %H:%M')
+  export APP_VERSION APP_BUILD APP_COMMIT APP_BUILT_AT
+  echo "Building $APP_VERSION (build $APP_BUILD, $APP_COMMIT)"
   compose up -d --build --remove-orphans || return 1
   wait_until_up
 }

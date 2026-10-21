@@ -78,21 +78,21 @@ function ProductDrawer({ product, onSaved, onDeleted, onClose }) {
       <form className="fl-stack fl-stack--sm" onSubmit={submit} noValidate>
         {(problem || error) && <Alert tone="error">{problem || error}</Alert>}
         <Field label="الاسم كما يظهر في الفاتورة" htmlFor="p_name" required>
-          <TextInput id="p_name" dir="auto" value={values.name} onChange={(e) => set('name', e.target.value)} maxLength={200} />
+          <TextInput id="p_name" value={values.name} onChange={(e) => set('name', e.target.value)} maxLength={200} />
         </Field>
         <Field label="الاسم بالعربية" htmlFor="p_name_ar">
           <TextInput id="p_name_ar" value={values.name_ar} onChange={(e) => set('name_ar', e.target.value)} maxLength={200} />
         </Field>
         <div className="fl-grid">
           <Field label="سعر الوحدة (درهم)" htmlFor="p_price" required>
-            <TextInput id="p_price" dir="ltr" type="number" min="0" step="0.01" value={values.unit_price} onChange={(e) => set('unit_price', e.target.value)} />
+            <TextInput id="p_price" type="number" min="0" step="0.01" value={values.unit_price} onChange={(e) => set('unit_price', e.target.value)} />
           </Field>
           <Field label="نسبة الضريبة %" htmlFor="p_tax">
-            <TextInput id="p_tax" dir="ltr" type="number" min="0" max="100" step="0.01" value={values.tax_percent} onChange={(e) => set('tax_percent', e.target.value)} />
+            <TextInput id="p_tax" type="number" min="0" max="100" step="0.01" value={values.tax_percent} onChange={(e) => set('tax_percent', e.target.value)} />
           </Field>
         </div>
         <Field label="الوصف" htmlFor="p_description">
-          <TextArea id="p_description" dir="auto" rows={2} value={values.description} onChange={(e) => set('description', e.target.value)} maxLength={2000} />
+          <TextArea id="p_description" rows={2} value={values.description} onChange={(e) => set('description', e.target.value)} maxLength={2000} />
         </Field>
         <div className="fl-stack fl-stack--sm">
           <Checkbox checked={values.price_includes_tax} onChange={(v) => set('price_includes_tax', v)}>السعر شامل الضريبة</Checkbox>
@@ -100,31 +100,31 @@ function ProductDrawer({ product, onSaved, onDeleted, onClose }) {
         </div>
         <div className="fl-grid">
           <Field label="كود المنتج (دفترة)" htmlFor="p_code">
-            <TextInput id="p_code" dir="ltr" value={values.product_code} onChange={(e) => set('product_code', e.target.value)} maxLength={50} />
+            <TextInput id="p_code" value={values.product_code} onChange={(e) => set('product_code', e.target.value)} maxLength={50} />
           </Field>
           <Field label="الباركود" htmlFor="p_barcode">
-            <TextInput id="p_barcode" dir="ltr" value={values.barcode} onChange={(e) => set('barcode', e.target.value)} maxLength={50} />
+            <TextInput id="p_barcode" value={values.barcode} onChange={(e) => set('barcode', e.target.value)} maxLength={50} />
           </Field>
         </div>
         <div className="fl-grid">
           <Field label="سعر الشراء (درهم)" htmlFor="p_buy_price">
-            <TextInput id="p_buy_price" dir="ltr" type="number" min="0" step="0.01" value={values.buy_price} onChange={(e) => set('buy_price', e.target.value)} />
+            <TextInput id="p_buy_price" type="number" min="0" step="0.01" value={values.buy_price} onChange={(e) => set('buy_price', e.target.value)} />
           </Field>
           <Field label="رصيد المخزون" htmlFor="p_stock">
-            <TextInput id="p_stock" dir="ltr" type="number" min="0" step="1" value={values.stock_balance} onChange={(e) => set('stock_balance', e.target.value)} />
+            <TextInput id="p_stock" type="number" min="0" step="1" value={values.stock_balance} onChange={(e) => set('stock_balance', e.target.value)} />
           </Field>
         </div>
         <div className="fl-grid">
           <Field label="التصنيف" htmlFor="p_category">
-            <TextInput id="p_category" dir="auto" value={values.category} onChange={(e) => set('category', e.target.value)} maxLength={200} />
+            <TextInput id="p_category" value={values.category} onChange={(e) => set('category', e.target.value)} maxLength={200} />
           </Field>
           <Field label="الماركة" htmlFor="p_brand">
-            <TextInput id="p_brand" dir="auto" value={values.brand} onChange={(e) => set('brand', e.target.value)} maxLength={100} />
+            <TextInput id="p_brand" value={values.brand} onChange={(e) => set('brand', e.target.value)} maxLength={100} />
           </Field>
         </div>
         <div className="fl-grid">
           <Field label="رقم دفترة" htmlFor="p_daftra_id" hint="رقم المنتج في دفترة؛ تستخدمه الفواتير التي تُنشأ عند اعتماد الطلبات.">
-            <TextInput id="p_daftra_id" dir="ltr" type="number" min="1" step="1" value={values.daftra_id ?? ''} onChange={(e) => set('daftra_id', e.target.value)} />
+            <TextInput id="p_daftra_id" type="number" min="1" step="1" value={values.daftra_id ?? ''} onChange={(e) => set('daftra_id', e.target.value)} />
           </Field>
           <Field label="بند صيانة — المجموعة" htmlFor="p_maintenance_group" hint="يظهر في «إضافة بند» بطلب الصيانة والتبديل تحت هذه المجموعة.">
             <Select id="p_maintenance_group" value={values.maintenance_group || ''} onChange={(e) => set('maintenance_group', e.target.value)}>
@@ -300,10 +300,10 @@ function PackageDrawer({ pack, products, onSaved, onDeleted, onClose }) {
         {(problem || error) && <Alert tone="error">{problem || error}</Alert>}
         <div className="fl-grid">
           <Field label="اسم الباقة" htmlFor="k_name" required>
-            <TextInput id="k_name" dir="auto" value={values.name} onChange={(e) => set('name', e.target.value)} maxLength={200} />
+            <TextInput id="k_name" value={values.name} onChange={(e) => set('name', e.target.value)} maxLength={200} />
           </Field>
           <Field label="الكود" htmlFor="k_code">
-            <TextInput id="k_code" dir="ltr" value={values.code} onChange={(e) => set('code', e.target.value)} maxLength={30} placeholder="FLP-043" />
+            <TextInput id="k_code" value={values.code} onChange={(e) => set('code', e.target.value)} maxLength={30} placeholder="FLP-043" />
           </Field>
           <Field label="اللون" htmlFor="k_color">
             <TextInput id="k_color" value={values.color} onChange={(e) => set('color', e.target.value)} maxLength={40} />
@@ -323,10 +323,10 @@ function PackageDrawer({ pack, products, onSaved, onDeleted, onClose }) {
                       return (
                         <tr key={line.key}>
                           <td className="fl-cell--wrap"><bdi>{label}</bdi>{product?.name_ar && <span className="fl-cell__sub">{product.name_ar}</span>}</td>
-                          <td><input className="fl-mini" dir="ltr" type="number" min="1" max="9999" step="1" value={line.quantity} onChange={(e) => setLine(line.key, 'quantity', e.target.value)} aria-label={`كمية ${label}`} /></td>
-                          <td><input className="fl-mini" dir="ltr" type="number" min="0" step="0.01" value={line.unit_price} onChange={(e) => setLine(line.key, 'unit_price', e.target.value)} aria-label={`سعر ${label}`} /></td>
+                          <td><input className="fl-mini" type="number" min="1" max="9999" step="1" value={line.quantity} onChange={(e) => setLine(line.key, 'quantity', e.target.value)} aria-label={`كمية ${label}`} /></td>
+                          <td><input className="fl-mini" type="number" min="0" step="0.01" value={line.unit_price} onChange={(e) => setLine(line.key, 'unit_price', e.target.value)} aria-label={`سعر ${label}`} /></td>
                           <td><input type="checkbox" className="fl-mini-check" checked={line.price_includes_tax} onChange={(e) => setLine(line.key, 'price_includes_tax', e.target.checked)} aria-label={`سعر ${label} شامل الضريبة`} /></td>
-                          <td><input className="fl-mini" dir="ltr" type="number" min="0" step="0.01" value={line.discount} onChange={(e) => setLine(line.key, 'discount', e.target.value)} aria-label={`خصم ${label}`} /></td>
+                          <td><input className="fl-mini" type="number" min="0" step="0.01" value={line.discount} onChange={(e) => setLine(line.key, 'discount', e.target.value)} aria-label={`خصم ${label}`} /></td>
                           <td data-fl-num><bdi dir="ltr">{money(lineTotal(line, product))}</bdi></td>
                           <td><Button size="sm" variant="ghost" icon="trash" iconOnly label={`إزالة ${label}`} onClick={() => setLines((current) => current.filter((l) => l.key !== line.key))} /></td>
                         </tr>

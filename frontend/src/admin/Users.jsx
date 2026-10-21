@@ -86,14 +86,14 @@ function UserDrawer({ user, roles, departments, staff, isSelf, onSaved, onDelete
         {error && <Alert tone="error">{error}</Alert>}
         {!user && (
           <Field label="اسم المستخدم" htmlFor="u_username" required hint="حروف إنجليزية وأرقام فقط، بدون مسافات.">
-            <TextInput id="u_username" dir="ltr" value={values.username} onChange={(e) => set('username', e.target.value)} autoComplete="off" />
+            <TextInput id="u_username" value={values.username} onChange={(e) => set('username', e.target.value)} autoComplete="off" />
           </Field>
         )}
         <Field label="الاسم الكامل" htmlFor="u_name" required>
           <TextInput id="u_name" value={values.full_name} onChange={(e) => set('full_name', e.target.value)} maxLength={120} />
         </Field>
         <Field label="البريد الإلكتروني" htmlFor="u_email" required hint="يُستخدم للدخول وللإشعارات.">
-          <TextInput id="u_email" dir="ltr" type="email" value={values.email} onChange={(e) => set('email', e.target.value)} maxLength={254} autoComplete="off" />
+          <TextInput id="u_email" type="email" value={values.email} onChange={(e) => set('email', e.target.value)} maxLength={254} autoComplete="off" />
         </Field>
         <Field
           label="الموظف في دفترة" htmlFor="u_daftra"

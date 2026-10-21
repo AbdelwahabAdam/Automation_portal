@@ -18,7 +18,14 @@ services:
       retries: 10
 
   backend:
-    build: ./backend
+    build:
+      context: ./backend
+      # Set by portal-deploy; empty when built by hand, which then reads as a development build
+      args:
+        APP_VERSION: ${APP_VERSION:-dev}
+        APP_BUILD: ${APP_BUILD:-0}
+        APP_COMMIT: ${APP_COMMIT:-}
+        APP_BUILT_AT: ${APP_BUILT_AT:-}
     restart: unless-stopped
     # Behind Caddy: take the visitor's address from X-Forwarded-For, for the activity log
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001", "--proxy-headers", "--forwarded-allow-ips", "*"]

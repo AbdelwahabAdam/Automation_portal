@@ -54,6 +54,17 @@ async function salesForm(page, prefix) {
     await page.locator('#phone').press('Enter');
     await expectText(page, 'عميل مسجل', 'client lookup after pressing Enter');
   }
+  // Finding a client fills التصنيف from Daftra, and المنطقة and الإمارة must follow it
+  const picked = (id) => page.locator(id).textContent().then((t) => (t || '').trim());
+  // Daftra answers a moment after the client is found; wait for التصنيف before reading the three
+  await page.locator('#category').filter({ hasNotText: 'اختر…' }).waitFor({ timeout: 12000 }).catch(() => {});
+  const afterLookup = { category: await picked('#category'), area: await picked('#area'), emirate: await picked('#emirate') };
+  log(`${prefix} after finding the client: ${JSON.stringify(afterLookup)}`);
+  const empty = (text) => !text || text.includes('اختر') || text.includes('بدون تحديد');
+  if (!empty(afterLookup.category) && (empty(afterLookup.area) || empty(afterLookup.emirate))) {
+    problems.push(`[client] التصنيف «${afterLookup.category}» came with المنطقة «${afterLookup.area}» and الإمارة «${afterLookup.emirate}»`);
+  }
+
   // التصنيف is a long list, so its drop-down opens with a search box; picking one fills المنطقة and الإمارة
   const category = page.locator('#category');
   if (await category.count()) {
@@ -98,9 +109,23 @@ async function salesForm(page, prefix) {
       if (!area.includes('بدون تحديد')) problems.push(`[address] المنطقة kept «${area}»`);
       if (street) problems.push(`[address] الشارع kept «${street}»`);
       if (coordinates) problems.push(`[address] الإحداثيات kept «${coordinates}»`);
+
+      // Going back to one of the client's own addresses fills it in again
+      await addressPick.click();
+      const saved = page.getByRole('option').first();
+      const label = ((await saved.textContent()) || '').trim();
+      await saved.click();
+      await page.waitForTimeout(400);
+      const back = ((await page.locator('#area').textContent()) || '').trim();
+      const emirate = ((await page.locator('#emirate').textContent()) || '').trim();
+      const filled = [back, emirate, await page.locator('#street').inputValue(), await page.locator('#house').inputValue()]
+        .filter((part) => part && !part.includes('بدون تحديد')).join(' · ');
+      log(`${prefix} back to «${label}»: ${filled || 'nothing filled'}`);
+      // Whatever that address holds must come back; «بلا عنوان مسجل» is the one that holds nothing
+      if (!label.includes('بلا عنوان') && !filled) problems.push(`[address] going back to «${label}» filled nothing in`);
     }
   }
-  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.evaluate(() => document.querySelector('.fl-main-col')?.scrollTo(0, 0));
   await shot(page, `${prefix}-form-top`, false);
   // Order lines: search, keyboard pick, the package's own fields, the stepper
   const search = page.locator('#order_lines');

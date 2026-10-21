@@ -363,6 +363,17 @@ def send_test_mail(body: MailTestIn, admin: User = Depends(require_admin), db: S
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"تعذر الإرسال. رد خادم البريد: {error}")
 
 
+@router.get("/version")
+def running_version():
+    """Which version of the portal is answering: the number, the build, and what it was built from."""
+    return {
+        "version": settings.app_version,
+        "build": settings.app_build,
+        "commit": settings.app_commit,
+        "built_at": settings.app_built_at,
+    }
+
+
 # ---------- Audit log ----------
 
 class AuditOut(BaseModel):
