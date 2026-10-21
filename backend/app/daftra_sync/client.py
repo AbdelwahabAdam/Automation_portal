@@ -95,12 +95,17 @@ def set_client_category(request: Request):
     data = request.data
     if not data.get("category"):
         return
-    current = daftra.client_category(request.daftra_client_id)
-    if current and str(current["id"]) == str(data["category"]):
+    resource = f"clients/{request.daftra_client_id}.json"
+    saved = daftra.get(resource).get("data", {}).get("Client", {})
+    if str(saved.get("category_id") or "") == str(data["category"]):
         return
 
-    resource = f"clients/{request.daftra_client_id}.json"
-    client = {"category_id": data["category"], "category": data.get("category_name") or ""}
+    # Daftra rebuilds the client's name out of the name fields of whatever is sent to it: left out
+    # of the body, business_name becomes the empty first and last name joined by a space. So the
+    # name the client already has goes back with the category, unchanged.
+    client = {"category_id": data["category"], "category": data.get("category_name") or "",
+              "business_name": saved.get("business_name") or "",
+              "first_name": saved.get("first_name") or "", "last_name": saved.get("last_name") or ""}
     try:
         # On its own first, so a client that already has those fields keeps what is in them
         daftra.update(resource, {"Client": client})

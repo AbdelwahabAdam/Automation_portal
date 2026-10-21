@@ -118,7 +118,13 @@ class FakeDaftra:
         if not (custom or {}).get("test") or not (custom or {}).get("coordinates_text"):
             raise DaftraError('HTTP 400: Bad Request — {"اسم الجهاز": ["هذا الحقل مطلوب ولا يمكن ان يكون فارغ"], '
                               '"Coordinates": ["هذا الحقل مطلوب ولا يمكن ان يكون فارغ"]}')
-        client.update(body["Client"])
+        fields = dict(body["Client"])
+        # Daftra builds the name out of the name fields of the body it is given: a save that leaves
+        # business_name out comes back with the empty first and last name joined by a space, which
+        # is how client 4053 lost its name on 22 Oct 2026
+        if "business_name" not in fields:
+            fields["business_name"] = f"{fields.get('first_name', '')} {fields.get('last_name', '')}"
+        client.update(fields)
         if body.get("le_custom_data_client"):
             client["custom"] = body["le_custom_data_client"]
         return {"result": "successful"}

@@ -4,6 +4,7 @@ from datetime import date, timedelta
 
 from app import forms
 from app.forms import FORM_TYPES, form_fields, package_colors, package_quantity, sanitize_draft, validate_submission
+from app.text import uae_today
 
 PACKAGE = "باقة برادة سقيا الخير - 3 صنابير - أسود"
 PRODUCTS = {
@@ -14,7 +15,8 @@ PRODUCTS = {
 PACKAGE_PRICES = {("10", "1"): 2000.0, ("10", "2"): 800.0}
 LISTS = {"daftra_order_source": {16: "Sales-جديد"}, "daftra_treasury": {13: "ADIB NEW CURRENT", 9: "خزينه المكتب"},
          "daftra_client_category": {5: "العين العامره"}}
-TODAY = date.today().isoformat()
+# What the portal calls today is the UAE's day, which is not the machine's when it runs behind UTC+4
+TODAY = uae_today().isoformat()
 
 
 def package_lines(quantity=2, **details):
@@ -133,7 +135,7 @@ def test_maintenance_only_takes_maintenance_items_and_must_be_paid_in_full():
 
 
 def test_field_types_are_checked():
-    tomorrow = (date.today() + timedelta(days=1)).isoformat()
+    tomorrow = (uae_today() + timedelta(days=1)).isoformat()
     data = new_sale(phone="12345", request_date=tomorrow, client_code="12a", treasury="77", emirate="باريس")
     _, errors = validate("new_sale", data, FILES)
     assert errors["phone"] == "أدخل رقم هاتف إماراتي صحيح"

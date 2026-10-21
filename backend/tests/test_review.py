@@ -325,8 +325,21 @@ def test_a_client_whose_required_fields_are_empty_is_still_given_its_category(cl
     assert len(saves) == 2
     assert "le_custom_data_client" not in saves[0]
     assert saves[1]["le_custom_data_client"] == {"test": "N + F", "coordinates_text": "24.1, 55.6"}
-    assert saves[1]["Client"] == {"category_id": 5, "category": "العين العامره"}
+    assert saves[1]["Client"] == {"category_id": 5, "category": "العين العامره",
+                                  "business_name": "Existing", "first_name": "", "last_name": ""}
     assert fake_daftra.clients[4053]["category_id"] == 5
+
+
+def test_the_client_keeps_its_name_when_its_category_changes(client, db, fake_daftra, sales, manager):
+    """Daftra blanks a name that a save leaves out, so the one it has is sent back with the category."""
+    seed.catalog(db)
+    seed.existing_client(db)
+    fake_daftra.add_client(4053, "0509999999", name="مؤسسة الواحة لتجارة المياه", category_id=1,
+                           custom={"test": "N + F", "coordinates_text": "24.1, 55.6"})
+    request_id = renewal_request(client, db, sales)
+    assert approve(client, manager, request_id).status_code == 200
+    assert fake_daftra.clients[4053]["category_id"] == 5
+    assert fake_daftra.clients[4053]["business_name"] == "مؤسسة الواحة لتجارة المياه"
 
 
 def test_a_client_that_has_those_fields_keeps_what_is_in_them(client, db, fake_daftra, sales, manager):
