@@ -94,7 +94,7 @@ manage the sales department) review under المبيعات → المراجعة;
 decides on their own request. Each step is kept in the request's history, and the owner is
 emailed when a request is returned or approved.
 
-Forms are defined in `backend/app/forms.py`. The last eight (reinstallation to daily_visits)
+Forms are defined in `backend/app/forms/definitions.py`. The last eight (reinstallation to daily_visits)
 were drafted from the design's form catalog and their fields still need the business's review.
 
 ## Products and packages
@@ -129,7 +129,7 @@ are not in `Products.xlsx`.
 
 ## Daftra invoices on approval
 
-Approving one of these requests creates its documents in Daftra (`app/daftra_sync.py`). The invoice PDF and
+Approving one of these requests creates its documents in Daftra (`app/daftra_sync/`). The invoice PDF and
 the receipt PDF are attached to the request. The receipt PDF is drawn by the portal (`app/receipt_pdf.py`),
 since Daftra's API has none:
 
@@ -142,7 +142,7 @@ since Daftra's API has none:
   - linked to the invoice;
   - with the custom fields of our work-order form filled from the request (ملحقات التركيب، الألوان المتاحة،
     ظهر الكفر، لون القاعدة، …). These are set by a `CustomModel` edit and read back to confirm, since Daftra
-    answers it with an error page (`WORK_ORDER_FIELDS` in `daftra_sync.py`). «صورة المنتج» is required but
+    answers it with an error page (`WORK_ORDER_FIELDS` in `daftra_sync/work_order.py`). «صورة المنتج» is required but
     the API cannot upload a file, so it gets a text placeholder; staff replace it with the photo in Daftra.
 - **طلب تجديد عقد الصيانة السنوي**: for an existing client only. It sets the client's category (التصنيف),
   then creates the one-line "exchange contract" invoice and its receipt.
@@ -197,7 +197,7 @@ After changing `backend/app/models.py`, add a migration (from `backend/`):
 
 ## Forms
 
-Form types and their fields live in `backend/app/forms.py`. The frontend renders
+Form types and their fields live in `backend/app/forms/definitions.py` (built from the blocks in `fields.py` and the choices in `options.py`; `validation.py` checks a submission). The frontend renders
 whatever that file defines, and the backend validates submissions against it.
 `frontend/src/validation.js` repeats the same checks for instant feedback.
 

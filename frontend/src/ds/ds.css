@@ -180,6 +180,11 @@ input.fl-input[type="date"] { min-block-size: calc(var(--fl-field-height) - 2px)
 .fl-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--fl-space-3); }
 .fl-muted { color: var(--fl-color-text-secondary); }
 .fl-small { font-size: var(--fl-type-body-sm-size); }
+.fl-row--spread { justify-content: space-between; }
+/* No margin of its own, e.g. a paragraph inside a card or a table cell */
+.fl-flush { margin: 0; }
+/* Indented under the heading above it, e.g. the products of a package */
+.fl-indent { padding-inline-start: var(--fl-space-4); }
 
 /* ---------- Numbered collapsible section ---------- */
 .fl-section { background: var(--fl-color-background-surface); border: var(--fl-border-width-default) solid var(--fl-color-border-default); border-radius: var(--fl-radius-lg); }
@@ -241,6 +246,8 @@ input.fl-input[type="date"] { min-block-size: calc(var(--fl-field-height) - 2px)
 .fl-rowcard dl { display: grid; grid-template-columns: auto 1fr; gap: var(--fl-space-2) var(--fl-space-4); margin: 0; font-size: var(--fl-type-body-sm-size); }
 .fl-rowcard dt { color: var(--fl-color-text-secondary); }
 .fl-rowcard dd { margin: 0; overflow-wrap: anywhere; }
+/* A dt/dd pair kept together in the markup; the grid above still lays them out */
+.fl-rowcard__item { display: contents; }
 
 /* Pager */
 .fl-pager { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--fl-space-3); padding: var(--fl-space-3) var(--fl-table-cell-padding-inline); border-block-start: var(--fl-border-width-default) solid var(--fl-color-border-subtle); }
@@ -321,12 +328,16 @@ input.fl-input[type="date"] { min-block-size: calc(var(--fl-field-height) - 2px)
 .fl-dropzone { display: flex; align-items: center; justify-content: center; gap: var(--fl-space-3); min-block-size: 56px; padding: var(--fl-space-4); border: var(--fl-border-width-default) dashed var(--fl-color-border-control); border-radius: var(--fl-radius-md); background: var(--fl-color-background-surface); color: var(--fl-color-text-link); font-weight: var(--fl-font-weight-semibold); cursor: pointer; }
 .fl-dropzone:hover { background: var(--fl-color-background-hover); }
 .fl-dropzone--busy { color: var(--fl-color-text-secondary); cursor: progress; }
+.fl-dropzone--invalid { border-color: var(--fl-color-border-error); }
 
 /* Order lines (products/packages picked for one request) */
 .fl-order-lines { display: flex; flex-direction: column; gap: var(--fl-space-2); }
 .fl-order-lines__row { display: flex; align-items: center; gap: var(--fl-space-3); padding: var(--fl-space-3) var(--fl-space-4); border: var(--fl-border-width-default) solid var(--fl-color-border-default); border-radius: var(--fl-radius-md); background: var(--fl-color-background-sunken); }
 .fl-order-lines__name { flex: 1 1 auto; min-inline-size: 0; overflow-wrap: anywhere; text-align: start; }
 .fl-order-lines__qty { inline-size: 80px; flex: 0 0 auto; }
+/* A whole number with − and + on either side */
+.fl-stepper { display: flex; align-items: center; gap: var(--fl-space-3); }
+.fl-stepper__value input { text-align: center; }
 .fl-order-lines__group { border: var(--fl-border-width-default) solid var(--fl-color-border-default); border-radius: var(--fl-radius-md); overflow: hidden; }
 .fl-order-lines__group-head { background: var(--fl-color-background-sunken); }
 .fl-order-lines__group-items { display: flex; flex-direction: column; gap: var(--fl-space-2); padding: var(--fl-space-2); }
@@ -339,6 +350,10 @@ input.fl-input[type="date"] { min-block-size: calc(var(--fl-field-height) - 2px)
 .fl-suggest__list { position: absolute; z-index: var(--fl-z-dropdown); inset-inline: 0; inset-block-start: calc(100% + 4px); max-block-size: 300px; overflow-y: auto; padding: var(--fl-space-2); background: var(--fl-color-background-surface); border: var(--fl-border-width-default) solid var(--fl-color-border-default); border-radius: var(--fl-radius-lg); box-shadow: var(--fl-elevation-2); }
 .fl-suggest__item { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; inline-size: 100%; padding: var(--fl-space-3) var(--fl-space-4); border: 0; border-radius: var(--fl-radius-md); background: transparent; text-align: start; font: inherit; cursor: pointer; }
 .fl-suggest__item:hover { background: var(--fl-color-background-hover); }
+.fl-suggest__item--active { background: var(--fl-color-background-hover); outline: 2px solid var(--fl-color-focus-ring); outline-offset: -2px; }
+/* A drop-down with a tick box per option */
+.fl-multiselect__button { background: none; border: 0; cursor: pointer; text-align: start; min-block-size: 2.5rem; }
+.fl-multiselect__option { flex-direction: row; align-items: center; gap: var(--fl-space-3); }
 .fl-suggest__item small { font-size: var(--fl-type-caption-size); color: var(--fl-color-text-secondary); }
 .fl-suggest__empty { margin: 0; padding: var(--fl-space-3) var(--fl-space-4); color: var(--fl-color-text-secondary); }
 

@@ -4,9 +4,9 @@ import {
   ActionBar, Alert, Button, Card, Dialog, Field, Icon, Loading, PageHeader, StatusBadge, TextArea,
 } from './ds/index.jsx';
 import { formatDate, formatMoney } from './formsMeta.js';
-import { DAFTRA_LIST_TYPES } from './validation.js';
+import { DAFTRA_LIST_TYPES, groupLines } from './validation.js';
 
-// The PDFs approving a request saves on it (see daftra_sync.py)
+// The PDFs approving a request saves on it (see backend/app/daftra_sync/)
 const DAFTRA_PDFS = [['daftra_invoice', 'الفاتورة PDF'], ['daftra_receipt', 'سند القبض PDF'], ['daftra_work_order', 'أمر الشغل PDF']];
 
 // What approving the request created in Daftra, or why it could not be created
@@ -73,7 +73,7 @@ function History({ events }) {
 }
 
 // Approve, or return to the salesperson with a reason; the decision is tied to the revision on screen
-// daftraNote: what approving creates in Daftra, from the form's definition (forms.py "daftra_note")
+// daftraNote: what approving creates in Daftra, from the form's definition (backend/app/forms/definitions.py "daftra_note")
 function ReviewActions({ request, own, daftraNote, onDone }) {
   // null | 'approve' | 'return'
   const [asking, setAsking] = useState(null);
@@ -152,42 +152,34 @@ export default function RequestView({ requestId, formTypes, onBack, ownerName, r
       if (!Array.isArray(lines) || !lines.length) return null;
       const lineFields = spec.line_fields || [];
       // Lines from the same package pick are shown under its name, in the order first added
-      const order = [];
-      const byKey = new Map();
-      lines.forEach((line) => {
-        const key = line.group_id || line.name;
-        if (!byKey.has(key)) { byKey.set(key, { groupName: line.group_id ? line.group_name : null, rows: [] }); order.push(key); }
-        byKey.get(key).rows.push(line);
-      });
       return (
         <span className="fl-stack fl-stack--sm">
-          {order.map((key) => {
-            const group = byKey.get(key);
+          {groupLines(lines).map((group) => {
+            const first = group.rows[0].line;
+            const indent = group.groupName ? 'fl-indent' : undefined;
+            // The details describe the package (or the one standalone product) as a whole, not each item inside it
+            const details = lineFields
+              .map((dspec) => [dspec.label, first.details?.[dspec.name]])
+              .filter(([, v]) => v != null && v !== '');
             return (
-              <span key={key} className="fl-stack fl-stack--sm">
+              <span key={group.key} className="fl-stack fl-stack--sm">
                 {group.groupName && (
                   <bdi>
                     <strong>{group.groupName}</strong>
-                    {Number(group.rows[0]?.details?.package_quantity) > 1 && <span data-fl-num> × {group.rows[0].details.package_quantity}</span>}
+                    {Number(first.details?.package_quantity) > 1 && <span data-fl-num> × {first.details.package_quantity}</span>}
                   </bdi>
                 )}
-                {group.rows.map((line, index) => (
-                  <bdi key={index} style={group.groupName ? { paddingInlineStart: 'var(--fl-space-4)' } : undefined}>
+                {group.rows.map(({ line, index }) => (
+                  <bdi key={index} className={indent}>
                     {line.name} × <span data-fl-num>{line.quantity}</span>
                     {typeof line.unit_price === 'number' && <span className="fl-muted" data-fl-num> — {formatMoney(line.unit_price)} درهم</span>}
                   </bdi>
                 ))}
-                {/* The details describe the package (or the one standalone product) as a whole, not each item inside it */}
-                {(() => {
-                  const details = lineFields
-                    .map((dspec) => [dspec.label, group.rows[0]?.details?.[dspec.name]])
-                    .filter(([, v]) => v != null && v !== '');
-                  return details.length > 0 ? (
-                    <dl className="fl-dl" style={group.groupName ? { paddingInlineStart: 'var(--fl-space-4)' } : undefined}>
-                      {details.map(([label, v]) => <div key={label}><dt>{label}</dt><dd><bdi>{v}</bdi></dd></div>)}
-                    </dl>
-                  ) : null;
-                })()}
+                {details.length > 0 && (
+                  <dl className={['fl-dl', indent].filter(Boolean).join(' ')}>
+                    {details.map(([label, v]) => <div key={label}><dt>{label}</dt><dd><bdi>{v}</bdi></dd></div>)}
+                  </dl>
+                )}
               </span>
             );
           })}

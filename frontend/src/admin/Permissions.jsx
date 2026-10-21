@@ -4,23 +4,12 @@ import {
   Alert, Badge, Button, Choice, Drawer, EmptyState, Field, Loading, PageHeader, SearchInput, TextInput,
 } from '../ds/index.jsx';
 import { matchesQuery } from '../formsMeta.js';
+import { useAction } from '../hooks.js';
 
 function RoleDrawer({ role, departments, onSaved, onDeleted, onClose }) {
   const [name, setName] = useState(role?.name || '');
   const [pages, setPages] = useState(role?.pages || []);
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState('');
-
-  async function run(kind, action) {
-    setBusy(kind);
-    setError('');
-    try {
-      await action();
-    } catch (err) {
-      setError(err.message);
-      setBusy('');
-    }
-  }
+  const { error, busy, run } = useAction();
 
   const submit = (e) => {
     e?.preventDefault();

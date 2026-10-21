@@ -2,10 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api } from './api.js';
 import {
-  Alert, Button, EmptyState, Field, Loading, PageHeader, Pager, SearchInput, Select, StatusBadge, Tabs, TextInput, useWidth,
+  Alert, Button, EmptyState, Field, Loading, PageHeader, SearchInput, Select, Tabs, TextInput, useWidth,
 } from './ds/index.jsx';
-import { formatDate, localDay, matchesQuery } from './formsMeta.js';
-import { TABLE_MIN_WIDTH } from './MyRequests.jsx';
+import { localDay, matchesQuery } from './formsMeta.js';
+import RequestList, { TABLE_MIN_WIDTH } from './RequestList.jsx';
 import RequestView from './RequestView.jsx';
 
 const TABS = [
@@ -68,7 +68,6 @@ export default function Review({ user, sales }) {
   const action = (r) => (r.status === 'submitted'
     ? <Button size="sm" variant="primary" icon="eye" onClick={() => setViewing(r)}>مراجعة الطلب</Button>
     : <Button size="sm" icon="eye" onClick={() => setViewing(r)}>عرض الطلب</Button>);
-  const note = (r) => r.status === 'returned' && r.returned_reason && <span className="fl-rownote">سبب الإعادة: {r.returned_reason}</span>;
 
   let list;
   if (!filtered.length) {
@@ -77,59 +76,13 @@ export default function Review({ user, sales }) {
         {tab === 'submitted' && !query ? 'كل الطلبات المرسلة تمت مراجعتها.' : 'غيّر البحث أو الفلاتر أو التبويب.'}
       </EmptyState>
     );
-  } else if (areaWidth >= TABLE_MIN_WIDTH) {
-    list = (
-      <div className="fl-table-wrap">
-        <div className="fl-table-scroll">
-          <table className="fl-table">
-            <thead>
-              <tr><th>رقم الطلب</th><th>نوع النموذج</th><th>العميل</th><th>الموظف</th><th>تاريخ الإرسال</th><th>الحالة</th><th>الإجراء</th></tr>
-            </thead>
-            <tbody>
-              {shown.map((r) => (
-                <tr key={r.id}>
-                  <td className="fl-cell--id" data-fl-num>{r.id}</td>
-                  <td className="fl-cell--wrap">{labels[r.form_type] || r.form_type}</td>
-                  <td className="fl-cell--wrap">
-                    <bdi>{r.data.customer_name || '—'}</bdi>
-                    {r.data.phone && <span className="fl-cell__sub"><bdi dir="ltr">{r.data.phone}</bdi></span>}
-                    {note(r)}
-                  </td>
-                  <td><bdi>{r.created_by_name}</bdi></td>
-                  <td className="fl-cell--nowrap" data-fl-num><bdi dir="ltr">{formatDate(r.submitted_at)}</bdi></td>
-                  <td><StatusBadge status={r.status} /></td>
-                  <td className="fl-cell--actions">{action(r)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <Pager page={page} pageSize={pageSize} total={filtered.length} onPage={setPage} onPageSize={setPageSize} />
-      </div>
-    );
   } else {
     list = (
-      <>
-        <ul className="fl-cards" role="list">
-          {shown.map((r) => (
-            <li key={r.id} className="fl-rowcard">
-              <div className="fl-rowcard__head">
-                <span className="fl-rowcard__title">{labels[r.form_type] || r.form_type}</span>
-                <StatusBadge status={r.status} />
-              </div>
-              <dl>
-                <dt>رقم الطلب</dt><dd data-fl-num>{r.id}</dd>
-                <dt>العميل</dt><dd><bdi>{r.data.customer_name || '—'}</bdi></dd>
-                <dt>الموظف</dt><dd><bdi>{r.created_by_name}</bdi></dd>
-                <dt>تاريخ الإرسال</dt><dd><bdi dir="ltr">{formatDate(r.submitted_at)}</bdi></dd>
-              </dl>
-              {note(r)}
-              {action(r)}
-            </li>
-          ))}
-        </ul>
-        <div className="fl-table-wrap"><Pager page={page} pageSize={pageSize} total={filtered.length} onPage={setPage} /></div>
-      </>
+      <RequestList
+        rows={shown} total={filtered.length} wide={areaWidth >= TABLE_MIN_WIDTH} labels={labels} actions={action}
+        columns={['id', 'type', 'client', 'employee', 'date', 'status']} dateLabel="تاريخ الإرسال" dateOf={(r) => r.submitted_at}
+        page={page} pageSize={pageSize} onPage={setPage} onPageSize={setPageSize}
+      />
     );
   }
 

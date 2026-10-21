@@ -69,7 +69,7 @@ def update_profile(body: ProfileIn, user: User = Depends(get_current_user), db: 
                    audit: Audit = Depends()):
     name = body.full_name.strip()
     if not name:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "اكتب الاسم")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "اكتب الاسم")
     if name != user.full_name:
         audit.log(user, "account.update", "user", user.id, user.username,
                   before={"full_name": user.full_name}, after={"full_name": name})
@@ -113,7 +113,7 @@ def enable_mfa(body: CodeIn, user: User = Depends(optional_two_step), db: Sessio
         raise HTTPException(status.HTTP_409_CONFLICT, "التحقق بخطوتين مفعّل بالفعل")
     if not mfa.check_code(user, body.code):
         db.commit()
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "الرمز غير صحيح أو انتهت صلاحيته")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "الرمز غير صحيح أو انتهت صلاحيته")
     user.mfa_enabled = True
     audit.log(user, "account.mfa_enabled", "user", user.id, user.username)
     db.commit()

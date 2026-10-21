@@ -44,7 +44,7 @@ function FormsCatalog({ formTypes, onChoose }) {
       .catch(() => {});
   }, []);
 
-  // Hidden forms take no new requests (forms.py VISIBLE_FORM_TYPES)
+  // Hidden forms take no new requests (VISIBLE_FORM_TYPES in backend/app/forms/definitions.py)
   const shown = formTypes.filter((type) => !type.hidden && matchesQuery(query, type.label, formMeta(type.key).desc));
   return (
     <section className="fl-stack" aria-labelledby="forms-title">

@@ -167,7 +167,7 @@ def apply_action(request: Request, data: dict, action: str, user: User, db: Sess
     if chosen and "paid_amount" not in errors and clean.get("paid_amount", 0) > chosen["unpaid"] + 0.005:
         errors["paid_amount"] = f"المبلغ أكبر من المتبقي على الفاتورة ({chosen['unpaid']:,.2f} درهم)"
     if errors:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, {"errors": errors})
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, {"errors": errors})
     request.data = clean
     request.status = "submitted"
     request.revision += 1
@@ -269,7 +269,7 @@ async def upload_attachment(field: str, filename: str, http_request: HttpRequest
     extension = Path(name).suffix.lower()
     if extension not in ALLOWED_EXTENSIONS:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "نوع الملف غير مسموح (صور، PDF، فيديو أو Word فقط)")
-    too_large = HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "حجم الملف أكبر من 20 ميجابايت")
+    too_large = HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, "حجم الملف أكبر من 20 ميجابايت")
     if int(http_request.headers.get("content-length") or 0) > MAX_UPLOAD_BYTES:
         raise too_large
     content = await http_request.body()

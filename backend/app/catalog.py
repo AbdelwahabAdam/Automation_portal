@@ -104,7 +104,7 @@ def existing_product(product_id: int, db: Session = Depends(get_db)) -> Product:
 def apply_product(product: Product, body: ProductIn, db: Session):
     name = " ".join(body.name.split())
     if not name:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "اكتب اسم المنتج")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "اكتب اسم المنتج")
     taken = db.scalar(select(Product).where(func.lower(Product.name) == name.lower()))
     if taken is not None and taken is not product:
         raise HTTPException(status.HTTP_409_CONFLICT, "يوجد منتج بنفس الاسم")
@@ -230,7 +230,7 @@ def apply_package(package: Package, body: PackageIn, db: Session):
     name = " ".join(body.name.split())
     code = body.code.strip() or None
     if not name:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "اكتب اسم الباقة")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "اكتب اسم الباقة")
     taken = db.scalar(select(Package).where(func.lower(Package.name) == name.lower()))
     if taken is not None and taken is not package:
         raise HTTPException(status.HTTP_409_CONFLICT, "توجد باقة بنفس الاسم")
@@ -240,13 +240,13 @@ def apply_package(package: Package, body: PackageIn, db: Session):
             raise HTTPException(status.HTTP_409_CONFLICT, "الكود مستخدم لباقة أخرى")
     product_ids = [item.product_id for item in body.items]
     if len(set(product_ids)) != len(product_ids):
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "المنتج مكرر في الباقة؛ زِد الكمية بدل تكراره")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "المنتج مكرر في الباقة؛ زِد الكمية بدل تكراره")
     products = {p.id: p for p in db.scalars(select(Product).where(Product.id.in_(product_ids)))}
     if len(products) != len(product_ids):
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "أحد المنتجات المختارة غير موجود")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "أحد المنتجات المختارة غير موجود")
     for item in body.items:
         if item.discount > item.unit_price * item.quantity * (1 + products[item.product_id].tax_rate):
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY,
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT,
                                 f"خصم «{products[item.product_id].name}» أكبر من قيمة البند")
     package.name = name
     package.code = code

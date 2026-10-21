@@ -49,7 +49,7 @@ def role_out(role: Role) -> RoleOut:
 def clean_role(body: RoleIn, db: Session, current: Role | None = None) -> tuple[str, list[str]]:
     name = body.name.strip()
     if not name:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "اكتب اسم الدور")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "اكتب اسم الدور")
     taken = db.scalar(select(Role).where(func.lower(Role.name) == name.lower()))
     if taken is not None and taken is not current:
         raise HTTPException(status.HTTP_409_CONFLICT, "يوجد دور بنفس الاسم")
@@ -177,7 +177,7 @@ def clean_manages(keys: list[str]) -> list[str]:
 def clean_email(raw: str, db: Session, current: User | None = None) -> str:
     email = raw.strip().lower()
     if len(email) > 254 or not EMAIL_RE.match(email):
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "اكتب بريدًا إلكترونيًا صحيحًا")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "اكتب بريدًا إلكترونيًا صحيحًا")
     taken = db.scalar(select(User).where(User.email == email))
     if taken is not None and taken is not current:
         raise HTTPException(status.HTTP_409_CONFLICT, "البريد الإلكتروني مستخدم لحساب آخر")
@@ -200,7 +200,7 @@ def send_password_link(user: User, admin: User, audit: Audit) -> InviteOut:
 def roles_by_id(role_ids: list[int], db: Session) -> list[Role]:
     roles = db.scalars(select(Role).where(Role.id.in_(role_ids))).all() if role_ids else []
     if len(roles) != len(set(role_ids)):
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "أحد الأدوار المختارة غير موجود")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "أحد الأدوار المختارة غير موجود")
     return list(roles)
 
 
@@ -231,7 +231,7 @@ def create_user(body: UserCreate, admin: User = Depends(require_admin), db: Sess
     username = body.username.strip().lower()
     if not USERNAME_RE.match(username):
         raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
             "اسم المستخدم من 3 إلى 50 حرفًا: حروف إنجليزية صغيرة وأرقام ونقطة وشرطة فقط",
         )
     if db.scalar(select(User).where(User.username == username)) is not None:
@@ -349,7 +349,7 @@ def send_test_mail(body: MailTestIn, admin: User = Depends(require_admin), db: S
     name = known_email(body.template)
     to = body.to.strip().lower()
     if len(to) > 254 or not EMAIL_RE.match(to):
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "اكتب بريدًا إلكترونيًا صحيحًا")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "اكتب بريدًا إلكترونيًا صحيحًا")
     error = None
     try:
         mail.send(to, *mail.compose_sample(name, to, admin.full_name or admin.username))

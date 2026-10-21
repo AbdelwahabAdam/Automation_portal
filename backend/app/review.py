@@ -183,7 +183,7 @@ def return_request(request_id: int, body: ReturnIn, user: User = Depends(reviewe
                    audit: Audit = Depends()):
     reason = body.reason.strip()
     if len(reason) < 5:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "اكتب سبب الإعادة بوضوح ليعرف الموظف ما المطلوب تعديله")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "اكتب سبب الإعادة بوضوح ليعرف الموظف ما المطلوب تعديله")
     request = reviewable(request_id, body, user, db)
     request.status = "returned"
     request.returned_reason = reason

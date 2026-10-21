@@ -7,6 +7,7 @@ import { Button, Icon, Loading, Menu } from './ds/index.jsx';
 import Login from './Login.jsx';
 import { PAGE_COMPONENTS, PAGE_ICONS } from './pages.jsx';
 import { pagePath } from './paths.js';
+import { useSalesData } from './salesData.js';
 import SetPassword from './SetPassword.jsx';
 
 // Pages shown in the phone's bottom bar before the rest move to «المزيد»
@@ -46,12 +47,6 @@ function NavGroups({ departments, onNavigate }) {
 export default function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(Boolean(getToken()));
-  // Form definitions, our product catalog and Daftra's staff list for the sales pages; products stays null until loaded
-  const [sales, setSales] = useState({
-    formTypes: null, error: '', products: null, productsError: '', catalogItems: null, catalogItemsError: '', staff: [],
-    // Daftra lists some fields pick from, by field type; a list missing here could not be loaded
-    daftraLists: {},
-  });
   const [moreOpen, setMoreOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
@@ -64,19 +59,8 @@ export default function App() {
   }, []);
 
   const departments = user?.navigation || [];
-  const hasSales = departments.some((department) => department.key === 'sales');
-  useEffect(() => {
-    if (!hasSales) return;
-    const update = (changes) => setSales((current) => ({ ...current, ...changes }));
-    api('/form-types').then((formTypes) => update({ formTypes })).catch((err) => update({ error: err.message }));
-    api('/products').then((products) => update({ products })).catch((err) => update({ productsError: err.message }));
-    api('/catalog/picker').then((catalogItems) => update({ catalogItems })).catch((err) => update({ catalogItemsError: err.message }));
-    api('/daftra/staff').then((staff) => update({ staff })).catch(() => {});
-    const addList = (type, rows) => setSales((current) => ({ ...current, daftraLists: { ...current.daftraLists, [type]: rows } }));
-    api('/daftra/treasuries').then((rows) => addList('daftra_treasury', rows)).catch(() => {});
-    api('/daftra/order_sources').then((rows) => addList('daftra_order_source', rows)).catch(() => {});
-    api('/daftra/client_categories').then((rows) => addList('daftra_client_category', rows)).catch(() => {});
-  }, [hasSales]);
+  // Form definitions, our product catalog and Daftra's lists, for the sales pages
+  const sales = useSalesData(departments.some((department) => department.key === 'sales'));
 
   useEffect(() => setMoreOpen(false), [location.pathname]);
 

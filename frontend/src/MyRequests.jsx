@@ -1,15 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api } from './api.js';
-import {
-  Alert, Button, EmptyState, Field, Loading, PageHeader, Pager, SearchInput, Select, StatusBadge, Tabs, useWidth,
-} from './ds/index.jsx';
-import { formatDate, matchesQuery } from './formsMeta.js';
-
-export { formatDate };
-
-// Table on a wide area, cards on a narrow one (same data, same actions)
-export const TABLE_MIN_WIDTH = 760;
+import { Alert, Button, EmptyState, Field, Loading, PageHeader, SearchInput, Select, Tabs, useWidth } from './ds/index.jsx';
+import { matchesQuery } from './formsMeta.js';
+import RequestList, { TABLE_MIN_WIDTH } from './RequestList.jsx';
 
 const TABS = [
   { value: 'all', label: 'الكل', test: () => true },
@@ -63,7 +57,8 @@ export default function MyRequests({ formTypes, onNew, onEdit, onView }) {
   if (!requests) return <div className="fl-stack" ref={area}>{header}{error ? <Alert tone="error">{error}</Alert> : <Loading />}</div>;
 
   const shown = filtered.slice((page - 1) * pageSize, page * pageSize);
-  const updated = (r) => formatDate(['draft', 'returned'].includes(r.status) ? r.updated_at : r.reviewed_at || r.submitted_at);
+  // A request still with its owner was last changed by them; a sent one, when it was sent or decided
+  const updatedAt = (r) => (['draft', 'returned'].includes(r.status) ? r.updated_at : r.reviewed_at || r.submitted_at);
   const actions = (r) => {
     if (r.status === 'draft') {
       return (
@@ -76,9 +71,6 @@ export default function MyRequests({ formTypes, onNew, onEdit, onView }) {
     if (r.status === 'returned') return <Button size="sm" variant="primary" icon="edit" onClick={() => onEdit(r)}>تعديل الطلب</Button>;
     return <Button size="sm" icon="eye" onClick={() => onView(r)}>عرض الطلب</Button>;
   };
-  // Why a returned request came back, under its row
-  const note = (r) => r.status === 'returned' && r.returned_reason && <span className="fl-rownote">سبب الإعادة: {r.returned_reason}</span>;
-
   let list;
   if (!requests.length) {
     list = (
@@ -88,57 +80,13 @@ export default function MyRequests({ formTypes, onNew, onEdit, onView }) {
     );
   } else if (!filtered.length) {
     list = <EmptyState icon="search" title="لا توجد طلبات مطابقة">غيّر البحث أو نوع النموذج أو التبويب.</EmptyState>;
-  } else if (wide) {
-    list = (
-      <div className="fl-table-wrap">
-        <div className="fl-table-scroll">
-          <table className="fl-table">
-            <thead>
-              <tr><th>رقم الطلب</th><th>نوع النموذج</th><th>العميل</th><th>الحالة</th><th>آخر تحديث</th><th>الإجراء</th></tr>
-            </thead>
-            <tbody>
-              {shown.map((r) => (
-                <tr key={r.id}>
-                  <td className="fl-cell--id" data-fl-num>{r.id}</td>
-                  <td className="fl-cell--wrap">{labels[r.form_type] || r.form_type}</td>
-                  <td className="fl-cell--wrap">
-                    <bdi>{r.data.customer_name || '—'}</bdi>
-                    {r.data.phone && <span className="fl-cell__sub"><bdi dir="ltr">{r.data.phone}</bdi></span>}
-                    {note(r)}
-                  </td>
-                  <td><StatusBadge status={r.status} /></td>
-                  <td className="fl-cell--nowrap" data-fl-num><bdi dir="ltr">{updated(r)}</bdi></td>
-                  <td className="fl-cell--actions">{actions(r)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <Pager page={page} pageSize={pageSize} total={filtered.length} onPage={setPage} onPageSize={setPageSize} />
-      </div>
-    );
   } else {
     list = (
-      <>
-        <ul className="fl-cards" role="list">
-          {shown.map((r) => (
-            <li key={r.id} className="fl-rowcard">
-              <div className="fl-rowcard__head">
-                <span className="fl-rowcard__title">{labels[r.form_type] || r.form_type}</span>
-                <StatusBadge status={r.status} />
-              </div>
-              <dl>
-                <dt>رقم الطلب</dt><dd data-fl-num>{r.id}</dd>
-                <dt>العميل</dt><dd><bdi>{r.data.customer_name || '—'}</bdi></dd>
-                <dt>آخر تحديث</dt><dd><bdi dir="ltr">{updated(r)}</bdi></dd>
-              </dl>
-              {note(r)}
-              <div className="fl-row">{actions(r)}</div>
-            </li>
-          ))}
-        </ul>
-        <div className="fl-table-wrap"><Pager page={page} pageSize={pageSize} total={filtered.length} onPage={setPage} /></div>
-      </>
+      <RequestList
+        rows={shown} total={filtered.length} wide={wide} labels={labels} actions={actions}
+        columns={['id', 'type', 'client', 'status', 'date']} dateLabel="آخر تحديث" dateOf={updatedAt}
+        page={page} pageSize={pageSize} onPage={setPage} onPageSize={setPageSize}
+      />
     );
   }
 

@@ -223,7 +223,7 @@ def test_malformed_order_lines_do_not_break_validation_or_drafts():
 
 
 def test_dates_are_checked_against_the_uae_day(monkeypatch):
-    monkeypatch.setattr(forms, "uae_today", lambda: date(2026, 10, 21))
+    monkeypatch.setattr("app.forms.validation.uae_today", lambda: date(2026, 10, 21))
     _, errors = validate("new_sale", new_sale(request_date="2026-10-21", payment_date="2026-10-21",
                                               remaining_due_date="2026-10-21"), FILES)
     assert "request_date" not in errors

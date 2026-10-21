@@ -1,5 +1,5 @@
 // How each form type appears in the forms catalog: icon (design system set) and a one-line description.
-// The form itself (fields, rules) is defined by the backend in backend/app/forms.py.
+// The form itself (fields, rules) is defined by the backend in backend/app/forms/definitions.py.
 export const FORM_META = {
   new_sale: { icon: 'package', desc: 'تسجيل طلب بيع جديد' },
   contract_renewal: { icon: 'calendar', desc: 'تجديد عقد الصيانة' },

@@ -4,6 +4,7 @@ import {
   Alert, Badge, Button, Checkbox, Choice, Drawer, EmptyState, Field, Loading, PageHeader, Pager, SearchInput, Select, TextInput,
 } from '../ds/index.jsx';
 import { formatDate, matchesQuery } from '../formsMeta.js';
+import { useAction } from '../hooks.js';
 
 const EMPTY = { username: '', email: '', full_name: '', role_ids: [], manages: [], is_admin: false, is_active: true, daftra_staff_id: null };
 
@@ -17,21 +18,8 @@ function UserDrawer({ user, roles, departments, staff, isSelf, onSaved, onDelete
   const [values, setValues] = useState(
     user ? { ...EMPTY, ...user, email: user.email || '', role_ids: user.roles.map((role) => role.id) } : EMPTY,
   );
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState('');
+  const { error, busy, run } = useAction();
   const set = (name, value) => setValues((current) => ({ ...current, [name]: value }));
-
-  // Runs one request for the drawer; on failure shows the message and unlocks the buttons
-  async function run(name, action) {
-    setBusy(name);
-    setError('');
-    try {
-      await action();
-    } catch (err) {
-      setError(err.message);
-      setBusy('');
-    }
-  }
 
   function submit(e) {
     e?.preventDefault();
@@ -146,7 +134,7 @@ function InviteResult({ invite, onDismiss }) {
       actions={<Button size="sm" icon="copy" onClick={() => navigator.clipboard.writeText(invite.link).then(() => setCopied(true))}>{copied ? 'تم النسخ' : 'نسخ الرابط'}</Button>}
     >
       انسخ الرابط وأرسله للمستخدم <bdi>{invite.user.username}</bdi> بنفسك:
-      <div dir="ltr" style={{ marginBlockStart: 'var(--fl-space-2)', overflowWrap: 'anywhere' }}>{invite.link}</div>
+      <div dir="ltr" className="fl-invite-link">{invite.link}</div>
     </Alert>
   );
 }

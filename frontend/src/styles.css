@@ -6,3 +6,8 @@
 @media (max-width: 600px) {
   .fl-pair { grid-template-columns: 1fr; }
 }
+
+/* The link shown to an admin when an invitation email could not be sent */
+.fl-invite-link { margin-block-start: var(--fl-space-2); overflow-wrap: anywhere; }
+/* The client found by a search: their address choice and its buttons */
+.fl-lookup__actions { margin-block-start: var(--fl-space-2); }

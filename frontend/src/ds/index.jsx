@@ -116,6 +116,67 @@ export function SearchInput({ value, onChange, placeholder, label, ...rest }) {
   );
 }
 
+// ---------- Combobox: a text box offering matching items in a list below it ----------
+
+// The list opens on focus and typing; ↑ ↓ move through it, Enter picks, Escape closes.
+// closeOnPick=false keeps it open after a pick (e.g. adding several products in a row).
+export function Combobox({
+  id, value, onInput, items, itemKey, renderItem, onPick, placeholder, invalid, emptyText, closeOnPick = true, icon = 'search',
+}) {
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(-1);
+  const listId = useId();
+  const shown = open && Boolean(items);
+  useEffect(() => setActive(-1), [items]);
+
+  function pick(item) {
+    onPick(item);
+    if (closeOnPick) setOpen(false);
+    setActive(-1);
+  }
+
+  function onKeyDown(e) {
+    if (e.key === 'Escape' && open) {
+      e.preventDefault();
+      setOpen(false);
+    } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (!open) return setOpen(true);
+      const count = items?.length || 0;
+      if (count) setActive((current) => (current + (e.key === 'ArrowDown' ? 1 : count - 1)) % count);
+    } else if (e.key === 'Enter' && shown && items[active]) {
+      e.preventDefault();
+      pick(items[active]);
+    }
+  }
+
+  return (
+    <div className="fl-suggest">
+      <TextInput
+        id={id} icon={icon} dir="auto" autoComplete="off" value={value ?? ''} invalid={invalid} placeholder={placeholder}
+        role="combobox" aria-expanded={shown} aria-autocomplete="list" aria-controls={listId}
+        aria-activedescendant={shown && active >= 0 ? `${listId}-${active}` : undefined}
+        onChange={(e) => { onInput(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)} onBlur={() => setOpen(false)} onKeyDown={onKeyDown}
+      />
+      {shown && (
+        <div className="fl-suggest__list" role="listbox" id={listId}>
+          {items.map((item, index) => (
+            <button
+              key={itemKey(item)} id={`${listId}-${index}`} type="button" role="option" aria-selected={index === active}
+              className={cx('fl-suggest__item', index === active && 'fl-suggest__item--active')} tabIndex={-1}
+              onMouseDown={(e) => e.preventDefault()} onMouseEnter={() => setActive(index)} onClick={() => pick(item)}
+            >
+              {renderItem(item)}
+            </button>
+          ))}
+          {!items.length && <p className="fl-suggest__empty">{emptyText}</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ---------- Select (FlSelect): native select styled as a field ----------
 
 export function Select({ invalid, children, className, ...rest }) {

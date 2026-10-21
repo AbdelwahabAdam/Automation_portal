@@ -39,8 +39,8 @@ function Changes({ entry, options }) {
             </tbody>
           </table>
         </div>
-      ) : <p className="fl-muted fl-small" style={{ margin: 0 }}>لا توجد قيم مسجلة لهذا الإجراء.</p>}
-      <p className="fl-field__hint" style={{ margin: 0 }}>المتصفح: <bdi dir="ltr">{entry.user_agent || '—'}</bdi></p>
+      ) : <p className="fl-muted fl-small fl-flush">لا توجد قيم مسجلة لهذا الإجراء.</p>}
+      <p className="fl-field__hint fl-flush">المتصفح: <bdi dir="ltr">{entry.user_agent || '—'}</bdi></p>
     </div>
   );
 }

@@ -4,23 +4,7 @@ import {
   Alert, Badge, Button, Checkbox, Drawer, EmptyState, Field, Loading, PageHeader, Pager, SearchInput, Select, Tabs, TextArea, TextInput,
 } from '../ds/index.jsx';
 import { formatMoney as money, matchesQuery } from '../formsMeta.js';
-
-// Runs one request for a drawer; on failure shows the message and unlocks the buttons
-function useSubmit() {
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState('');
-  async function run(kind, action) {
-    setBusy(kind);
-    setError('');
-    try {
-      await action();
-    } catch (err) {
-      setError(err.message);
-      setBusy('');
-    }
-  }
-  return { error, busy, run };
-}
+import { useAction } from '../hooks.js';
 
 // ---------- Products ----------
 
@@ -36,7 +20,7 @@ function ProductDrawer({ product, onSaved, onDeleted, onClose }) {
     ...product, tax_percent: product.tax_rate * 100,
     buy_price: product.buy_price ?? '', stock_balance: product.stock_balance ?? '', daftra_id: product.daftra_id ?? '',
   } : { ...NEW_PRODUCT, tax_percent: 5 });
-  const { error, busy, run } = useSubmit();
+  const { error, busy, run } = useAction();
   const set = (name, value) => setValues((current) => ({ ...current, [name]: value }));
 
   function submit(e) {
@@ -162,7 +146,7 @@ function Products({ products, onChange }) {
   const shown = products.filter((product) => matchesQuery(search, product.name, product.name_ar, product.maintenance_group || ''));
   return (
     <>
-      <div className="fl-row" style={{ justifyContent: 'space-between' }}>
+      <div className="fl-row fl-row--spread">
         <div className="fl-narrow-search"><SearchInput value={search} onChange={setSearch} placeholder="ابحث في المنتجات" /></div>
         <Button variant="primary" icon="plus" onClick={() => { setNotice(''); setPanel({}); }}>إضافة منتج</Button>
       </div>
@@ -223,7 +207,7 @@ function PackageDrawer({ pack, products, onSaved, onDeleted, onClose }) {
   const [lines, setLines] = useState(() => (pack ? pack.items.map((item, index) => ({ ...item, key: index })) : []));
   const [nextKey, setNextKey] = useState(pack ? pack.items.length : 0);
   const [adding, setAdding] = useState('');
-  const { error, busy, run } = useSubmit();
+  const { error, busy, run } = useAction();
   const byId = Object.fromEntries(products.map((product) => [product.id, product]));
   const set = (name, value) => setValues((current) => ({ ...current, [name]: value }));
   const setLine = (key, name, value) => setLines((current) => current.map((line) => (line.key === key ? { ...line, [name]: value } : line)));
@@ -400,7 +384,7 @@ function Packages({ packages, products, onChange }) {
   const shown = useMemo(() => packages.filter((pack) => matchesQuery(search, pack.name, pack.code, pack.color)), [packages, search]);
   return (
     <>
-      <div className="fl-row" style={{ justifyContent: 'space-between' }}>
+      <div className="fl-row fl-row--spread">
         <div className="fl-narrow-search"><SearchInput value={search} onChange={setSearch} placeholder="ابحث في الباقات" /></div>
         <Button variant="primary" icon="plus" onClick={() => { setNotice(''); setPanel({}); }}>إضافة باقة</Button>
       </div>

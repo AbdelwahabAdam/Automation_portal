@@ -1,21 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from './api.js';
 import { Alert, Badge, Button, Card, Field, Loading, PageHeader, PasswordInput, TextInput } from './ds/index.jsx';
-
-// Runs a form's request and keeps its busy, error and success state
-function useAction() {
-  const [state, setState] = useState({ busy: false, error: '', ok: '' });
-  async function run(action, ok = '') {
-    setState({ busy: true, error: '', ok: '' });
-    try {
-      await action();
-      setState({ busy: false, error: '', ok });
-    } catch (err) {
-      setState({ busy: false, error: err.message, ok: '' });
-    }
-  }
-  return [state, run];
-}
+import { useAction } from './hooks.js';
 
 function Feedback({ state }) {
   if (state.error) return <Alert tone="error">{state.error}</Alert>;
@@ -36,10 +22,10 @@ function Permissions({ account }) {
 
 function Profile({ account, onChange }) {
   const [fullName, setFullName] = useState(account.full_name);
-  const [state, run] = useAction();
+  const state = useAction();
   const submit = (e) => {
     e.preventDefault();
-    run(async () => onChange(await api('/account', { method: 'PUT', body: { full_name: fullName } })), 'تم حفظ الاسم.');
+    state.run('save', async () => onChange(await api('/account', { method: 'PUT', body: { full_name: fullName } })), 'تم حفظ الاسم.');
   };
   return (
     <form onSubmit={submit} noValidate>
@@ -58,7 +44,7 @@ function Profile({ account, onChange }) {
         </div>
         <Feedback state={state} />
         <div className="fl-row">
-          <Button type="submit" variant="primary" loading={state.busy} disabled={!fullName.trim() || fullName.trim() === account.full_name}>حفظ</Button>
+          <Button type="submit" variant="primary" loading={Boolean(state.busy)} disabled={!fullName.trim() || fullName.trim() === account.full_name}>حفظ</Button>
         </div>
       </Card>
     </form>
@@ -68,7 +54,7 @@ function Profile({ account, onChange }) {
 function Password({ username }) {
   const [values, setValues] = useState({ current: '', next: '', repeat: '' });
   const [problem, setProblem] = useState('');
-  const [state, run] = useAction();
+  const state = useAction();
   const set = (name) => (e) => setValues((current) => ({ ...current, [name]: e.target.value }));
 
   function submit(e) {
@@ -77,7 +63,7 @@ function Password({ username }) {
     if (values.next.length < 8) return setProblem('next');
     if (values.next !== values.repeat) return setProblem('repeat');
     setProblem('');
-    run(async () => {
+    state.run('password', async () => {
       await api('/account/password', { method: 'POST', body: { current_password: values.current, new_password: values.next } });
       setValues({ current: '', next: '', repeat: '' });
     }, 'تم تغيير كلمة المرور.');
@@ -100,7 +86,7 @@ function Password({ username }) {
           </Field>
         </div>
         <Feedback state={state} />
-        <div className="fl-row"><Button type="submit" variant="primary" loading={state.busy}>تغيير كلمة المرور</Button></div>
+        <div className="fl-row"><Button type="submit" variant="primary" loading={Boolean(state.busy)}>تغيير كلمة المرور</Button></div>
       </Card>
     </form>
   );
@@ -113,19 +99,19 @@ function TwoStep({ account, onChange }) {
   const [hint, setHint] = useState('');
   const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
-  const [state, run] = useAction();
+  const state = useAction();
   // A refused code is cleared so the next one can be typed straight away
   useEffect(() => {
     if (state.error) setCode('');
-  }, [state]);
+  }, [state.error]);
 
-  const sendCode = () => run(async () => {
+  const sendCode = () => state.run('send', async () => {
     setHint((await api('/account/mfa/send-code', { method: 'POST' })).email_hint);
     setStep('confirm');
   });
   const enable = (e) => {
     e.preventDefault();
-    run(async () => {
+    state.run('enable', async () => {
       const updated = await api('/account/mfa/enable', { method: 'POST', body: { code } });
       setStep(null);
       setCode('');
@@ -134,7 +120,7 @@ function TwoStep({ account, onChange }) {
   };
   const disable = (e) => {
     e.preventDefault();
-    run(async () => {
+    state.run('disable', async () => {
       const updated = await api('/account/mfa/disable', { method: 'POST', body: { password } });
       setStep(null);
       setPassword('');
@@ -154,7 +140,7 @@ function TwoStep({ account, onChange }) {
         </Field>
         <Feedback state={state} />
         <div className="fl-row">
-          <Button type="submit" variant="primary" loading={state.busy} disabled={!code.trim()}>تأكيد وتفعيل</Button>
+          <Button type="submit" variant="primary" loading={Boolean(state.busy)} disabled={!code.trim()}>تأكيد وتفعيل</Button>
           <Button onClick={() => setStep(null)}>إلغاء</Button>
         </div>
       </form>
@@ -167,7 +153,7 @@ function TwoStep({ account, onChange }) {
         </Field>
         <Feedback state={state} />
         <div className="fl-row">
-          <Button type="submit" variant="destructive" loading={state.busy} disabled={!password}>إيقاف التحقق بخطوتين</Button>
+          <Button type="submit" variant="destructive" loading={Boolean(state.busy)} disabled={!password}>إيقاف التحقق بخطوتين</Button>
           <Button onClick={() => setStep(null)}>إلغاء</Button>
         </div>
       </form>
@@ -183,11 +169,11 @@ function TwoStep({ account, onChange }) {
   } else {
     body = (
       <>
-        <p className="fl-muted" style={{ margin: 0 }}>حماية إضافية اختيارية: بعد كلمة المرور نرسل رمز تحقق إلى بريدك الإلكتروني وتكتبه للدخول.</p>
+        <p className="fl-muted fl-flush">حماية إضافية اختيارية: بعد كلمة المرور نرسل رمز تحقق إلى بريدك الإلكتروني وتكتبه للدخول.</p>
         <Feedback state={state} />
         {!account.email && <Alert tone="warning">لا يوجد بريد إلكتروني لحسابك. اطلب من مدير النظام إضافته أولًا.</Alert>}
         <div className="fl-row">
-          <Button variant="primary" icon="shield" loading={state.busy} disabled={!account.email} onClick={sendCode}>تفعيل التحقق بخطوتين</Button>
+          <Button variant="primary" icon="shield" loading={Boolean(state.busy)} disabled={!account.email} onClick={sendCode}>تفعيل التحقق بخطوتين</Button>
         </div>
       </>
     );

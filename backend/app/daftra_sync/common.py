@@ -1,0 +1,84 @@
+"""What every Daftra step shares: the error a manager sees, amounts, the marker that finds a
+document again, and saving a PDF on the request."""
+
+import functools
+import uuid
+from decimal import Decimal
+
+from sqlalchemy.orm import Session
+
+from ..config import UPLOAD_DIR
+from ..daftra import PAYMENT_METHOD_KEYS, DaftraError
+from ..models import Attachment, Request
+from ..text import squash
+
+# The fields the PDFs approving a request saves are attached under (not fields of any form)
+INVOICE_ATTACHMENT_FIELD = "daftra_invoice"
+RECEIPT_ATTACHMENT_FIELD = "daftra_receipt"
+WORK_ORDER_ATTACHMENT_FIELD = "daftra_work_order"
+CENT = Decimal("0.01")
+# Daftra rounds each line's tax on its own, so a total can be off by a little
+TOTAL_TOLERANCE = Decimal("0.05")
+
+
+class SyncError(Exception):
+    """Why the Daftra documents could not be created, in words the manager can act on.
+    from_daftra says whether Daftra itself refused or failed, rather than our own checks."""
+
+    def __init__(self, message: str, from_daftra: bool = False):
+        super().__init__(message)
+        self.from_daftra = from_daftra
+
+
+def money(value) -> Decimal:
+    return Decimal(str(value or 0)).quantize(CENT)
+
+
+def daftra_failed(error: DaftraError) -> SyncError:
+    return SyncError(f"تعذر الإنشاء في دفترة: {error}", from_daftra=True)
+
+
+def reports_daftra_errors(step):
+    """Turns Daftra refusing or failing anywhere in a step into the SyncError the manager sees."""
+    @functools.wraps(step)
+    def run(*args, **kwargs):
+        try:
+            return step(*args, **kwargs)
+        except DaftraError as error:
+            raise daftra_failed(error) from error
+    return run
+
+
+def marker(request: Request) -> str:
+    return f"PORTAL-{request.id}"
+
+
+def sales_person(request: Request) -> int:
+    """The submitter's Daftra staff id, the sales person on the invoice."""
+    staff_id = request.created_by.daftra_staff_id
+    if not staff_id:
+        raise SyncError(f"الموظف «{request.created_by.full_name or request.created_by.username}» غير مربوط "
+                        "بموظف في دفترة. اربطه من الإدارة ← المستخدمون، ثم اعتمد الطلب مرة أخرى.")
+    return staff_id
+
+
+def payment_inputs(data: dict) -> tuple[Decimal, str | None]:
+    """The amount paid now and its Daftra payment method key, checked before anything is sent."""
+    paid = money(data.get("paid_amount"))
+    method = PAYMENT_METHOD_KEYS.get(data.get("payment_method"))
+    if paid > 0 and not method:
+        raise SyncError(f"طريقة الدفع «{data.get('payment_method') or '—'}» غير معروفة لدفترة.")
+    return paid, method
+
+
+def attach_pdf(request: Request, field: str, title: str, invoice: dict, content: bytes, db: Session):
+    """Saves a PDF on the request, named like the ones staff save by hand: «<title> <customer> <client number>.pdf»."""
+    client_number = (invoice.get("Client") or {}).get("client_number") or ""
+    customer = squash(request.data.get("customer_name"))
+    filename = " ".join(part for part in (title, customer, client_number) if part) + ".pdf"
+    folder = UPLOAD_DIR / str(request.id)
+    folder.mkdir(parents=True, exist_ok=True)
+    stored_name = uuid.uuid4().hex + ".pdf"
+    (folder / stored_name).write_bytes(content)
+    db.add(Attachment(request=request, field=field, filename=filename[:255], stored_name=stored_name,
+                      content_type="application/pdf", size=len(content)))

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { localDay, matchesQuery, normalize } from '../src/formsMeta.js';
 import {
-  evaluateForm, initialValues, linePrice, normalizePhone, packageColors, packageQuantity, today,
+  evaluateForm, groupLines, initialValues, linePrice, normalizePhone, packageColors, packageQuantity, today,
 } from '../src/validation.js';
 
 const families = [
@@ -112,4 +112,12 @@ test('a number that is no amount is refused', () => {
 test('localDay gives the local date of an ISO time', () => {
   assert.equal(localDay(''), '');
   assert.match(localDay('2026-10-21T10:00:00Z'), /^2026-10-2[01]$/);
+});
+
+test('groupLines keeps a package together and each product on its own', () => {
+  const groups = groupLines([
+    { name: 'a', group_id: 'g', group_name: 'Pack' }, { name: 'b', group_id: 'g', group_name: 'Pack' },
+    { name: 'x', group_id: null }, { name: 'x', group_id: null },
+  ]);
+  assert.deepEqual(groups.map((g) => [g.groupName, g.rows.map((r) => r.index)]), [['Pack', [0, 1]], [null, [2]], [null, [3]]]);
 });

@@ -1,11 +1,11 @@
-// Mirrors backend/app/forms.py so the user sees errors before submitting.
+// Mirrors backend/app/forms/validation.py so the user sees errors before submitting.
 // The backend validates again and stays the source of truth.
 
 const PHONE_RE = /^(?:\+?971|0)\d{8,9}$/;
 const ARABIC_DIGITS = '٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹';
 // Field types 'product' and 'staff' hold a name picked from a Daftra list
 const DEFAULT_MAX_LENGTH = { text: 300, product: 300, staff: 300, textarea: 3000 };
-// Field types holding the id of a row in a Daftra list (see DAFTRA_LIST_TYPES in forms.py)
+// Field types holding the id of a row in a Daftra list (see DAFTRA_LIST_TYPES in backend/app/forms/validation.py)
 export const DAFTRA_LIST_TYPES = ['daftra_order_source', 'daftra_treasury', 'daftra_client_category', 'daftra_client_invoice'];
 
 const toLatinDigits = (text) => text.replace(/[٠-٩۰-۹]/g, (d) => ARABIC_DIGITS.indexOf(d) % 10);
@@ -68,7 +68,7 @@ function cleanValue(spec, raw) {
   return [value, null];
 }
 
-// The cooler colours a package's name allows (a "package_color" field's families, from forms.py
+// The cooler colours a package's name allows (a "package_color" field's families, from backend/app/forms/options.py
 // PACKAGE_COLOR_FAMILIES): the first family whose words the name contains; [] when none matches
 export function packageColors(spec, packageName) {
   const name = String(packageName ?? '').split(/\s+/).filter(Boolean).join(' ');
@@ -85,6 +85,22 @@ export function packageQuantity(line) {
 // A line's price: what the product costs inside the package it was picked from, else its own price
 export function linePrice(line, priceById) {
   return typeof line.unit_price === 'number' ? line.unit_price : priceById.get(Number(line.product_id)) || 0;
+}
+
+// Lines from the same package pick stay together as one group, in the order first added; a product
+// picked on its own is a group of its own. Each group: { key, groupName (null for a product), rows: [{ line, index }] }
+export function groupLines(lines) {
+  const order = [];
+  const byKey = new Map();
+  lines.forEach((line, index) => {
+    const key = line.group_id || `single-${index}`;
+    if (!byKey.has(key)) {
+      byKey.set(key, { key, groupName: line.group_id ? line.group_name : null, rows: [] });
+      order.push(key);
+    }
+    byKey.get(key).rows.push({ line, index });
+  });
+  return order.map((key) => byKey.get(key));
 }
 
 function conditionMet(condition, clean) {

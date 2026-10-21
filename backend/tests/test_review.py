@@ -259,17 +259,17 @@ def test_an_unexpected_fault_midway_keeps_what_daftra_created(client, db, fake_d
 
     seed.catalog(db)
     request_id = submitted_sale(client, db, sales, create_work_order="لا", installation_days="")
-    real = daftra_sync.save_receipt_pdf
+    real = daftra_sync.invoice.save_receipt_pdf
 
     def broken(*args, **kwargs):
         raise KeyError("boom")
-    monkeypatch.setattr(daftra_sync, "save_receipt_pdf", broken)
+    monkeypatch.setattr(daftra_sync.invoice, "save_receipt_pdf", broken)
     failed = approve(client, manager, request_id)
     assert failed.status_code == 500 and "boom" in failed.json()["detail"]
     request = db.get(Request, request_id)
     assert request.status == "submitted" and request.daftra_invoice_id and request.daftra_payment_id
 
-    monkeypatch.setattr(daftra_sync, "save_receipt_pdf", real)
+    monkeypatch.setattr(daftra_sync.invoice, "save_receipt_pdf", real)
     assert approve(client, manager, request_id).status_code == 200
     assert len(fake_daftra.posted("/api2/invoices.json")) == 1
     assert len(fake_daftra.posted("/api2/invoice_payments.json")) == 1
