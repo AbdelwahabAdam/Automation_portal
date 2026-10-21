@@ -24,12 +24,12 @@ from ..config import settings
 from ..daftra import NotFound, local_phone
 from ..models import Request, User
 from ..text import day_month_year
-from .client import client_id, existing_client_id, set_client_category
+from .client import client_id, existing_client_id, save_address, update_client
 from .common import TOTAL_TOLERANCE, SyncError, money, payment_inputs, reports_daftra_errors, sales_person
 from .invoice import ensure_invoice, finish, get_invoice, invoice_items, payment_of
 from .work_order import ensure_work_order
 
-__all__ = ["SyncError", "existing_client_id", "sync"]
+__all__ = ["SyncError", "existing_client_id", "save_address", "sync"]
 
 # The description of the renewal invoice's one line, as staff write it by hand (e.g. invoice 06263)
 RENEWAL_DESCRIPTION = "تجديد عقد الصيانه لمده عام مع تبديل فلاتر كل ثلاث اشهر"
@@ -54,7 +54,7 @@ def sync_new_sale(request: Request, db: Session, reviewer: User) -> dict:
     paid, method = payment_inputs(data)
     if request.daftra_client_id is None:
         request.daftra_client_id = client_id(data, db)
-    set_client_category(request)
+    update_client(request)
     invoice = ensure_invoice(request, items, staff_id)
     summary = finish(request, invoice, paid, method, reviewer, db)
     if data.get("create_work_order") == "نعم":
@@ -79,7 +79,7 @@ def sync_contract_renewal(request: Request, db: Session, reviewer: User) -> dict
             raise SyncError(f"لا يوجد في دفترة عميل بالرقم {local_phone(data.get('phone'))} أو الكود "
                             f"«{data.get('client_code') or '—'}». التجديد لعميل موجود فقط؛ أعد الطلب للموظف ليصحح بيانات العميل.")
         request.daftra_client_id = found
-    set_client_category(request)
+    update_client(request)
     invoice = ensure_invoice(request, [item], staff_id)
     return finish(request, invoice, paid, method, reviewer, db)
 
@@ -101,7 +101,7 @@ def sync_maintenance(request: Request, db: Session, reviewer: User) -> dict:
     ) if part)
     if request.daftra_client_id is None:
         request.daftra_client_id = client_id(data, db)
-    set_client_category(request)
+    update_client(request)
     invoice = ensure_invoice(request, items, staff_id, notes=notes)
     return finish(request, invoice, paid, method, reviewer, db)
 

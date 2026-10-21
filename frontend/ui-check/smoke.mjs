@@ -54,8 +54,9 @@ async function salesForm(page, prefix) {
     await page.locator('#phone').press('Enter');
     await expectText(page, 'عميل مسجل', 'client lookup after pressing Enter');
   }
-  // Finding a client fills التصنيف from Daftra, and المنطقة and الإمارة must follow it
-  const picked = (id) => page.locator(id).textContent().then((t) => (t || '').trim());
+  // Finding a client fills التصنيف from Daftra, and المنطقة and الإمارة come from its address.
+  // التصنيف and الإمارة are buttons showing what is chosen; المنطقة is typed, so it has a value.
+  const picked = (id) => page.locator(id).evaluate((el) => ((el.tagName === 'INPUT' ? el.value : el.textContent) || '').trim());
   // Daftra answers a moment after the client is found; wait for التصنيف before reading the three
   await page.locator('#category').filter({ hasNotText: 'اختر…' }).waitFor({ timeout: 12000 }).catch(() => {});
   const afterLookup = { category: await picked('#category'), area: await picked('#area'), emirate: await picked('#emirate') };
@@ -82,10 +83,11 @@ async function salesForm(page, prefix) {
       else {
         await matches.first().click();
         await page.waitForTimeout(400);
-        const picked = (await category.textContent()) || '';
-        if (!picked.includes('العين')) problems.push(`[dropdown] after picking, التصنيف reads «${picked}»`);
-        const area = (await page.locator('#area').textContent()) || '';
-        if (!area.trim() || area.includes('بدون تحديد')) problems.push('[dropdown] picking a category did not fill المنطقة');
+        const chosen = (await category.textContent()) || '';
+        if (!chosen.includes('العين')) problems.push(`[dropdown] after picking, التصنيف reads «${chosen}»`);
+        // المنطقة is filled by التصنيف only while it is empty; the client's own address keeps it otherwise
+        const area = await picked('#area');
+        if (!area) problems.push('[dropdown] المنطقة is empty after picking a التصنيف');
         log(`${prefix} category search: ${found} match(es), picked «${first.trim()}», area «${area.trim()}»`);
       }
     }
@@ -100,13 +102,13 @@ async function salesForm(page, prefix) {
     else {
       await newAddress.first().click();
       await page.waitForTimeout(400);
-      const category = ((await page.locator('#category').textContent()) || '').trim();
-      const area = ((await page.locator('#area').textContent()) || '').trim();
+      const category = await picked('#category');
+      const area = await picked('#area');
       const street = await page.locator('#street').inputValue();
       const coordinates = await page.locator('#coordinates').inputValue();
       log(`${prefix} new address: category «${category}», area «${area}», street «${street}», coordinates «${coordinates}»`);
       if (!category.includes('اختر')) problems.push(`[address] التصنيف kept «${category}»`);
-      if (!area.includes('بدون تحديد')) problems.push(`[address] المنطقة kept «${area}»`);
+      if (area) problems.push(`[address] المنطقة kept «${area}»`);
       if (street) problems.push(`[address] الشارع kept «${street}»`);
       if (coordinates) problems.push(`[address] الإحداثيات kept «${coordinates}»`);
 
@@ -116,8 +118,8 @@ async function salesForm(page, prefix) {
       const label = ((await saved.textContent()) || '').trim();
       await saved.click();
       await page.waitForTimeout(400);
-      const back = ((await page.locator('#area').textContent()) || '').trim();
-      const emirate = ((await page.locator('#emirate').textContent()) || '').trim();
+      const back = await picked('#area');
+      const emirate = await picked('#emirate');
       const filled = [back, emirate, await page.locator('#street').inputValue(), await page.locator('#house').inputValue()]
         .filter((part) => part && !part.includes('بدون تحديد')).join(' · ');
       log(`${prefix} back to «${label}»: ${filled || 'nothing filled'}`);
@@ -210,14 +212,14 @@ async function devicePicker(page, prefix) {
   await page.waitForTimeout(400);
   if (await page.locator('.fl-suggest__item').count()) await page.locator('.fl-suggest__item').first().click();
   await page.waitForTimeout(300);
-  const rows = await page.locator('#field-devices .fl-order-lines__row').count();
+  const rows = await page.locator('#field-devices .fl-picked__item').count();
   log(`${prefix} devices: ${found} match(es) for «سقيا», ${rows} picked`);
   if (rows !== 2) problems.push(`[devices] expected 2 rows after two picks, found ${rows}`);
   await shot(page, `${prefix}-devices`, false);
   // Removing one takes its row away
-  await page.locator('#field-devices .fl-order-lines__row button').first().click();
+  await page.locator('#field-devices .fl-picked__item button').first().click();
   await page.waitForTimeout(300);
-  if (await page.locator('#field-devices .fl-order-lines__row').count() !== 1) problems.push('[devices] removing a device did not take its row away');
+  if (await page.locator('#field-devices .fl-picked__item').count() !== 1) problems.push('[devices] removing a device did not take its row away');
 }
 
 async function pages(page, prefix) {

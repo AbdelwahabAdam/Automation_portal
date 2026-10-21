@@ -121,6 +121,38 @@ def test_adding_an_address_to_a_client(client, db, sales):
     assert client.post("/api/clients/1/addresses", json={}, headers=auth(sales)).status_code == 404
 
 
+def test_a_new_address_is_put_on_the_client_in_daftra_as_it_is_saved(client, db, fake_daftra, sales):
+    seed.existing_client(db)
+    fake_daftra.add_client(4053, "0509999999", custom={"test": "N + F", "coordinates_text": "24.1, 55.6"},
+                           address={"address1": "شارع الشيخ زايد", "address2": "12", "city": "دبي",
+                                    "state": "الخوانيج", "country_code": "AE"})
+    link = "https://maps.app.goo.gl/AJMANHOME1"
+    added = client.post("/api/clients/4053/addresses",
+                        json={"emirate": "عجمان", "area": "مدينة عجمان", "street": "شارع الاتحاد",
+                              "location_url": link, "coordinates": "25.4052, 55.5136"},
+                        headers=auth(sales))
+    assert added.status_code == 200 and added.json()["saved_in_daftra"] is True
+    saved = fake_daftra.clients[4053]
+    assert saved["secondary_city"] == "عجمان" and saved["secondary_state"] == "مدينة عجمان"
+    assert saved["secondary_address1"] == "شارع الاتحاد" and saved["active_secondary_address"] == 1
+    assert saved["link"] == link
+    assert saved["custom"]["coordinates_text"] == "25.4052, 55.5136"
+    # The address it already had, and its name, are left as they were
+    assert saved["address1"] == "شارع الشيخ زايد" and saved["business_name"] == "Existing"
+
+
+def test_an_address_daftra_refuses_is_still_saved_here_and_says_so(client, db, fake_daftra, sales):
+    """The client has no coordinates and the new address brings none, which Daftra will not accept."""
+    seed.existing_client(db)
+    fake_daftra.add_client(4053, "0509999999")
+    added = client.post("/api/clients/4053/addresses", json={"emirate": "عجمان", "area": "مدينة عجمان"},
+                        headers=auth(sales))
+    assert added.status_code == 200
+    assert added.json()["saved_in_daftra"] is False and "الإحداثيات" in added.json()["daftra_error"]
+    found = client.get("/api/clients/lookup", params={"code": "4089"}, headers=auth(sales)).json()["matches"][0]
+    assert len(found["addresses"]) == 2
+
+
 def test_catalog_picker_lists_packages_with_their_prices(client, db, sales):
     seed.catalog(db)
     items = client.get("/api/catalog/picker", headers=auth(sales)).json()

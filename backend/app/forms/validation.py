@@ -181,6 +181,11 @@ def validate_submission(form_type: str, data: dict, file_counts: dict, employee_
                     row_errors[dspec["name"]] = derror
                 elif dvalue is not None:
                     details[dspec["name"]] = dvalue
+            # Before anything is required of it: a field left empty that stands for a word saves as
+            # that word (an empty الكتابة المطلوبة is «لا يوجد», which charges nothing)
+            for dspec in line_fields:
+                if dspec.get("blank_value") and not details.get(dspec["name"]):
+                    details[dspec["name"]] = dspec["blank_value"]
             for dspec in line_fields:
                 dname = dspec["name"]
                 required = dspec["required"] or ("required_if" in dspec and _condition_met(dspec["required_if"], details))
@@ -244,6 +249,11 @@ def validate_submission(form_type: str, data: dict, file_counts: dict, employee_
                     errors[name] = spec["negative_message"]
                 else:
                     clean[name] = result
+
+    # The same for a field of the form itself, before the checks below read it
+    for spec in fields:
+        if spec.get("blank_value") and not clean.get(spec["name"]):
+            clean[spec["name"]] = spec["blank_value"]
 
     # A field that must equal another (e.g. the amount paid must be the whole total)
     for spec in fields:

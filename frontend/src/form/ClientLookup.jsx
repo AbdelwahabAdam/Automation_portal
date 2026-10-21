@@ -103,11 +103,16 @@ export function useClientLookup(form) {
     setAddressBusy(true);
     try {
       const address = await api(`/clients/${client.daftra_id}/addresses`, {
-        method: 'POST', body: Object.fromEntries(ADDRESS_FIELDS.map((f) => [f, values[f] || ''])),
+        // The coordinates go too: Daftra will not save a client without them
+        method: 'POST',
+        body: { ...Object.fromEntries(ADDRESS_FIELDS.map((f) => [f, values[f] || ''])), coordinates: values.coordinates || '' },
       });
       setLookup((current) => ({ ...current, client: { ...current.client, addresses: [...current.client.addresses, address] } }));
       setAddressChoice(String(address.id));
-      toast('تم حفظ العنوان الجديد لهذا العميل');
+      // Never say it reached Daftra when it did not; it is tried again when the request is approved
+      toast(address.saved_in_daftra
+        ? 'تم حفظ العنوان الجديد لهذا العميل وفي دفترة'
+        : 'تم حفظ العنوان هنا، ولم يُحفظ في دفترة الآن — سيُحاول مرة أخرى عند اعتماد الطلب');
     } catch (err) {
       form.setMessage({ error: err.message });
     } finally {

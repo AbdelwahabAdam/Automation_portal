@@ -331,18 +331,36 @@ input.fl-input[type="date"] { min-block-size: calc(var(--fl-field-height) - 2px)
 .fl-dropzone--invalid { border-color: var(--fl-color-border-error); }
 
 /* Order lines (products/packages picked for one request) */
-.fl-order-lines { display: flex; flex-direction: column; gap: var(--fl-space-2); }
-.fl-order-lines__row { display: flex; align-items: center; gap: var(--fl-space-3); padding: var(--fl-space-3) var(--fl-space-4); border: var(--fl-border-width-default) solid var(--fl-color-border-default); border-radius: var(--fl-radius-md); background: var(--fl-color-background-sunken); }
-.fl-order-lines__name { flex: 1 1 auto; min-inline-size: 0; overflow-wrap: anywhere; text-align: start; }
-.fl-order-lines__qty { inline-size: 80px; flex: 0 0 auto; }
+/* The lines are a table: the quantity and the two amounts each sit under their own heading,
+   in their own column, so a bare number is never read as the one beside it */
+.fl-order-lines .fl-table td { vertical-align: top; }
+.fl-order-lines .fl-table td[data-fl-num] { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fl-order-lines__package { display: flex; align-items: center; gap: var(--fl-space-2); }
+.fl-table tr.fl-row--group > td { background: var(--fl-color-background-sunken); }
+/* A product that came with a package, listed under it */
+.fl-table tr.fl-row--child > td:first-child { padding-inline-start: var(--fl-space-6); }
+.fl-order-lines__qty { inline-size: 72px; }
+/* Five columns cannot fit a phone, and a form is no place to scroll sideways for a price: below
+   this width each row becomes its own block, every number keeping the heading it had as a column */
+@media (max-width: 36rem) {
+  .fl-order-lines .fl-table, .fl-order-lines .fl-table tbody, .fl-order-lines .fl-table tr, .fl-order-lines .fl-table td { display: block; }
+  .fl-order-lines .fl-table thead { display: none; }
+  .fl-order-lines .fl-table tr { border-block-end: var(--fl-border-width-default) solid var(--fl-color-border-default); }
+  .fl-order-lines .fl-table tr.fl-row--detail, .fl-order-lines .fl-table tr:last-child { border-block-end: 0; }
+  .fl-order-lines .fl-table td { display: flex; align-items: center; justify-content: space-between; gap: var(--fl-space-3); block-size: auto; min-block-size: 0; padding-block: var(--fl-space-2); border-block-end: 0; }
+  .fl-order-lines .fl-table td::before { content: attr(data-label); color: var(--fl-color-text-secondary); font-size: var(--fl-type-body-sm-size); }
+  .fl-order-lines .fl-table td.fl-cell--title { padding-block-start: var(--fl-space-3); }
+  .fl-order-lines .fl-table td.fl-cell--actions { position: static; justify-content: flex-end; padding-block-end: var(--fl-space-3); }
+  .fl-order-lines .fl-table tr.fl-row--child > td:first-child { padding-inline-start: var(--fl-table-cell-padding-inline); }
+  .fl-order-lines .fl-table tr.fl-row--child { background: var(--fl-color-background-sunken); }
+}
+/* Things picked from a search box and listed under it (the devices of a maintenance request) */
+.fl-picked { display: flex; flex-direction: column; gap: var(--fl-space-2); }
+.fl-picked__item { display: flex; align-items: center; gap: var(--fl-space-3); padding: var(--fl-space-3) var(--fl-space-4); border: var(--fl-border-width-default) solid var(--fl-color-border-default); border-radius: var(--fl-radius-md); background: var(--fl-color-background-sunken); }
+.fl-picked__name { flex: 1 1 auto; min-inline-size: 0; overflow-wrap: anywhere; text-align: start; }
 /* A whole number with − and + on either side */
 .fl-stepper { display: flex; align-items: center; gap: var(--fl-space-3); }
 .fl-stepper__value input { text-align: center; }
-.fl-order-lines__group { border: var(--fl-border-width-default) solid var(--fl-color-border-default); border-radius: var(--fl-radius-md); overflow: hidden; }
-.fl-order-lines__group-head { background: var(--fl-color-background-sunken); }
-.fl-order-lines__group-items { display: flex; flex-direction: column; gap: var(--fl-space-2); padding: var(--fl-space-2); }
-.fl-order-lines__group-items .fl-order-lines__row { background: var(--fl-color-background-surface); }
-.fl-order-lines__item { display: flex; flex-direction: column; gap: var(--fl-space-2); }
 .fl-order-lines__details { padding: var(--fl-space-4); border: var(--fl-border-width-default) solid var(--fl-color-border-default); border-radius: var(--fl-radius-md); background: var(--fl-color-background-surface); }
 
 /* Suggestion list under a field */

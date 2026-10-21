@@ -1,7 +1,7 @@
 """Building blocks the form definitions are written with: one field, and the sections several forms share."""
 
-from .options import (AREAS, AREAS_BY_EMIRATE, CASH_PAYMENT, DISCOUNT_LABELS, DISCOUNTED, EMIRATES, PAYMENT_METHODS,
-    SOURCES, TREASURY_BY_METHOD, YES_NO)
+from .options import (AREAS, AREAS_BY_EMIRATE, CASH_PAYMENT, DISCOUNT_LABELS, DISCOUNTED, EMIRATES, NO_INSCRIPTION,
+    PAYMENT_METHODS, SOURCES, TREASURY_BY_METHOD, YES_NO)
 
 
 def f(name, label, type="text", required=False, **extra):
@@ -61,7 +61,11 @@ def address(title="عنوان الخدمة", required=True):
     return section(
         title,
         f("category", "التصنيف", "daftra_client_category", required),
-        f("area", "المنطقة", "select", required, options=AREAS, areas_by_emirate=AREAS_BY_EMIRATE),
+        # Not a list to pick from: Daftra holds a neighbourhood here («الخوانيج 2»), which is what
+        # the installation team needs on the work order, and only 28 of our 3,931 client addresses
+        # hold one of the regions below. They are offered as suggestions instead.
+        f("area", "المنطقة", "text", required, max_length=100, suggestions=AREAS,
+          areas_by_emirate=AREAS_BY_EMIRATE),
         f("emirate", "الإمارة", "select", required, options=EMIRATES),
         f("street", "الشارع"),
         f("house", "رقم البيت / اسم الموقع"),
@@ -144,6 +148,8 @@ def attachments(*fields):
 
 NOTES = section("ملاحظات", f("notes", "أي اتفاق خاص أو ملاحظات إضافية", "textarea"))
 INSCRIPTION = [
-    f("inscription", "الكتابة المطلوبة (النص حرفيًا، أو «لا يوجد»)", "textarea", True),
+    # blank_value: left empty it saves as «لا يوجد», so there is no inscription to write or charge for
+    f("inscription", "الكتابة المطلوبة (النص حرفيًا، واتركه فارغًا إن لم تكن مطلوبة)", "textarea",
+      blank_value=NO_INSCRIPTION[0]),
     f("inscription_place", "مكان الكتابة، إن وجدت"),
 ]

@@ -1,11 +1,13 @@
 // The products and packages of a request (field type "order_lines" in backend/app/forms/).
-import { useMemo, useState } from 'react';
-import { Button, Combobox, Field, Icon, Select, TextInput } from '../ds/index.jsx';
+import { Fragment, useMemo, useState } from 'react';
+import { Button, Combobox, Field, Icon, Select } from '../ds/index.jsx';
 import { formatMoney } from '../formsMeta.js';
 import { groupLines, linePrice, packageColors, packageQuantity } from '../validation.js';
 import { Control, guessFromProductName, Stepper } from './fields.jsx';
 
 const newGroupId = () => `g${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+// المنتج، الكمية، سعر الوحدة، الإجمالي and the row's buttons: what a details row spans
+const COLUMNS = 5;
 
 // A package's (or a standalone product's) own fields: colours, build details, the inscription.
 // forPackage: a product picked on its own has its own quantity box instead of «الكمية».
@@ -142,25 +144,37 @@ export default function OrderLines({ spec, value, invalid, catalog, onChange, li
     return next;
   });
 
-  function row({ line, index }) {
+  // One row of the table: the product, its quantity, what one costs and what the row costs.
+  // inPackage: a line that came with a package is indented under it and has no fields of its own.
+  function row({ line, index }, inPackage = false) {
+    const unit = linePrice(line, priceById);
     return (
-      <div key={index} className="fl-order-lines__item">
-        <div className="fl-order-lines__row">
-          <bdi className="fl-order-lines__name">{line.name}</bdi>
-          <span className="fl-small fl-muted fl-cell--nowrap" data-fl-num>{formatMoney(linePrice(line, priceById))} درهم</span>
-          <TextInput
-            type="number" min="1" inputMode="numeric" className="fl-order-lines__qty"
-            aria-label={`الكمية — ${line.name}`} value={line.quantity}
-            onChange={(e) => setQuantity(index, Math.max(1, Number(e.target.value) || 1))}
-          />
-          <Button type="button" size="sm" variant="ghost" icon="trash" iconOnly label={`إزالة ${line.name}`} onClick={() => removeLine(index)} />
-        </div>
-        {/* A line inside a package shows no fields of its own — they belong to the package, below */}
+      <Fragment key={`line-${index}`}>
+        <tr className={inPackage ? 'fl-row--child' : undefined}>
+          <td className="fl-cell--wrap fl-cell--title"><bdi>{line.name}</bdi></td>
+          <td data-label="الكمية">
+            <input
+              className="fl-mini fl-order-lines__qty" type="number" min="1" inputMode="numeric"
+              aria-label={`الكمية — ${line.name}`} value={line.quantity}
+              onChange={(e) => setQuantity(index, Math.max(1, Number(e.target.value) || 1))}
+            />
+          </td>
+          <td data-label="سعر الوحدة (درهم)" data-fl-num><bdi dir="ltr">{formatMoney(unit)}</bdi></td>
+          <td data-label="الإجمالي (درهم)" data-fl-num><bdi dir="ltr">{formatMoney(unit * (Number(line.quantity) || 0))}</bdi></td>
+          <td className="fl-cell--actions">
+            <Button type="button" size="sm" variant="ghost" icon="trash" iconOnly label={`إزالة ${line.name}`} onClick={() => removeLine(index)} />
+          </td>
+        </tr>
+        {/* A line inside a package shows no fields of its own — they belong to the package, above */}
         {!line.group_id && (
-          <DetailFields lineFields={lineFields} details={line.details} errors={lineErrors?.[index]} keyPrefix={`${spec.name}-${index}`}
-            onChange={(name, v) => setDetail(index, name, v)} forPackage={false} packageName={line.name} />
+          <tr className="fl-row--detail">
+            <td colSpan={COLUMNS}>
+              <DetailFields lineFields={lineFields} details={line.details} errors={lineErrors?.[index]} keyPrefix={`${spec.name}-${index}`}
+                onChange={(name, v) => setDetail(index, name, v)} forPackage={false} packageName={line.name} />
+            </td>
+          </tr>
         )}
-      </div>
+      </Fragment>
     );
   }
 
@@ -170,33 +184,51 @@ export default function OrderLines({ spec, value, invalid, catalog, onChange, li
     const total = group.rows.reduce((sum, { line }) => sum + linePrice(line, priceById) * (Number(line.quantity) || 0), 0);
     const open = openGroups.has(group.key);
     return (
-      <div key={group.key} className="fl-order-lines__group">
-        <div className="fl-order-lines__row fl-order-lines__group-head">
-          <Icon name="package" size={18} />
-          <bdi className="fl-order-lines__name">{group.groupName}</bdi>
-          <span className="fl-small fl-muted fl-cell--nowrap" data-fl-num>
-            {count > 1 && `× ${count} · `}
-            {formatMoney(total)} درهم
-          </span>
-          <Button type="button" size="sm" variant="ghost" icon={open ? 'chevron-up' : 'chevron-down'} aria-expanded={open}
-            onClick={() => toggleGroup(group.key)}>
-            <span data-fl-num>{group.rows.length}</span> منتجات
-          </Button>
-          <Button type="button" size="sm" variant="ghost" icon="trash" iconOnly label={`إزالة ${group.groupName}`} onClick={() => removeGroup(group.key)} />
-        </div>
-        <DetailFields lineFields={lineFields} details={first.line.details} errors={lineErrors?.[first.index]}
-          keyPrefix={`${spec.name}-${group.key}`} onChange={(name, v) => setGroupDetail(group.key, name, v)} forPackage
-          packageName={group.groupName} />
-        {open && <div className="fl-order-lines__group-items">{group.rows.map(row)}</div>}
-      </div>
+      <Fragment key={group.key}>
+        <tr className="fl-row--group">
+          <td className="fl-cell--wrap fl-cell--title">
+            <span className="fl-order-lines__package"><Icon name="package" size={18} /><bdi><strong>{group.groupName}</strong></bdi></span>
+            <span className="fl-cell__sub">باقة — <span data-fl-num>{group.rows.length}</span> منتجات</span>
+          </td>
+          {/* The package's own «الكمية» is set by its stepper below; here it is what the number means */}
+          <td data-label="عدد الباقات" data-fl-num>{count}</td>
+          <td data-label="سعر الوحدة (درهم)" className="fl-muted">—</td>
+          <td data-label="الإجمالي (درهم)" data-fl-num><strong><bdi dir="ltr">{formatMoney(total)}</bdi></strong></td>
+          <td className="fl-cell--actions">
+            <Button type="button" size="sm" variant="ghost" icon={open ? 'chevron-up' : 'chevron-down'} iconOnly
+              aria-expanded={open} label={open ? `إخفاء منتجات ${group.groupName}` : `عرض منتجات ${group.groupName}`}
+              onClick={() => toggleGroup(group.key)} />
+            <Button type="button" size="sm" variant="ghost" icon="trash" iconOnly label={`إزالة ${group.groupName}`} onClick={() => removeGroup(group.key)} />
+          </td>
+        </tr>
+        <tr className="fl-row--detail">
+          <td colSpan={COLUMNS}>
+            <DetailFields lineFields={lineFields} details={first.line.details} errors={lineErrors?.[first.index]}
+              keyPrefix={`${spec.name}-${group.key}`} onChange={(name, v) => setGroupDetail(group.key, name, v)} forPackage
+              packageName={group.groupName} />
+          </td>
+        </tr>
+        {open && group.rows.map((entry) => row(entry, true))}
+      </Fragment>
     );
   }
 
   return (
     <div className="fl-stack fl-stack--sm">
       {groups.length > 0 && (
-        <div className="fl-order-lines">
-          {groups.map((group) => (group.groupName ? packageGroup(group) : group.rows.map(row)))}
+        <div className="fl-table-wrap fl-order-lines">
+          <div className="fl-table-scroll">
+            <table className="fl-table">
+              <thead>
+                <tr>
+                  <th>المنتج</th><th>الكمية</th><th>سعر الوحدة (درهم)</th><th>الإجمالي (درهم)</th><th />
+                </tr>
+              </thead>
+              <tbody>
+                {groups.map((group) => (group.groupName ? packageGroup(group) : group.rows.map((entry) => row(entry))))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
       <Combobox

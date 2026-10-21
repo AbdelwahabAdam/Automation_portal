@@ -104,6 +104,21 @@ def test_no_inscription_needs_no_price_and_charges_nothing():
     assert clean["subtotal_amount"] == 5600
 
 
+def test_an_inscription_left_empty_is_saved_as_there_being_none():
+    """It is not asked for any more: left empty it means «لا يوجد», and nothing is charged for it."""
+    clean, errors = validate("new_sale", new_sale(order_lines=package_lines(inscription="", inscription_price="")), FILES)
+    assert errors == {}
+    assert [line["details"]["inscription"] for line in clean["order_lines"]] == ["لا يوجد", "لا يوجد"]
+    assert clean["subtotal_amount"] == 5600
+
+
+def test_an_empty_inscription_on_a_form_that_asks_it_once_is_saved_the_same_way():
+    # طلب عرض سعر asks for it as a field of its own, not per line; the rest of the form is beside the point here
+    clean, errors = validate("quotation", {"inscription": ""})
+    assert "inscription" not in errors
+    assert clean["inscription"] == "لا يوجد"
+
+
 def test_cover_colour_must_be_one_of_the_package_family():
     _, errors = validate("new_sale", new_sale(order_lines=package_lines(cover_color="بنفسجي")), FILES)
     assert errors["order_lines"]["lines"]["0"]["cover_color"] == "اختر من القائمة"
@@ -251,3 +266,11 @@ def test_every_amount_field_is_marked_as_money():
                 continue
             looks_like_money = any(word in spec["name"] for word in ("amount", "price", "paid", "refund", "total", "value"))
             assert spec.get("money", False) == looks_like_money, f"{key}.{spec['name']}"
+
+
+def test_the_area_keeps_the_neighbourhood_daftra_holds():
+    """المنطقة is not a list to pick from: Daftra's own addresses hold a neighbourhood, and only
+    28 of the 3,931 we imported hold one of the regions the form suggests."""
+    clean, errors = validate("new_sale", new_sale(area="الخوانيج 2"), FILES)
+    assert "area" not in errors
+    assert clean["area"] == "الخوانيج 2"

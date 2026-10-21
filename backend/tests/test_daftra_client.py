@@ -97,3 +97,20 @@ def test_lists_are_cached_and_kept_when_daftra_is_down(fake_daftra):
     daftra._cache["treasuries"] = (0, daftra._cache["treasuries"][1])
     fake_daftra.fail_once = "/api2/treasuries.json"
     assert [t["id"] for t in daftra.list_treasuries()] == [13, 9]
+
+
+# The spellings Daftra's own data uses for the same place, and the two fields the other way round
+@pytest.mark.parametrize("city, state, emirate, area", [
+    ("دبى", "الخوانيج 2", "دبي", "الخوانيج 2"),          # the neighbourhood is kept as it is
+    ("ابو ظبى", "المصفح", "أبوظبي", "المصفح"),
+    ("DUbai", "", "دبي", "مدينة دبي"),                   # written in English, and in no one case
+    ("Abu Dhabi", "Khalifa Bin Zayed", "أبوظبي", "Khalifa Bin Zayed"),
+    ("Sharjah", "", "الشارقة", "مدينة الشارقة"),
+    ("العين", "", "أبوظبي", "منطقة العين"),              # a city of its own, not أبوظبي the city
+    ("كلباء", "", "الشارقة", "كلباء"),
+    ("السمحه", "ابو ظبي", "أبوظبي", "السمحه"),           # city and area the other way round
+    ("Atlantis", "y", "", "Atlantis، y"),                # nothing we know: kept where it can be read
+])
+def test_an_address_knows_which_emirate_it_is_in(city, state, emirate, area):
+    assert daftra.address_from_daftra({"city": city, "state": state}) == {
+        "emirate": emirate, "area": area, "street": "", "house": ""}

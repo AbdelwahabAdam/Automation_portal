@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
-from . import catalog, daftra
+from . import catalog, daftra, daftra_sync
 from .audit import Audit
 from .daftra import local_phone
 from .database import get_db
@@ -65,12 +65,18 @@ class AddressIn(BaseModel):
     street: str = Field("", max_length=200)
     house: str = Field("", max_length=100)
     location_url: str = Field("", max_length=600)
+    coordinates: str = Field("", max_length=100)
 
 
 @router.post("/clients/{daftra_id}/addresses")
 def add_client_address(daftra_id: int, body: AddressIn, user: User = Depends(sales_user),
                        db: Session = Depends(get_db), audit: Audit = Depends()):
-    """Adds a new address for a client already in our list, e.g. when they have moved."""
+    """Adds a new address for a client already in our list, e.g. when they have moved.
+
+    It is put on the client in Daftra too, in the one address block Daftra's API can write. If
+    that fails the address is still saved here, and the answer says Daftra did not take it, so
+    nobody is told it was saved on the client when it was not.
+    """
     client = db.scalar(select(Client).where(Client.daftra_id == daftra_id))
     if client is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "العميل غير موجود")
@@ -80,7 +86,13 @@ def add_client_address(daftra_id: int, body: AddressIn, user: User = Depends(sal
     db.flush()
     audit.log(user, "client.address.add", "client", client.id, client.customer_name, after=address_out(address))
     db.commit()
-    return address_out(address)
+
+    saved_in_daftra, problem = True, ""
+    try:
+        daftra_sync.save_address(daftra_id, body.model_dump())
+    except (daftra_sync.SyncError, daftra.DaftraError) as error:
+        saved_in_daftra, problem = False, str(error)
+    return {**address_out(address), "saved_in_daftra": saved_in_daftra, "daftra_error": problem}
 
 
 # ---------- Our catalog ----------

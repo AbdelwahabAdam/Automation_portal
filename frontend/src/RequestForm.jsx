@@ -62,9 +62,10 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
     return row?.area && row?.emirate ? { area: row.area, emirate: row.emirate } : null;
   };
 
-  // المنطقة and الإمارة follow التصنيف however it was set — picked by hand, or taken from Daftra
-  // when a client is found, whose own address holds Daftra's neighbourhood names, which are not
-  // among the areas this form offers. Runs again if the list of categories arrives later.
+  // التصنيف says where its clients mostly are, which fills المنطقة and الإمارة while they are still
+  // empty — on a new client, or a found one whose address says nothing. It never replaces an address
+  // that is already there: the client's own neighbourhood is the address, التصنيف is not.
+  // Runs again if the list of categories arrives later.
   const placedBy = useRef('');
   useEffect(() => {
     const id = values.category;
@@ -73,8 +74,8 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
     if (!place) return;
     // Decided out here, not inside the update: an update may be run more than once, and reading
     // what was auto-filled while also writing it would make the second run change its mind
-    const takeArea = !values.area || values.area === autoFilled.current.area;
-    const takeEmirate = !values.emirate || values.emirate === autoFilled.current.emirate;
+    const takeArea = !values.area;
+    const takeEmirate = !values.emirate;
     placedBy.current = String(id);
     if (!takeArea && !takeEmirate) return;
     if (takeArea) autoFilled.current.area = place.area;
@@ -199,21 +200,22 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
       ? catalog.daftraLists?.daftra_client_category?.find((row) => String(row.id) === String(rowId))
       : null;
     const place = located?.area && located?.emirate && fieldNames.has('area') ? { area: located.area, emirate: located.emirate } : {};
-    setValues((current) => ({ ...current, [name]: rowId, [`${name}_name`]: label, ...place }));
+    // Only where there is no address yet: picking a التصنيف must not rewrite the client's own
+    setValues((current) => ({
+      ...current, [name]: rowId, [`${name}_name`]: label,
+      ...(place.area && !current.area ? { area: place.area } : {}),
+      ...(place.emirate && !current.emirate ? { emirate: place.emirate } : {}),
+    }));
     autoFilled.current[name] = undefined;
     setMessage(null);
     if (place.area) clearError(name, 'area', 'emirate');
     else clearError(name);
   }
 
-  // الإمارة and المنطقة stay in sync: picking one narrows or fills in the other
+  // الإمارة narrows the areas suggested for المنطقة, and a known area fills in its emirate.
+  // Changing the emirate leaves المنطقة alone: it holds a neighbourhood, which no list knows.
   function chooseEmirate(value) {
-    const allowed = specOf('area')?.areas_by_emirate?.[value];
-    setValues((current) => (
-      allowed && current.area && !allowed.includes(current.area)
-        ? { ...current, emirate: value, area: '' }
-        : { ...current, emirate: value }
-    ));
+    setValues((current) => ({ ...current, emirate: value }));
     setMessage(null);
     clearError('emirate');
   }
@@ -433,9 +435,10 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
       return { control: <Control spec={spec} value={values.emirate} invalid={invalid} onChange={(_, v) => chooseEmirate(v)} /> };
     }
     if (spec.name === 'area') {
-      const options = (values.emirate && spec.areas_by_emirate?.[values.emirate]) || spec.options;
-      // Always a drop-down, even when the emirate has only two or three areas
-      return { control: <Control spec={{ ...spec, options, dropdown: true }} value={values.area} invalid={invalid} onChange={(_, v) => chooseArea(v)} /> };
+      // Typed freely — a client's neighbourhood is whatever Daftra holds — with the regions of the
+      // chosen emirate offered as suggestions
+      const suggestions = (values.emirate && spec.areas_by_emirate?.[values.emirate]) || spec.suggestions;
+      return { control: <Control spec={{ ...spec, suggestions }} value={values.area} invalid={invalid} onChange={(_, v) => chooseArea(v)} /> };
     }
     const searchable = SEARCH_FIELDS.includes(spec.name);
     return {

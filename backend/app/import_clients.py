@@ -43,6 +43,15 @@ def client_rows(raw_clients: list[dict]) -> list[dict]:
         for a in entries:
             is_default = a.get("id", 0) == default_id
             addresses.append(Address(**address_from_daftra(a), is_default=is_default, link=link if is_default else ""))
+        # Daftra's second address block is not one of the "addresses" it lists, so it is taken from
+        # the client itself. This is where an address added through the portal lands (daftra_sync.client)
+        if str(c.get("active_secondary_address") or "") in ("1", 1):
+            second = {key: c.get(f"secondary_{key}") for key in ("address1", "address2", "city", "state")}
+            fields = address_from_daftra(second)
+            if any(fields.values()) and not any(a.emirate == fields["emirate"] and a.area == fields["area"]
+                                                and a.street == fields["street"] and a.house == fields["house"]
+                                                for a in addresses):
+                addresses.append(Address(**fields, is_default=False, link=""))
         rows.append({
             "daftra_id": int(c["id"]), "client_code": c.get("client_number") or "", "customer_name": name,
             "phone": phone, "phone2": phone2, "email": (c.get("email") or "").strip(),

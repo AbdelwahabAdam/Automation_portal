@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { api, openAttachment } from './api.js';
 import { FileRow } from './attachments.jsx';
 import {
@@ -195,39 +195,62 @@ export default function RequestView({ requestId, formTypes, onBack, ownerName, r
       const lines = request.data[spec.name];
       if (!Array.isArray(lines) || !lines.length) return null;
       const lineFields = spec.line_fields || [];
-      // Lines from the same package pick are shown under its name, in the order first added
+      // The same table the form shows, without the boxes: each number under its own heading
+      const amount = (value) => (typeof value === 'number' ? <bdi dir="ltr">{formatMoney(value)}</bdi> : '—');
       return (
-        <span className="fl-stack fl-stack--sm">
-          {groupLines(lines).map((group) => {
-            const first = group.rows[0].line;
-            const indent = group.groupName ? 'fl-indent' : undefined;
-            // The details describe the package (or the one standalone product) as a whole, not each item inside it
-            const details = lineFields
-              .map((dspec) => [dspec.label, first.details?.[dspec.name]])
-              .filter(([, v]) => v != null && v !== '');
-            return (
-              <span key={group.key} className="fl-stack fl-stack--sm">
-                {group.groupName && (
-                  <bdi>
-                    <strong>{group.groupName}</strong>
-                    {Number(first.details?.package_quantity) > 1 && <span data-fl-num> × {first.details.package_quantity}</span>}
-                  </bdi>
-                )}
-                {group.rows.map(({ line, index }) => (
-                  <bdi key={index} className={indent}>
-                    {line.name} × <span data-fl-num>{line.quantity}</span>
-                    {typeof line.unit_price === 'number' && <span className="fl-muted" data-fl-num> — {formatMoney(line.unit_price)} درهم</span>}
-                  </bdi>
-                ))}
-                {details.length > 0 && (
-                  <dl className={['fl-dl', indent].filter(Boolean).join(' ')}>
-                    {details.map(([label, v]) => <div key={label}><dt>{label}</dt><dd><bdi>{v}</bdi></dd></div>)}
-                  </dl>
-                )}
-              </span>
-            );
-          })}
-        </span>
+        <div className="fl-table-wrap fl-order-lines">
+          <div className="fl-table-scroll">
+            <table className="fl-table">
+              <thead>
+                <tr><th>المنتج</th><th>الكمية</th><th>سعر الوحدة (درهم)</th><th>الإجمالي (درهم)</th></tr>
+              </thead>
+              <tbody>
+                {groupLines(lines).map((group) => {
+                  const first = group.rows[0].line;
+                  // The details describe the package (or the one standalone product) as a whole, not each item inside it
+                  const details = lineFields
+                    .map((dspec) => [dspec.label, first.details?.[dspec.name]])
+                    .filter(([, v]) => v != null && v !== '');
+                  const total = group.rows.reduce((sum, { line }) => sum + (line.unit_price || 0) * (Number(line.quantity) || 0), 0);
+                  return (
+                    <Fragment key={group.key}>
+                      {group.groupName && (
+                        <tr className="fl-row--group">
+                          <td className="fl-cell--wrap fl-cell--title">
+                            <bdi><strong>{group.groupName}</strong></bdi>
+                            <span className="fl-cell__sub">باقة — <span data-fl-num>{group.rows.length}</span> منتجات</span>
+                          </td>
+                          <td data-label="عدد الباقات" data-fl-num>{Number(first.details?.package_quantity) || 1}</td>
+                          <td data-label="سعر الوحدة (درهم)" className="fl-muted">—</td>
+                          <td data-label="الإجمالي (درهم)" data-fl-num><strong>{amount(total)}</strong></td>
+                        </tr>
+                      )}
+                      {group.rows.map(({ line, index }) => (
+                        <tr key={index} className={group.groupName ? 'fl-row--child' : undefined}>
+                          <td className="fl-cell--wrap fl-cell--title"><bdi>{line.name}</bdi></td>
+                          <td data-label="الكمية" data-fl-num>{line.quantity}</td>
+                          <td data-label="سعر الوحدة (درهم)" data-fl-num>{amount(line.unit_price)}</td>
+                          <td data-label="الإجمالي (درهم)" data-fl-num>
+                            {amount(typeof line.unit_price === 'number' ? line.unit_price * (Number(line.quantity) || 0) : undefined)}
+                          </td>
+                        </tr>
+                      ))}
+                      {details.length > 0 && (
+                        <tr className="fl-row--detail">
+                          <td colSpan={4}>
+                            <dl className="fl-dl">
+                              {details.map(([label, v]) => <div key={label}><dt>{label}</dt><dd><bdi>{v}</bdi></dd></div>)}
+                            </dl>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
       );
     }
     if (spec.type === 'files') {

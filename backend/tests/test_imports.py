@@ -51,7 +51,26 @@ def test_clients_import_keeps_clients_with_a_phone(db, tmp_path, monkeypatch):
     assert (first.phone, first.phone2) == ("0501111111", "")
     assert [(a.emirate, a.street, a.link, a.is_default) for a in first.addresses] == [("دبي", "x", "https://m", True)]
     assert second.customer_name == "B C" and second.phone == "0522222222"
-    assert (second.addresses[0].emirate, second.addresses[0].area) == ("أبوظبي", "العين")
+    # With no neighbourhood of its own, العين gives the region it is in, which the form offers
+    assert (second.addresses[0].emirate, second.addresses[0].area) == ("أبوظبي", "منطقة العين")
+
+
+def test_the_import_brings_back_an_address_the_portal_put_in_the_spare_block(db, tmp_path, monkeypatch):
+    """Daftra does not list its second address block among a client's «addresses», so it is read
+    from the client itself — otherwise an address added through the portal is lost on the next run."""
+    export = {"data": [
+        {"Client": {"id": "1", "client_number": "000001", "business_name": "A", "phone1": "0501111111",
+                    "city": "دبى", "state": "الخوانيج", "address1": "st",
+                    "active_secondary_address": "1", "secondary_city": "عجمان",
+                    "secondary_state": "مدينة عجمان", "secondary_address1": "شارع الاتحاد"}},
+    ]}
+    path = tmp_path / "clients.json"
+    path.write_text(json.dumps(export, ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", ["import", str(path)])
+    import_clients.main()
+    client = db.query(Client).one()
+    assert [(a.emirate, a.area, a.street) for a in client.addresses] == [
+        ("دبي", "الخوانيج", "st"), ("عجمان", "مدينة عجمان", "شارع الاتحاد")]
 
 
 def test_create_user_from_the_command_line(db, monkeypatch, capsys):

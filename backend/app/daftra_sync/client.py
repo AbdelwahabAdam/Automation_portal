@@ -44,20 +44,67 @@ def existing_client_id(data: dict, db: Session) -> int | None:
     return int(found[0]["id"]) if found else None
 
 
-def custom_fields(data: dict) -> dict:
+def custom_fields(data: dict, held: dict | None = None) -> dict:
     """The two fields our Daftra account demands on any client it saves: اسم الجهاز and Coordinates.
-    An empty one is refused with «هذا الحقل مطلوب», whether the client is being created or changed."""
+    An empty one is refused with «هذا الحقل مطلوب», whether the client is being created or changed.
+
+    held: what the client already has in those fields, used for whatever the request does not say.
+    A request's own الإحداثيات win, which is how a client's location follows them when they move.
+    """
+    held = held or {}
     # اسم الجهاز is not asked on the form any more; a request from before keeps the one typed then
-    device = str(data.get("device_name") or "").strip() or settings.daftra_default_device_name
-    coordinates = str(data.get("coordinates") or "").strip()
+    device = (str(data.get("device_name") or "").strip()
+              or str(held.get(settings.daftra_client_device_field) or "").strip()
+              or settings.daftra_default_device_name)
+    coordinates = (str(data.get("coordinates") or "").strip()
+                   or str(held.get(settings.daftra_client_coordinates_field) or "").strip())
     if not coordinates:
-        # Requests submitted before the form asked for them
+        # Requests submitted before the form asked for them, for a client that has none either
         raise SyncError("دفترة تتطلب «الإحداثيات» للعميل، وهي غير موجودة في الطلب. "
                         "أعد الطلب للموظف ليكملها، ثم اعتمده بعد إعادة الإرسال.")
     return {
         settings.daftra_client_device_field: device,
         settings.daftra_client_coordinates_field: coordinates,
     }
+
+
+def address_fields(data: dict) -> dict:
+    """An address as Daftra keeps one: the city holds the emirate and the state holds the area
+    (daftra.address_from_daftra reads them back that way)."""
+    return {"address1": str(data.get("street") or "").strip(), "address2": str(data.get("house") or "").strip(),
+            "city": str(data.get("emirate") or "").strip(), "state": str(data.get("area") or "").strip(),
+            "country_code": "AE"}
+
+
+def address_change(saved: dict, address: dict) -> dict:
+    """What to send so the client in Daftra carries this address, or nothing when it already does.
+
+    Daftra's API can write two addresses on a client: its own, and one «secondary» block. The
+    others a client may have exist only in Daftra's own screens, with no API behind them. So an
+    address goes into the client's own block while that is empty, and after that into the
+    secondary one, where the newest address the portal is told about takes the slot.
+    """
+    filled = ("address1", "address2", "state", "city")
+    if not any(address[key] for key in ("address1", "address2", "state")):
+        return {}
+    own = {key: str(saved.get(key) or "").strip() for key in address}
+    if own == address:
+        return {}  # Daftra has it as the client's own address
+    if not any(own[key] for key in filled):
+        return dict(address)  # the client has no address of its own, so it goes there
+    second = {key: str(saved.get(f"secondary_{key}") or "").strip() for key in address}
+    if second == address and str(saved.get("active_secondary_address") or "") in ("1", 1, "true", "True"):
+        return {}
+    return {"active_secondary_address": 1, **{f"secondary_{key}": value for key, value in address.items()}}
+
+
+def held_custom_fields(client_id: int) -> dict:
+    """What the client's required custom fields hold now. Only the read API v2 returns them, and
+    only it: the client itself comes back without them, however it is asked for."""
+    try:
+        return daftra.read_v2("client", client_id).get("client_custom_data") or {}
+    except DaftraError:
+        return {}
 
 
 def create_client(data: dict, phone: str, db: Session) -> int:
@@ -85,29 +132,52 @@ def create_client(data: dict, phone: str, db: Session) -> int:
     return new_id
 
 
-def set_client_category(request: Request):
-    """Gives the request's client the التصنيف picked on the form.
+def save_address(daftra_id: int, data: dict):
+    """Puts an address the salesperson has just saved on the client in Daftra, with its location
+    link. Raises SyncError, so the salesperson is told rather than left thinking Daftra has it.
+    """
+    resource = f"clients/{daftra_id}.json"
+    saved = daftra.get(resource).get("data", {}).get("Client", {})
+    wanted = address_change(saved, address_fields(data))
+    link = str(data.get("location_url") or "").strip()
+    if link and str(saved.get("link") or "").strip() != link:
+        wanted["link"] = link
+    if not wanted:
+        return
+    custom = custom_fields(data, held_custom_fields(daftra_id))
+    client = {**wanted, "business_name": saved.get("business_name") or "",
+              "first_name": saved.get("first_name") or "", "last_name": saved.get("last_name") or ""}
+    daftra.update(resource, {"Client": client, "le_custom_data_client": custom})
 
-    Daftra is only written to when the category would actually change. When it is written to, it
-    checks the client's required custom fields; for a client whose fields are empty (one added
-    before they existed, or outside the portal) the save is refused, so it is sent again with them.
+
+def update_client(request: Request):
+    """Puts on the client in Daftra what this request knows about them: the التصنيف picked on the
+    form, the رابط اللوكيشن and the الإحداثيات of the address it is for.
+
+    Daftra is only written to when something would actually change, and the newest request wins:
+    a client has one link and one pair of coordinates, so they follow the address last used.
     """
     data = request.data
-    if not data.get("category"):
-        return
     resource = f"clients/{request.daftra_client_id}.json"
     saved = daftra.get(resource).get("data", {}).get("Client", {})
-    if str(saved.get("category_id") or "") == str(data["category"]):
+    held = held_custom_fields(request.daftra_client_id)
+    wanted, custom = {}, custom_fields(data, held)
+
+    if data.get("category") and str(saved.get("category_id") or "") != str(data["category"]):
+        wanted["category_id"] = data["category"]
+        wanted["category"] = data.get("category_name") or ""
+    link = str(data.get("location_url") or "").strip()
+    if link and str(saved.get("link") or "").strip() != link:
+        wanted["link"] = link
+    wanted.update(address_change(saved, address_fields(data)))
+    # The coordinates live in a custom field, which is saved separately from the client's own fields
+    if custom == {key: str(held.get(key) or "") for key in custom} and not wanted:
         return
 
     # Daftra rebuilds the client's name out of the name fields of whatever is sent to it: left out
     # of the body, business_name becomes the empty first and last name joined by a space. So the
-    # name the client already has goes back with the category, unchanged.
-    client = {"category_id": data["category"], "category": data.get("category_name") or "",
-              "business_name": saved.get("business_name") or "",
+    # name the client already has goes back with the change, unchanged.
+    client = {**wanted, "business_name": saved.get("business_name") or "",
               "first_name": saved.get("first_name") or "", "last_name": saved.get("last_name") or ""}
-    try:
-        # On its own first, so a client that already has those fields keeps what is in them
-        daftra.update(resource, {"Client": client})
-    except DaftraError:
-        daftra.update(resource, {"Client": client, "le_custom_data_client": custom_fields(data)})
+    # The account refuses any client save that does not carry those two fields, so they always go
+    daftra.update(resource, {"Client": client, "le_custom_data_client": custom})

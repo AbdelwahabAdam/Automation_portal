@@ -5,6 +5,7 @@ These pin the exact payloads sent to Daftra, since they were tuned against the l
 
 from datetime import datetime, timedelta, timezone
 
+from app.daftra_sync.invoice import WARRANTY_TERMS_HTML
 from app.models import Attachment, Request
 
 from . import seed
@@ -50,7 +51,7 @@ def test_approving_a_new_sale_creates_everything_in_daftra(client, db, fake_daft
     assert invoice["Invoice"] == {
         "client_id": client_id, "date": TODAY, "draft": 0, "is_offline": 1, "currency_code": "AED", "store_id": 1,
         "branch_id": 1, "sales_person_id": 71, "order_source_id": 16, "po_number": f"PORTAL-{request_id}",
-        "adjustment_label": "مبادرة لك ان تشارك", "adjustment_value": -200.0,
+        "adjustment_label": "مبادرة لك ان تشارك", "adjustment_value": -200.0, "html_notes": WARRANTY_TERMS_HTML,
     }
     assert invoice["InvoiceItem"] == [
         {"product_id": 501, "item": "WATER COOLER BLACK 3 T", "unit_price": 2000.0, "quantity": 2, "tax1": 3, "store_id": 1},
@@ -190,6 +191,7 @@ def test_contract_renewal(client, db, fake_daftra, sales, manager):
     assert fake_daftra.clients[4053]["category_id"] == 5
     [invoice] = fake_daftra.posted("/api2/invoices.json")
     assert invoice["Invoice"]["client_id"] == 4053
+    assert invoice["Invoice"]["html_notes"] == WARRANTY_TERMS_HTML
     assert invoice["InvoiceItem"] == [{
         "product_id": 37, "item": "exchange contract", "description": "تجديد عقد الصيانه لمده عام مع تبديل فلاتر كل ثلاث اشهر",
         "unit_price": 1680.0, "quantity": 1, "tax1": 3, "store_id": 1,
@@ -252,6 +254,7 @@ def test_maintenance(client, db, fake_daftra, sales, manager):
                                        "tax1": 3, "store_id": 1}]
     assert invoice["Invoice"]["notes"] == f"الأجهزة: فلتر RO VIB\nالخدمة: تبديل فلاتر\nتاريخ الزيارة: {'/'.join(reversed(TODAY.split('-')))}"
     assert invoice["Invoice"]["order_source_id"] == 12
+    assert invoice["Invoice"]["html_notes"] == WARRANTY_TERMS_HTML
 
 
 def test_an_unexpected_fault_midway_keeps_what_daftra_created(client, db, fake_daftra, sales, manager, monkeypatch):
@@ -287,6 +290,10 @@ def test_the_pdfs_saved_on_approval_cannot_be_deleted_by_the_owner(client, db, s
     assert client.delete(f"/api/attachments/{invoice_pdf.id}", headers=auth(sales)).status_code == 409
 
 
+# The address seed.renewal_data carries, as Daftra keeps one: the city is the emirate, the state the area
+RENEWAL_ADDRESS = {"address1": "", "address2": "", "city": "أبوظبي", "state": "منطقة العين", "country_code": "AE"}
+
+
 def client_updates(fake, client_id=4053):
     """Every save Daftra was asked to make on that client, in order."""
     return [body for method, path, _, body in fake.calls
@@ -303,29 +310,30 @@ def renewal_request(client, db, sales, **overrides):
     return request_id
 
 
-def test_the_client_category_is_left_alone_when_it_already_matches(client, db, fake_daftra, sales, manager):
+def test_the_client_is_left_alone_when_daftra_already_has_all_of_it(client, db, fake_daftra, sales, manager):
     seed.catalog(db)
     seed.existing_client(db)
-    # Daftra already has this client in the category the form picked
-    fake_daftra.add_client(4053, "0509999999", category_id=5)
+    # Daftra already has this client in the category the form picked, with the same address and coordinates
+    fake_daftra.add_client(4053, "0509999999", category_id=5,
+                           custom={"test": "N + F", "coordinates_text": "24.1, 55.6"},
+                           address=RENEWAL_ADDRESS)
     request_id = renewal_request(client, db, sales)
     assert approve(client, manager, request_id).status_code == 200
     assert client_updates(fake_daftra) == []
 
 
 def test_a_client_whose_required_fields_are_empty_is_still_given_its_category(client, db, fake_daftra, sales, manager):
-    """Daftra refuses any save that leaves اسم الجهاز and Coordinates empty, so they go with it."""
+    """Daftra refuses any save that leaves اسم الجهاز and Coordinates empty, so they go with every one."""
     seed.catalog(db)
     seed.existing_client(db)
     fake_daftra.add_client(4053, "0509999999", category_id=1)
     request_id = renewal_request(client, db, sales)
     assert approve(client, manager, request_id).status_code == 200
     saves = client_updates(fake_daftra)
-    # Asked plainly first, then again with the fields Daftra insists on
-    assert len(saves) == 2
-    assert "le_custom_data_client" not in saves[0]
-    assert saves[1]["le_custom_data_client"] == {"test": "N + F", "coordinates_text": "24.1, 55.6"}
-    assert saves[1]["Client"] == {"category_id": 5, "category": "العين العامره",
+    assert len(saves) == 1
+    assert saves[0]["le_custom_data_client"] == {"test": "N + F", "coordinates_text": "24.1, 55.6"}
+    # This client had no address of its own, so the request's goes there rather than in the spare block
+    assert saves[0]["Client"] == {"category_id": 5, "category": "العين العامره", **RENEWAL_ADDRESS,
                                   "business_name": "Existing", "first_name": "", "last_name": ""}
     assert fake_daftra.clients[4053]["category_id"] == 5
 
@@ -342,16 +350,44 @@ def test_the_client_keeps_its_name_when_its_category_changes(client, db, fake_da
     assert fake_daftra.clients[4053]["business_name"] == "مؤسسة الواحة لتجارة المياه"
 
 
-def test_a_client_that_has_those_fields_keeps_what_is_in_them(client, db, fake_daftra, sales, manager):
+def test_the_clients_own_device_is_kept_while_its_coordinates_follow_the_request(client, db, fake_daftra, sales, manager):
+    """اسم الجهاز is not on the form, so what Daftra holds stands; the الإحداثيات are, so they win."""
     seed.catalog(db)
     seed.existing_client(db)
-    kept = {"test": "جهاز العميل الحقيقي", "coordinates_text": "25.0000, 55.0000"}
-    fake_daftra.add_client(4053, "0509999999", category_id=1, custom=kept)
+    fake_daftra.add_client(4053, "0509999999", category_id=1,
+                           custom={"test": "جهاز العميل الحقيقي", "coordinates_text": "25.0000, 55.0000"})
     request_id = renewal_request(client, db, sales)
     assert approve(client, manager, request_id).status_code == 200
-    saves = client_updates(fake_daftra)
-    assert len(saves) == 1 and "le_custom_data_client" not in saves[0]
-    assert fake_daftra.clients[4053]["custom"] == kept
+    assert fake_daftra.clients[4053]["custom"] == {"test": "جهاز العميل الحقيقي", "coordinates_text": "24.1, 55.6"}
+
+
+def test_a_second_address_goes_into_the_spare_block_and_leaves_the_first_alone(client, db, fake_daftra, sales, manager):
+    """Daftra's API can write the client's own address and one more, so a new one takes that slot."""
+    seed.catalog(db)
+    seed.existing_client(db)
+    home = {"address1": "شارع الشيخ زايد", "address2": "12", "city": "دبي", "state": "الخوانيج", "country_code": "AE"}
+    fake_daftra.add_client(4053, "0509999999", category_id=5, address=home,
+                           custom={"test": "N + F", "coordinates_text": "24.1, 55.6"})
+    request_id = renewal_request(client, db, sales)
+    assert approve(client, manager, request_id).status_code == 200
+    saved = fake_daftra.clients[4053]
+    # The address it already had is untouched
+    assert {key: saved[key] for key in home} == home
+    assert saved["active_secondary_address"] == 1
+    assert saved["secondary_city"] == "أبوظبي" and saved["secondary_state"] == "منطقة العين"
+
+
+def test_the_location_link_of_the_request_is_put_on_the_client(client, db, fake_daftra, sales, manager):
+    seed.catalog(db)
+    seed.existing_client(db)
+    fake_daftra.add_client(4053, "0509999999", category_id=5,
+                           custom={"test": "N + F", "coordinates_text": "24.1, 55.6"})
+    link = "https://maps.app.goo.gl/NEWLOCATION1"
+    request_id = renewal_request(client, db, sales, location_url=link, coordinates="24.1, 55.6")
+    assert approve(client, manager, request_id).status_code == 200
+    assert fake_daftra.clients[4053]["link"] == link
+    # The name is not lost to a save that is only about the link
+    assert fake_daftra.clients[4053]["business_name"] == "Existing"
 
 
 def test_a_request_without_coordinates_says_so_instead_of_failing_in_daftra(client, db, fake_daftra, sales, manager):

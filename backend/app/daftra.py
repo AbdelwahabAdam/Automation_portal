@@ -13,7 +13,7 @@ from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor
 
 from .config import settings
-from .forms import EMIRATES, PAYMENT_METHODS
+from .forms import PAYMENT_METHODS
 from .text import day_month_year, digits, squash
 
 TIMEOUT_SECONDS = 20
@@ -161,18 +161,26 @@ def _fold(text: str) -> str:
     return text
 
 
-EMIRATE_BY_CITY = {_fold(emirate): emirate for emirate in EMIRATES}
-# Cities that are not emirates themselves
-CITY_EMIRATE = {_fold("العين"): "أبوظبي"}
-
-
 def address_from_daftra(client: dict) -> dict:
-    """A Daftra client (or one of its addresses) as our address fields."""
+    """A Daftra client (or one of its addresses) as our address fields.
+
+    The emirate comes from CITY_LOCATIONS, which knows the spellings Daftra's data uses for the
+    same place — «دبى», «دبي», «Dubai» — and the cities that are not emirates (العين, حتا).
+    The area keeps the neighbourhood Daftra holds («الخوانيج 2»), which is what the installation
+    team needs on the work order; it is not one of the regions the form lists.
+    """
     city, area = (client.get("city") or "").strip(), (client.get("state") or "").strip()
-    emirate = EMIRATE_BY_CITY.get(_fold(city))
-    if emirate is None:
-        # Keep an unrecognised city (or العين) visible in the area instead of dropping it
-        emirate = CITY_EMIRATE.get(_fold(city), "")
+    found = _city_location(city)
+    if found:
+        # With no neighbourhood of its own, the city's own region says where it is («العين» is
+        # not أبوظبي the city), and that one the form does offer
+        emirate, area = found[0], area or found[1]
+    elif _city_location(area):
+        # The two are the other way round on some clients: «السمحه» as the city, «ابو ظبي» as the area
+        emirate, area = _city_location(area)[0], city
+    else:
+        # Keep an unrecognised city visible in the area instead of dropping it
+        emirate = ""
         area = "، ".join(part for part in (city, area) if part)
     return {
         "emirate": emirate,
@@ -276,14 +284,14 @@ CITY_LOCATIONS = {
         (["ابو ظبى", "ابوظبى", "ابو ظبي", "أبو ظبي", "أبوظبي", "ابوظبي", "ابو طبى", "ابوطبى", "abu dhabi"], ("أبوظبي", "منطقة أبوظبي")),
         (["الظفرة", "الظفره"], ("أبوظبي", "منطقة الظفرة")),
         (["دبى", "دبي", "dubai"], ("دبي", "مدينة دبي")),
-        (["حتا"], ("دبي", "حتا")),
-        (["الشارقه", "الشارقة"], ("الشارقة", "مدينة الشارقة")),
-        (["خورفكان"], ("الشارقة", "خورفكان")),
-        (["كلباء"], ("الشارقة", "كلباء")),
-        (["عجمان"], ("عجمان", "مدينة عجمان")),
-        (["ام القوين", "ام القيوين", "أم القيوين"], ("أم القيوين", "مدينة أم القيوين")),
-        (["راس الخيمه", "رأس الخيمة", "راس الخيمة"], ("رأس الخيمة", "نطاق مدينة رأس الخيمة")),
-        (["الفجيره", "الفجيرة"], ("الفجيرة", "مدينة الفجيرة")),
+        (["حتا", "hatta"], ("دبي", "حتا")),
+        (["الشارقه", "الشارقة", "sharjah"], ("الشارقة", "مدينة الشارقة")),
+        (["خورفكان", "khorfakkan"], ("الشارقة", "خورفكان")),
+        (["كلباء", "kalba"], ("الشارقة", "كلباء")),
+        (["عجمان", "ajman"], ("عجمان", "مدينة عجمان")),
+        (["ام القوين", "ام القيوين", "أم القيوين", "umm al quwain"], ("أم القيوين", "مدينة أم القيوين")),
+        (["راس الخيمه", "رأس الخيمة", "راس الخيمة", "ras al khaimah"], ("رأس الخيمة", "نطاق مدينة رأس الخيمة")),
+        (["الفجيره", "الفجيرة", "fujairah"], ("الفجيرة", "مدينة الفجيرة")),
     ]
     for city in cities
 }

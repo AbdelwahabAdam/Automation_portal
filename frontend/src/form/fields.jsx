@@ -113,14 +113,12 @@ export function MultiSelectPicker({ spec, value, invalid, onChange }) {
   return (
     <div className="fl-stack fl-stack--sm">
       {chosen.length > 0 && (
-        <div className="fl-order-lines">
+        <div className="fl-picked">
           {chosen.map((option) => (
-            <div key={option} className="fl-order-lines__item">
-              <div className="fl-order-lines__row">
-                <Icon name="tool" size={18} />
-                <bdi className="fl-order-lines__name">{option}</bdi>
-                <Button type="button" size="sm" variant="ghost" icon="trash" iconOnly label={`إزالة ${option}`} onClick={() => remove(option)} />
-              </div>
+            <div key={option} className="fl-picked__item">
+              <Icon name="tool" size={18} />
+              <bdi className="fl-picked__name">{option}</bdi>
+              <Button type="button" size="sm" variant="ghost" icon="trash" iconOnly label={`إزالة ${option}`} onClick={() => remove(option)} />
             </div>
           ))}
         </div>

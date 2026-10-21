@@ -35,12 +35,14 @@ class FakeDaftra:
         self.next_id += 1
         return self.next_id
 
-    def add_client(self, client_id, phone, name="Existing", category_id=None, client_number=None, custom=None):
+    def add_client(self, client_id, phone, name="Existing", category_id=None, client_number=None, custom=None,
+                   address=None):
         # custom: the required custom fields, as a client added through the portal has them
+        # address: the client's own address block (city holds the emirate, state the area)
         self.clients[client_id] = {"id": str(client_id), "business_name": name, "phone1": phone, "phone2": "",
                                    "client_number": client_number or f"{client_id:06d}",
                                    "category_id": str(category_id) if category_id else "", "category": "",
-                                   "custom": custom}
+                                   "custom": custom, **(address or {})}
 
     def add_invoice(self, client_id, total, paid=0.0, no=None, draft="0"):
         invoice_id = self._new_id()
@@ -85,6 +87,7 @@ class FakeDaftra:
             (r"GET /api2/work_orders/(\d+)\.json", self.get_work_order),
             (r"PUT /api2/work_orders/(\d+)\.json", self.update_work_order),
             (r"GET /v2/api/entity/work_order/(\d+)/3", self.read_work_order_v2),
+            (r"GET /v2/api/entity/client/(\d+)/3", self.read_client_v2),
         ]
 
     @staticmethod
@@ -110,6 +113,13 @@ class FakeDaftra:
         if client is None:
             raise NotFound("HTTP 404: no client")
         return {"data": {"Client": client}}
+
+    def read_client_v2(self, client_id, params, body):
+        """The read API v2, the only one that gives back a client's custom fields."""
+        client = self.clients.get(int(client_id))
+        if client is None:
+            raise NotFound("HTTP 404: no client")
+        return {**client, "client_custom_data": client.get("custom")}
 
     def update_client(self, client_id, params, body):
         client = self.clients[int(client_id)]
