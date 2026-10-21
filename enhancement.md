@@ -161,6 +161,9 @@ These would change behaviour or need a decision, so they were left for you. Most
       assume.
     - The test client warns that `httpx` is deprecated in favour of `httpx2`; harmless for now.
 
+The enhancements agreed after this round are in **enhancementv2.md**: five are done (`cc6cd86`),
+the remaining seven are written up there as a plan.
+
 ## Design pass (UX)
 
 The look is unchanged: same logo, colours, typography and right-to-left layout. The work went into
