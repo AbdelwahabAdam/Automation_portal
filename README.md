@@ -320,11 +320,34 @@ The client categories (التصنيف) are copied from Daftra by the backend its
 The first admin login needs a code sent by email, so SMTP must work. Users and their Daftra staff
 links are then set up in الإدارة.
 
+**5. The deploy pipeline.** Once the secrets below are set, every push to `main` runs the tests and,
+if they pass, updates the server (`.github/workflows/deploy.yml`). The deploy itself is
+`/usr/local/bin/portal-deploy` on the server, installed by the `pipeline` role: it pulls the new
+commit, rebuilds, and **goes back to the version that was running if the new one does not answer**.
+Settings, uploaded files and the database are untouched. Its log is `/var/log/portal-deploy.log`,
+and the same log comes back in the GitHub Actions run.
+
+In GitHub → Settings → Secrets and variables → Actions, add three repository secrets:
+
+| Secret | What |
+|---|---|
+| `SERVER_HOST` | The server's address, e.g. `51.20.114.226` |
+| `SSH_PRIVATE_KEY` | The deploy key's private half, whole file including the BEGIN/END lines |
+| `SSH_KNOWN_HOSTS` | The server's own key: `ssh-keyscan -t ed25519 <address>` |
+
+The deploy key is its own key pair, not your personal one, and the server only lets it run
+`portal-deploy` — no shell, no file copying, no tunnels (`roles/pipeline/tasks/main.yml`). To replace
+it, make a new pair, put the public half in `portal_ci_public_key` in `group_vars/all/vars.yml`, run
+`ansible-playbook site.yml --tags pipeline`, and update the secret.
+
+Deploying by hand is still `ansible-playbook site.yml`, or `sudo portal-deploy` on the server.
+
 **On the server:** `ssh ubuntu@<ip>`, then `cd /opt/portal` and run any of:
 - `docker compose -f docker-compose.prod.yml logs -f backend` to follow the backend's log
 - `docker compose -f docker-compose.prod.yml ps` to see the containers
 - `docker compose -f docker-compose.prod.yml exec backend python -m app.<command>` for the other
   commands above
+- `tail -f /var/log/portal-deploy.log` to watch a deploy
 
 **HTTPS later:** point a domain at the IP. In `frontend/Caddyfile`, replace `:80` with the domain.
 Open port 443 in `main.tf`, add `"443:443"` to the web service (plus a volume for Caddy's `/data`, which keeps the certificate), and set `portal_public_url` to

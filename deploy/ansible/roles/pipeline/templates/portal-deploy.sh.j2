@@ -1,0 +1,60 @@
+#!/bin/bash
+# Updates the portal to the newest commit of {{ portal_version }} and restarts it (written by Ansible).
+# Run by the GitHub Actions pipeline on every push to main (.github/workflows/deploy.yml), and by
+# hand with: sudo portal-deploy
+#
+# Settings (.env), uploaded files and the database are untouched: they are not in git.
+# If the new version does not answer, it goes back to the one that was running.
+set -u
+# Everything is written to the log and sent back to whoever ran it (the pipeline shows it)
+exec > >(tee -a {{ portal_deploy_log }}) 2>&1
+
+cd {{ portal_dir }} || exit 1
+start=$(date +%s)
+echo "=== $(date '+%Y-%m-%d %H:%M:%S %z') deploy started by ${SUDO_USER:-root}"
+
+compose() { docker compose -f docker-compose.prod.yml "$@"; }
+
+# Waits for the portal to answer; 401 is the right answer to an unauthenticated request
+wait_until_up() {
+  for _ in $(seq 1 {{ portal_health_tries }}); do
+    [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1/api/auth/me)" = "401" ] && return 0
+    sleep {{ portal_health_wait }}
+  done
+  return 1
+}
+
+build_and_start() {
+  compose up -d --build --remove-orphans || return 1
+  wait_until_up
+}
+
+was=$(git rev-parse HEAD)
+git fetch --prune origin || { echo "FAILED: could not reach GitHub"; exit 1; }
+now=$(git rev-parse "origin/{{ portal_version }}")
+if [ "$was" = "$now" ]; then
+  echo "Already on ${now:0:7}; nothing to deploy"
+  exit 0
+fi
+echo "Updating ${was:0:7} -> ${now:0:7}"
+git log --no-merges --format='  %h %s' "$was..$now" | head -20
+
+# Only tracked files are reset; .env and imports/ stay as they are
+git reset --hard "$now" || { echo "FAILED: could not check out ${now:0:7}"; exit 1; }
+
+if build_and_start; then
+  # The build leaves images and a cache behind, and this server's disk is small
+  docker image prune -f >/dev/null
+  docker builder prune -af >/dev/null
+  echo "=== deployed ${now:0:7} in $(( $(date +%s) - start ))s"
+  exit 0
+fi
+
+echo "FAILED: ${now:0:7} did not answer; going back to ${was:0:7}"
+git reset --hard "$was"
+if build_and_start; then
+  echo "=== back on ${was:0:7}, which is running"
+else
+  echo "=== THE PORTAL IS DOWN: neither version answers. Look at: compose logs"
+fi
+exit 1

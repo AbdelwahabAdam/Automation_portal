@@ -1,0 +1,41 @@
+- name: The deploy command the pipeline runs
+  ansible.builtin.template:
+    src: portal-deploy.sh.j2
+    dest: /usr/local/bin/portal-deploy
+    mode: "0755"
+
+- name: Somewhere to keep the pipeline's key
+  ansible.builtin.file:
+    path: /home/ubuntu/.ssh
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: "0700"
+
+- name: Let the pipeline's key run that command and nothing else
+  ansible.builtin.lineinfile:
+    path: /home/ubuntu/.ssh/authorized_keys
+    # Whatever the pipeline asks for, only the deploy runs: no shell, no file copying, no tunnels
+    line: >-
+      command="sudo -n /usr/local/bin/portal-deploy",no-agent-forwarding,no-port-forwarding,no-user-rc,no-X11-forwarding
+      {{ portal_ci_public_key }} github-actions-deploy
+    regexp: ' github-actions-deploy$'
+    state: "{{ 'present' if portal_ci_public_key | length > 0 else 'absent' }}"
+    create: true
+    owner: ubuntu
+    group: ubuntu
+    mode: "0600"
+
+- name: Keep the deploy log from growing without end
+  ansible.builtin.copy:
+    dest: /etc/logrotate.d/portal-deploy
+    mode: "0644"
+    content: |
+      {{ portal_deploy_log }} {
+        weekly
+        rotate 8
+        compress
+        missingok
+        notifempty
+        copytruncate
+      }

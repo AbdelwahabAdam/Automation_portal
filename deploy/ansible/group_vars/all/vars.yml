@@ -11,6 +11,15 @@ portal_timezone: Asia/Dubai
 # Admins log in with a code emailed after the password; needs working email
 portal_require_admin_mfa: true
 
+# The deploy pipeline (.github/workflows/deploy.yml): the public half of its SSH key, which may
+# run only /usr/local/bin/portal-deploy. Its private half is a secret in the GitHub repository.
+# Empty: no pipeline, and deploys are run by hand with site.yml.
+portal_ci_public_key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIUamCYpLNedY5OpbTBEfgFCiChcmVfbtwHdsqsOdYJE github-actions-deploy@futurelife-portal"
+portal_deploy_log: /var/log/portal-deploy.log
+# How long to wait for the new version to answer: tries x seconds
+portal_health_tries: 30
+portal_health_wait: 5
+
 # Daily database + uploads backups, kept on the server this many days
 portal_backup_dir: /opt/portal-backups
 portal_backup_keep_days: 14

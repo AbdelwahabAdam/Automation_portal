@@ -1,0 +1,98 @@
+# Every push to main: run the tests, and update the server when they pass.
+# The deploy itself is /usr/local/bin/portal-deploy on the server (deploy/ansible/roles/pipeline),
+# which pulls this commit, rebuilds, and goes back to the previous version if the new one does not answer.
+#
+# Needs three repository secrets (Settings -> Secrets and variables -> Actions):
+#   SERVER_HOST         the server's address, e.g. 51.20.114.226
+#   SSH_PRIVATE_KEY     the deploy key's private half (it may only run portal-deploy)
+#   SSH_KNOWN_HOSTS     the server's own key: ssh-keyscan -t ed25519 <address>
+name: Test and deploy
+
+on:
+  push:
+    branches: [main]
+  # «Run workflow» in the Actions tab deploys main again without a new commit
+  workflow_dispatch:
+
+# A newer push takes over: an older deploy still waiting is dropped
+concurrency:
+  group: deploy-main
+  cancel-in-progress: false
+
+jobs:
+  backend:
+    name: Backend tests
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: postgres:16
+        env:
+          POSTGRES_USER: portal
+          POSTGRES_PASSWORD: portal_test
+          POSTGRES_DB: portal_test
+        options: >-
+          --health-cmd "pg_isready -U portal" --health-interval 5s --health-timeout 5s --health-retries 10
+        ports: ["5432:5432"]
+    env:
+      DATABASE_URL: postgresql+psycopg://portal:portal_test@localhost:5432/portal_test
+      JWT_SECRET: a-test-secret-that-is-at-least-32-bytes-long
+      UPLOAD_DIR: /tmp/uploads
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+      # Pango and a font with Arabic letters: weasyprint draws the receipt and work order PDFs
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0 fonts-noto-core
+      - run: pip install -r backend/requirements-dev.txt pyflakes
+      - run: python -m pyflakes app tests
+        working-directory: backend
+      - run: python -m pytest -q
+        working-directory: backend
+
+  frontend:
+    name: Frontend tests and build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: node --test tests/
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend
+
+  deploy:
+    name: Deploy to the server
+    needs: [backend, frontend]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update the portal
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        run: |
+          if [ -z "$SERVER_HOST" ] || [ -z "$SSH_PRIVATE_KEY" ]; then
+            echo "::error::Set the SERVER_HOST and SSH_PRIVATE_KEY secrets (see .github/workflows/deploy.yml)"
+            exit 1
+          fi
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          if [ -n "$SSH_KNOWN_HOSTS" ]; then
+            printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          else
+            # Without the server's key on file, take the one it offers this once
+            ssh-keyscan -t ed25519 "$SERVER_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          fi
+          # The key may run nothing but the deploy, so this command is ignored; the deploy's own log comes back
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o ConnectTimeout=20 "ubuntu@$SERVER_HOST" deploy

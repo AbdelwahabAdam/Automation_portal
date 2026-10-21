@@ -3,8 +3,10 @@
 - name: FutureLife portal
   hosts: portal
   become: true
+  # Tags let one part run on its own, e.g. --tags pipeline (which does not restart the portal)
   roles:
-    - base
-    - docker
-    - portal
-    - backups
+    - {role: base, tags: base}
+    - {role: docker, tags: docker}
+    - {role: portal, tags: portal}
+    - {role: pipeline, tags: pipeline}
+    - {role: backups, tags: backups}
