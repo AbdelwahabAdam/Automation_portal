@@ -12,7 +12,6 @@ arrived), the invoice is found again by its po_number and the payment by its not
 "PORTAL-<request id>", so neither is created twice.
 """
 
-import re
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -24,8 +23,9 @@ from sqlalchemy.orm import Session
 from . import daftra, printouts
 from .config import UPLOAD_DIR, settings
 from .daftra import PAYMENT_METHOD_KEYS, DaftraError, NotFound, local_phone
-from .forms import ARABIC_DIGITS, NO_INSCRIPTION, package_colors, package_quantity
+from .forms import NO_INSCRIPTION, package_colors, package_quantity
 from .models import Address, Attachment, Client, Product, Request, User
+from .text import UAE, day_month_year, digits, display_name, squash
 
 INVOICE_ATTACHMENT_FIELD = "daftra_invoice"
 RECEIPT_ATTACHMENT_FIELD = "daftra_receipt"
@@ -254,7 +254,7 @@ def client_id(data: dict, db: Session) -> int:
 
 def existing_client_id(data: dict, db: Session) -> int | None:
     """The Daftra client with the request's client code, else its phone number; None if there is none."""
-    code = re.sub(r"\D", "", str(data.get("client_code") or "").translate(ARABIC_DIGITS))
+    code = digits(data.get("client_code"))
     if code.strip("0"):
         client = db.scalar(select(Client).where(Client.client_code == code.zfill(6)))
         if client is not None:
@@ -280,7 +280,7 @@ def existing_client_id(data: dict, db: Session) -> int | None:
 
 
 def create_client(data: dict, phone: str, db: Session) -> int:
-    name = " ".join(str(data.get("customer_name") or "").split())
+    name = squash(data.get("customer_name"))
     # اسم الجهاز is not asked on the form any more; a request from before keeps the one typed then
     device = str(data.get("device_name") or "").strip() or settings.daftra_default_device_name
     coordinates = str(data.get("coordinates") or "").strip()
@@ -288,7 +288,7 @@ def create_client(data: dict, phone: str, db: Session) -> int:
         # Requests submitted before the form asked for them
         raise SyncError("العميل جديد ودفترة تتطلب «الإحداثيات» له، وهي غير موجودة في الطلب. "
                         "أعد الطلب للموظف ليكملها، ثم اعتمده بعد إعادة الإرسال.")
-    # Daftra keeps the city in "city" and the area in "state" (see daftra._address, which reads them back)
+    # Daftra keeps the city in "city" and the area in "state" (see daftra.address_from_daftra, which reads them back)
     body = {
         "Client": {
             "business_name": name, "type": 2, "phone1": phone,
@@ -385,7 +385,7 @@ def save_invoice_pdf(request: Request, invoice: dict, db: Session) -> bool:
 def attach_pdf(request: Request, field: str, title: str, invoice: dict, content: bytes, db: Session):
     """Saves a PDF on the request, named like the ones staff save by hand: «<title> <customer> <client number>.pdf»."""
     client_number = (invoice.get("Client") or {}).get("client_number") or ""
-    customer = " ".join(str(request.data.get("customer_name") or "").split())
+    customer = squash(request.data.get("customer_name"))
     filename = " ".join(part for part in (title, customer, client_number) if part) + ".pdf"
     folder = UPLOAD_DIR / str(request.id)
     folder.mkdir(parents=True, exist_ok=True)
@@ -431,7 +431,7 @@ def save_receipt_pdf(request: Request, invoice: dict, paid: Decimal, reviewer: U
     try:
         content = printouts.receipt(
             number=request.daftra_receipt_no, date=day_month_year(day),
-            client=" ".join(str(data.get("customer_name") or "").split()),
+            client=squash(data.get("customer_name")),
             amount=f"{paid:,.2f}".removesuffix(".00"), method=data.get("payment_method") or "",
             invoice_no=request.daftra_invoice_no or "", receiver=display_name(reviewer),
             treasury=data.get("treasury_name") or "",
@@ -444,7 +444,6 @@ def save_receipt_pdf(request: Request, invoice: dict, paid: Decimal, reviewer: U
 
 # ---------- Work order ----------
 
-UAE = timezone(timedelta(hours=4))
 # The work order's custom fields in our Daftra account (its form «نموذج أمر تشغيل ومتابعة عقد»), worked
 # out from the values staff put in them: there is no API listing their labels
 WORK_ORDER_FIELDS = {
@@ -555,15 +554,6 @@ def work_order_title(data: dict, invoice: dict) -> str:
     code = str((invoice.get("Client") or {}).get("client_number") or "").lstrip("0")
     parts = ["، ".join(name for name in names if name), data.get("emirate"), data.get("area"), code]
     return " ".join(str(part).strip() for part in parts if part and str(part).strip())[:250]
-
-
-def display_name(user: User) -> str:
-    return user.full_name or user.username
-
-
-def day_month_year(day: str) -> str:
-    """2026-10-19 as Daftra prints it, 19/10/2026."""
-    return "/".join(reversed(day.split("-"))) if day.count("-") == 2 else day
 
 
 def work_order_rows(request: Request, reviewer: User) -> list[str]:

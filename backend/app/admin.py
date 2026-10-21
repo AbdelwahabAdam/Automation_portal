@@ -4,7 +4,7 @@ import csv
 import io
 import json
 import re
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, ConfigDict, Field
@@ -18,14 +18,13 @@ from .database import get_db
 from .models import AuditLog, Request, Role, User
 from .pages import ADMIN_DEPARTMENT, ASSIGNABLE_PAGE_KEYS, DEPARTMENT_LABELS, MANAGEABLE_DEPARTMENTS, navigation
 from .security import create_password_link, require_admin
+from .text import UAE
 
 router = APIRouter(prefix="/api/admin", dependencies=[Depends(require_admin)])
 
 # No "@" in a username, so a login name can never be mistaken for an email
 USERNAME_RE = re.compile(r"^[a-z0-9._-]{3,50}$")
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-# The UAE has no daylight saving, so dates in the audit filters are read at a fixed UTC+4
-UAE = timezone(timedelta(hours=4))
 EXPORT_LIMIT = 20000
 
 

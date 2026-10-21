@@ -116,7 +116,7 @@ function UserDrawer({ user, roles, departments, staff, isSelf, onSaved, onDelete
               value={values.role_ids} onChange={(v) => set('role_ids', v)} />
           )}
         </Field>
-        <Field label="مدير قسم" hint="مدير القسم يفتح كل صفحات قسمه، ومنها «طلبات الفريق» في المبيعات.">
+        <Field label="مدير قسم" hint="مدير القسم يفتح كل صفحات قسمه، ومنها «المراجعة» في المبيعات.">
           <Choice name="u_manages" multiple options={departments.map((d) => ({ value: d.key, label: d.label }))}
             value={values.manages} onChange={(v) => set('manages', v)} />
         </Field>

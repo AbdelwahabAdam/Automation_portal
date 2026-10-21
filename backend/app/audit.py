@@ -41,6 +41,7 @@ ACTIONS = {
     "request.approve": "اعتماد طلب",
     "request.daftra_failed": "تعذر إنشاء الفاتورة في دفترة",
     "request.return": "إعادة طلب للتعديل",
+    "client.address.add": "إضافة عنوان لعميل",
     "attachment.upload": "رفع مرفق",
     "attachment.download": "فتح مرفق",
     "attachment.delete": "حذف مرفق",
@@ -55,7 +56,7 @@ ACTIONS = {
 }
 
 ENTITY_TYPES = {"user": "مستخدم", "role": "دور", "request": "طلب", "attachment": "مرفق", "product": "منتج",
-                "package": "باقة"}
+                "package": "باقة", "client": "عميل"}
 
 # Labels for the keys that appear in the before/after values of an entry
 FIELD_LABELS = {
@@ -99,6 +100,7 @@ FIELD_LABELS = {
     "work_order_pdf_saved": "تم حفظ PDF أمر الشغل",
     "work_order_fields_saved": "تم ملء حقول أمر الشغل في دفترة",
     "error": "الخطأ",
+    "is_default": "العنوان الأساسي",
     "daftra_staff_id": "رقم الموظف في دفترة",
 }
 

@@ -13,7 +13,7 @@ matched by Daftra's own client id — this is a straight reflection of the expor
 import argparse
 import json
 
-from .daftra import _address, local_phone
+from .daftra import address_from_daftra, local_phone
 from .database import SessionLocal, run_migrations
 from .models import Address, Client
 
@@ -40,7 +40,7 @@ def client_rows(path: str) -> tuple[list[dict], int]:
         addresses = []
         for a in entries:
             is_default = a.get("id", 0) == default_id
-            addresses.append(Address(**_address(a), is_default=is_default, link=link if is_default else ""))
+            addresses.append(Address(**address_from_daftra(a), is_default=is_default, link=link if is_default else ""))
         rows.append({
             "daftra_id": int(c["id"]), "client_code": c.get("client_number") or "", "customer_name": name,
             "phone": phone, "phone2": phone2, "email": (c.get("email") or "").strip(),

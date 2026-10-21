@@ -171,7 +171,7 @@ def test_returning_and_resubmitting(client, db, sales, manager, outbox):
     assert "صحّح رقم الهاتف" in outbox[-1]["text"]
     # The owner corrects it, can add and remove files, and sends it again as revision 2
     extra = upload(client, sales, request_id, "inscription_file").json()
-    assert client.delete(f"/api/attachments/{extra['id']}", headers=auth(sales)).status_code in (204, 409)
+    assert client.delete(f"/api/attachments/{extra['id']}", headers=auth(sales)).status_code == 204
     again = client.put(f"/api/requests/{request_id}", json={"data": seed.sale_data(), "action": "submit"}, headers=auth(sales))
     assert again.json()["revision"] == 2
     history = client.get(f"/api/requests/{request_id}/history", headers=auth(manager)).json()
@@ -252,3 +252,36 @@ def test_maintenance(client, db, fake_daftra, sales, manager):
                                        "tax1": 3, "store_id": 1}]
     assert invoice["Invoice"]["notes"] == f"الأجهزة: فلتر RO VIB\nالخدمة: تبديل فلاتر\nتاريخ الزيارة: {'/'.join(reversed(TODAY.split('-')))}"
     assert invoice["Invoice"]["order_source_id"] == 12
+
+
+def test_an_unexpected_fault_midway_keeps_what_daftra_created(client, db, fake_daftra, sales, manager, monkeypatch):
+    from app import daftra_sync
+
+    seed.catalog(db)
+    request_id = submitted_sale(client, db, sales, create_work_order="لا", installation_days="")
+    real = daftra_sync.save_receipt_pdf
+
+    def broken(*args, **kwargs):
+        raise KeyError("boom")
+    monkeypatch.setattr(daftra_sync, "save_receipt_pdf", broken)
+    failed = approve(client, manager, request_id)
+    assert failed.status_code == 500 and "boom" in failed.json()["detail"]
+    request = db.get(Request, request_id)
+    assert request.status == "submitted" and request.daftra_invoice_id and request.daftra_payment_id
+
+    monkeypatch.setattr(daftra_sync, "save_receipt_pdf", real)
+    assert approve(client, manager, request_id).status_code == 200
+    assert len(fake_daftra.posted("/api2/invoices.json")) == 1
+    assert len(fake_daftra.posted("/api2/invoice_payments.json")) == 1
+
+
+def test_the_pdfs_saved_on_approval_cannot_be_deleted_by_the_owner(client, db, sales, manager):
+    seed.catalog(db)
+    request_id = submitted_sale(client, db, sales, create_work_order="لا", installation_days="")
+    approve(client, manager, request_id)
+    invoice_pdf = db.query(Attachment).filter_by(request_id=request_id, field="daftra_invoice").one()
+    request = db.get(Request, request_id)
+    # Even if the request were open for corrections again
+    request.status = "returned"
+    db.commit()
+    assert client.delete(f"/api/attachments/{invoice_pdf.id}", headers=auth(sales)).status_code == 409

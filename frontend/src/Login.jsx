@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { api, setToken } from './api.js';
+import { BRAND } from './brand.js';
 import { Alert, Button, Field, PasswordInput, TextInput } from './ds/index.jsx';
-
-const BRAND = 'المستقبل لايف';
 
 export function AuthCard({ title, subtitle, children, footer, onSubmit }) {
   return (

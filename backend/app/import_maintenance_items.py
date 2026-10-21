@@ -13,7 +13,7 @@ import argparse
 from decimal import Decimal
 
 from openpyxl import load_workbook
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 
 from .database import SessionLocal, run_migrations
 from .models import Product
@@ -56,9 +56,10 @@ def main():
     with SessionLocal() as db:
         for group, name, name_ar in items:
             daftra_id = DAFTRA_IDS.get(name)
-            product = db.scalar(select(Product).where(or_(
-                func.lower(Product.name) == name.lower(), Product.daftra_id == daftra_id if daftra_id else False,
-            )))
+            # The product with this name, else the one with its Daftra id
+            product = db.scalar(select(Product).where(func.lower(Product.name) == name.lower()))
+            if product is None and daftra_id:
+                product = db.scalar(select(Product).where(Product.daftra_id == daftra_id))
             if product is None:
                 product = Product(name=name, unit_price=Decimal(START_PRICES.get(name, 0)), price_includes_tax=True,
                                   tax_rate=Decimal("0.05"), is_active=True)
@@ -67,7 +68,11 @@ def main():
             else:
                 marked.append(name)
             product.name_ar = product.name_ar or name_ar
-            product.daftra_id = product.daftra_id or daftra_id
+            db.flush()
+            # A Daftra id another product already carries stays with that product (it is unique)
+            taken = daftra_id and db.scalar(select(Product.id).where(Product.daftra_id == daftra_id, Product.id != product.id))
+            if not product.daftra_id and not taken:
+                product.daftra_id = daftra_id
             product.maintenance_group = group
         db.commit()
     print(f"{len(items)} maintenance items: {len(added)} added to the catalog, {len(marked)} already there and marked")

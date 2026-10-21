@@ -30,6 +30,11 @@ def line_total(item: PackageItem) -> Decimal:
     return (gross - item.discount).quantize(CENT, ROUND_HALF_UP)
 
 
+def unit_price_in_package(item: PackageItem) -> float:
+    """What one unit of a product costs inside a package, tax included and after the line's discount."""
+    return round(float(line_total(item)) / item.quantity, 2)
+
+
 def set_items(package: Package, lines: list[dict]):
     """Makes the package contain exactly these lines, each a dict of PackageItem values including "product".
 

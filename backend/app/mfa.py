@@ -2,13 +2,12 @@
 
 import hashlib
 import hmac
-import re
 import secrets
 from datetime import datetime, timedelta, timezone
 
 from .config import settings
-from .forms import ARABIC_DIGITS
 from .models import User
+from .text import digits
 
 CODE_MINUTES = 10
 # Wrong tries allowed on one code before a new one has to be sent
@@ -53,12 +52,12 @@ def clear_code(user: User):
 
 def check_code(user: User, code: str) -> bool:
     """True once for the right code. Counts wrong tries, so the caller must commit either way."""
-    digits = re.sub(r"\D", "", (code or "").translate(ARABIC_DIGITS))
+    typed = digits(code)
     if (not user.mfa_code_hash or user.mfa_code_expires is None
             or user.mfa_code_expires < datetime.now(timezone.utc) or user.mfa_code_attempts >= MAX_ATTEMPTS):
         return False
     user.mfa_code_attempts += 1
-    if not hmac.compare_digest(user.mfa_code_hash, _hash(user, digits)):
+    if not hmac.compare_digest(user.mfa_code_hash, _hash(user, typed)):
         return False
     clear_code(user)
     return True

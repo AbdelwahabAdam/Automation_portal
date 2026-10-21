@@ -39,7 +39,8 @@ function cleanValue(spec, raw) {
 
   if (spec.type === 'number') {
     const number = Number(toLatinDigits(value).replace(/,/g, ''));
-    if (Number.isNaN(number)) return [null, 'أدخل رقمًا صحيحًا'];
+    // Infinity reads as a number but is no amount
+    if (!Number.isFinite(number)) return [null, 'أدخل رقمًا صحيحًا'];
     if (spec.integer && !Number.isInteger(number)) return [null, 'أدخل عددًا بدون كسور'];
     if (spec.positive && number <= 0) return [null, 'يجب أن يكون أكبر من صفر'];
     if (spec.min !== undefined && number < spec.min) return [null, `الحد الأدنى ${spec.min}`];

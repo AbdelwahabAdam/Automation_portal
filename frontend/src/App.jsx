@@ -2,13 +2,13 @@ import { useEffect, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import Account from './Account.jsx';
 import { api, getToken, setToken } from './api.js';
+import { BRAND } from './brand.js';
 import { Button, Icon, Loading, Menu } from './ds/index.jsx';
 import Login from './Login.jsx';
 import { PAGE_COMPONENTS, PAGE_ICONS } from './pages.jsx';
 import { pagePath } from './paths.js';
 import SetPassword from './SetPassword.jsx';
 
-const BRAND = 'المستقبل لايف';
 // Pages shown in the phone's bottom bar before the rest move to «المزيد»
 const BOTTOM_NAV_SIZE = 3;
 

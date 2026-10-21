@@ -88,6 +88,10 @@ def require_page(*page_keys: str):
     return dependency
 
 
+# The salesperson's pages: the forms and their own requests
+sales_user = require_page("sales.new_request", "sales.my_requests")
+
+
 def require_admin(user: User = Depends(get_current_user)) -> User:
     if not user.is_admin:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "هذه الصفحة لمدير النظام فقط")

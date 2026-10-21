@@ -4,16 +4,17 @@ invoices and payments when a request is approved."""
 import http.cookiejar
 import json
 import re
-from collections import Counter, defaultdict
 import threading
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor
 
 from .config import settings
-from .forms import ARABIC_DIGITS, EMIRATES, PAYMENT_METHODS
+from .forms import EMIRATES, PAYMENT_METHODS
+from .text import day_month_year, digits, squash
 
 TIMEOUT_SECONDS = 20
 CACHE_SECONDS = 15 * 60
@@ -131,12 +132,12 @@ def invoice_pdf(invoice_id: int, pdf_url: str) -> bytes:
 
 def local_phone(raw: str | None) -> str:
     """Reduces any way a UAE number is written to digits in local form, e.g. 0501234567."""
-    digits = re.sub(r"\D", "", (raw or "").translate(ARABIC_DIGITS))
-    if digits.startswith("00971"):
-        digits = digits[5:]
-    elif digits.startswith("971"):
-        digits = digits[3:]
-    return digits if digits.startswith("0") or not digits else "0" + digits
+    number = digits(raw)
+    if number.startswith("00971"):
+        number = number[5:]
+    elif number.startswith("971"):
+        number = number[3:]
+    return number if number.startswith("0") or not number else "0" + number
 
 
 def _fold(text: str) -> str:
@@ -153,7 +154,8 @@ EMIRATE_BY_CITY = {_fold(emirate): emirate for emirate in EMIRATES}
 CITY_EMIRATE = {_fold("العين"): "أبوظبي"}
 
 
-def _address(client: dict) -> dict:
+def address_from_daftra(client: dict) -> dict:
+    """A Daftra client (or one of its addresses) as our address fields."""
     city, area = (client.get("city") or "").strip(), (client.get("state") or "").strip()
     emirate = EMIRATE_BY_CITY.get(_fold(city))
     if emirate is None:
@@ -166,8 +168,6 @@ def _address(client: dict) -> dict:
         "street": (client.get("address1") or "").strip(),
         "house": (client.get("address2") or "").strip(),
     }
-
-
 
 
 # ---------- Lists used as drop-downs (cached, they change rarely) ----------
@@ -203,29 +203,12 @@ def _all(resource: str, model: str, workers: int = 4) -> list[dict]:
     return [row[model] for page in (first, *rest) for row in page.get("data", [])]
 
 
-def list_staff() -> list[str]:
-    """Names of active Daftra staff."""
-    def load():
-        names = {
-            " ".join((member.get("full_name") or f"{member.get('name') or ''} {member.get('last_name') or ''}").split())
-            for member in _all("staff", "Staff")
-            if member.get("active") == "1"
-        }
-        return sorted(name for name in names if name)
-
-    return _cached("staff", load)
-
-
-def _clean_name(name) -> str:
-    return " ".join(str(name or "").split())
-
-
 def list_staff_members() -> list[dict]:
     """Active Daftra staff with their ids, for linking a portal user to one."""
     def load():
         members = [
             {"id": int(member["id"]),
-             "name": _clean_name(member.get("full_name") or f"{member.get('name') or ''} {member.get('last_name') or ''}")}
+             "name": squash(member.get("full_name") or f"{member.get('name') or ''} {member.get('last_name') or ''}")}
             for member in _all("staff", "Staff")
             if member.get("active") == "1"
         ]
@@ -234,12 +217,18 @@ def list_staff_members() -> list[dict]:
     return _cached("staff_members", load)
 
 
+def list_staff() -> list[str]:
+    """Names of active Daftra staff, each once, for the forms' staff fields (e.g. «اسم المحصل»).
+    Read from the same cached list as list_staff_members, so Daftra is asked once for both."""
+    return sorted({member["name"] for member in list_staff_members()})
+
+
 def list_treasuries() -> list[dict]:
     """Active treasuries and bank accounts a payment can be received into."""
     def load():
         rows = _all("treasuries", "Treasury")
         return sorted(
-            ({"id": int(row["id"]), "name": _clean_name(row.get("name"))} for row in rows if row.get("active") == "1"),
+            ({"id": int(row["id"]), "name": squash(row.get("name"))} for row in rows if row.get("active") == "1"),
             key=lambda row: row["name"],
         )
 
@@ -256,7 +245,7 @@ def list_client_categories() -> list[dict]:
             if page >= (body.get("last_page") or 1):
                 break
             page += 1
-        named = ({"id": int(row["id"]), "name": _clean_name(row.get("name"))} for row in rows)
+        named = ({"id": int(row["id"]), "name": squash(row.get("name"))} for row in rows)
         return sorted((row for row in named if row["name"]), key=lambda row: row["name"])
 
     return _cached("client_categories", load)
@@ -339,7 +328,7 @@ def client_category(client_id: int) -> dict | None:
     row = get(f"clients/{client_id}.json").get("data", {}).get("Client", {})
     if not row.get("category_id"):
         return None
-    return {"id": int(row["category_id"]), "name": _clean_name(row.get("category"))}
+    return {"id": int(row["category_id"]), "name": squash(row.get("category"))}
 
 
 def open_invoices(client_id: int) -> list[dict]:
@@ -350,9 +339,8 @@ def open_invoices(client_id: int) -> list[dict]:
         invoice = row["Invoice"]
         unpaid = float(invoice.get("summary_unpaid") or 0)
         if invoice.get("draft") == "0" and unpaid > 0.005:
-            day = invoice.get("date") or ""
             # The list gives 2026-10-19; Daftra prints 19/10/2026
-            day = "/".join(reversed(day.split("-"))) if re.fullmatch(r"\d{4}-\d{2}-\d{2}", day) else day
+            day = day_month_year(invoice.get("date") or "")
             found.append({"id": int(invoice["id"]), "no": invoice.get("no") or "", "date": day,
                           "total": float(invoice.get("summary_total") or 0), "unpaid": round(unpaid, 2)})
     return sorted(found, key=lambda invoice: invoice["id"], reverse=True)
@@ -369,7 +357,7 @@ def list_order_sources() -> list[dict]:
         body = _call("GET", "/v2/api/entity/order_source/list/1", {"limit": 100})
         rows = body.get("data", [])
         return [
-            {"id": int(row["id"]), "name": _clean_name(row.get("name"))}
+            {"id": int(row["id"]), "name": squash(row.get("name"))}
             for row in sorted(rows, key=lambda row: row.get("display_order") or 0)
             if row.get("status") == 1
         ]

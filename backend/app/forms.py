@@ -5,8 +5,11 @@ submissions against the same definitions, so a form is described in one place.
 The forms follow the sales templates in forms.md.
 """
 
+import math
 import re
 from datetime import date
+
+from .text import ARABIC_DIGITS, squash, uae_today
 
 YES_NO = ["نعم", "لا"]
 CASH = "نقدًا"
@@ -31,7 +34,6 @@ WORK_STARTED = WORK_STATUS[1:]
 COLORS = ["أبيض", "أسود", "ذهبي", "أخرى"]
 
 PHONE_RE = re.compile(r"^(?:\+?971|0)\d{8,9}$")
-ARABIC_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789")
 # Field type "product" holds a name picked from our catalog, "staff" one picked from Daftra's staff list
 DEFAULT_MAX_LENGTH = {"text": 300, "product": 300, "staff": 300, "textarea": 3000, "package_color": 300}
 # Field types holding the id of a row in a Daftra list; the form shows the list, the data keeps the
@@ -92,7 +94,7 @@ PACKAGE_COLOR_FAMILIES = [
 def package_colors(package_name: str) -> list[tuple[str, str]]:
     """The colours a package's name allows, as (shown, as written on the work order); [] for none.
     frontend/src/validation.js packageColors() mirrors this."""
-    name = " ".join(str(package_name or "").split())
+    name = squash(package_name)
     for family in PACKAGE_COLOR_FAMILIES:
         if any(word in name for word in family["match"]) and not any(word in name for word in family["exclude"]):
             return family["colors"]
@@ -903,7 +905,8 @@ def _clean_value(spec: dict, raw):
     if kind == "order_lines":
         lines = []
         for line in raw if isinstance(raw, list) else []:
-            line = line or {}
+            if not isinstance(line, dict):
+                continue
             product_id = str(line.get("product_id") or "").strip()
             try:
                 quantity = int(line.get("quantity"))
@@ -934,6 +937,9 @@ def _clean_value(spec: dict, raw):
             number = float(value.translate(ARABIC_DIGITS).replace(",", ""))
         except ValueError:
             return None, "أدخل رقمًا صحيحًا"
+        # "inf" and "nan" read as numbers, but are no amount and cannot be stored
+        if not math.isfinite(number):
+            return None, "أدخل رقمًا صحيحًا"
         if spec.get("integer") and not number.is_integer():
             return None, "أدخل عددًا بدون كسور"
         if spec.get("positive") and number <= 0:
@@ -951,7 +957,8 @@ def _clean_value(spec: dict, raw):
             parsed = date.fromisoformat(value)
         except ValueError:
             return None, "أدخل تاريخًا صحيحًا"
-        if spec.get("not_future") and parsed > date.today():
+        # The UAE's today: the server's clock (UTC) is still on yesterday until 4 a.m. there
+        if spec.get("not_future") and parsed > uae_today():
             return None, "التاريخ لا يمكن أن يكون في المستقبل"
         return value, None
     if kind == "select":
@@ -1133,6 +1140,14 @@ def validate_submission(form_type: str, data: dict, file_counts: dict, employee_
     return clean, errors
 
 
+def _dict(value) -> dict:
+    return value if isinstance(value, dict) else {}
+
+
+def _finite(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
 def sanitize_draft(form_type: str, data: dict) -> dict:
     """Drafts are stored as typed, without validation, so the user can finish them later."""
     draft = {}
@@ -1147,10 +1162,10 @@ def sanitize_draft(form_type: str, data: dict) -> dict:
                  "package_id": str(line["package_id"])[:20] if str(line.get("package_id") or "").isdigit() else None,
                  "base_quantity": int(line["base_quantity"]) if str(line.get("base_quantity") or "").isdigit() else None,
                  # Shown again when the draft is opened; worked out afresh when it is submitted
-                 "unit_price": line["unit_price"] if isinstance(line.get("unit_price"), (int, float)) else None,
+                 "unit_price": line["unit_price"] if _finite(line.get("unit_price")) else None,
                  "details": {
-                     str(k)[:40]: str(v)[:2000] for k, v in (line.get("details") or {}).items()
-                     if isinstance(line.get("details"), dict) and not isinstance(v, (list, dict))
+                     str(k)[:40]: str(v)[:2000] for k, v in _dict(line.get("details")).items()
+                     if not isinstance(v, (list, dict))
                  }}
                 for line in (raw if isinstance(raw, list) else [])[:100]
                 if isinstance(line, dict) and line.get("product_id")

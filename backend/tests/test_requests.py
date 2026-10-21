@@ -139,3 +139,16 @@ def test_daftra_lists_for_the_forms(client, db, sales):
     assert [s["id"] for s in client.get("/api/daftra/order_sources", headers=auth(sales)).json()] == [12, 16]
     categories = client.get("/api/daftra/client_categories", headers=auth(sales)).json()
     assert categories == [{"id": 5, "name": "العين العامره", "emirate": "أبوظبي", "area": "منطقة العين"}]
+
+
+def test_an_uploaded_file_keeps_only_its_own_name(client, sales):
+    request_id = create(client, sales, {}).json()["id"]
+    attachment = upload(client, sales, request_id, "payment_proof", name=r"C:\Users\me\Desktop\صورة.JPG").json()
+    assert attachment["filename"] == "صورة.JPG" and attachment["content_type"] == "image/jpeg"
+
+
+def test_adding_an_address_is_labelled_in_the_audit_log(client, db, sales, admin):
+    seed.existing_client(db)
+    client.post("/api/clients/4053/addresses", json={"emirate": "عجمان"}, headers=auth(sales))
+    options = client.get("/api/admin/audit/options", headers=auth(admin)).json()
+    assert options["actions"]["client.address.add"] and options["entity_types"]["client"] == "عميل"

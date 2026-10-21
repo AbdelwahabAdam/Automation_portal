@@ -4,12 +4,13 @@ A request goes draft -> submitted -> returned or approved. A returned request ca
 and submitted again by its owner, which starts a new revision. Every step is kept in its history.
 """
 
+import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from . import daftra_sync, mail
 from .audit import Audit, request_label
@@ -18,6 +19,9 @@ from .database import get_db
 from .forms import FORM_TYPES
 from .models import Request, RequestEvent, User
 from .security import get_current_user, require_page
+from .text import display_name
+
+log = logging.getLogger(__name__)
 
 REVIEW_PAGE = "sales.review"
 router = APIRouter(prefix="/api")
@@ -30,10 +34,6 @@ EVENT_LABELS = {
     "returned": "إعادة للتعديل",
     "approved": "اعتماد الطلب",
 }
-
-
-def display_name(user: User) -> str:
-    return user.full_name or user.username
 
 
 def add_event(db: Session, request: Request, user: User, kind: str, note: str | None = None):
@@ -73,7 +73,9 @@ def review_out(request: Request) -> dict:
 def review_queue(user: User = Depends(reviewer), db: Session = Depends(get_db)):
     """Every request that has been sent, newest first. Drafts stay private to their owner."""
     requests = db.scalars(
-        select(Request).where(Request.status != "draft").order_by(Request.submitted_at.desc()).limit(1000)
+        select(Request).where(Request.status != "draft")
+        .options(selectinload(Request.created_by), selectinload(Request.reviewed_by))
+        .order_by(Request.submitted_at.desc()).limit(1000)
     ).all()
     return [review_out(request) for request in requests]
 
@@ -131,6 +133,19 @@ def notify_owner(request: Request, reviewer_user: User, approved: bool) -> bool:
         return False
 
 
+def daftra_failed(request: Request, user: User, audit: Audit, db: Session, message: str, code: int) -> HTTPException:
+    """Saves why the Daftra documents could not all be created, with the ids of those that were."""
+    request.daftra_error = message
+    audit.log(user, "request.daftra_failed", "request", request.id, request_label(request), after={"error": message})
+    try:
+        db.commit()
+    except Exception:
+        # The fault left the session unusable (a database error); nothing more can be saved now
+        log.exception("Could not save the Daftra failure of request %s", request.id)
+        db.rollback()
+    return HTTPException(code, message)
+
+
 @router.post("/review/requests/{request_id}/approve")
 def approve(request_id: int, body: DecisionIn, user: User = Depends(reviewer), db: Session = Depends(get_db),
             audit: Audit = Depends()):
@@ -143,12 +158,13 @@ def approve(request_id: int, body: DecisionIn, user: User = Depends(reviewer), d
             daftra_summary = daftra_sync.sync(request, db, user)
         except daftra_sync.SyncError as error:
             # The request stays submitted; what was created so far is kept, so approving again carries on
-            request.daftra_error = str(error)
-            audit.log(user, "request.daftra_failed", "request", request.id, request_label(request),
-                      after={"error": str(error)})
-            db.commit()
-            raise HTTPException(status.HTTP_502_BAD_GATEWAY if error.from_daftra else status.HTTP_409_CONFLICT,
-                                str(error))
+            raise daftra_failed(request, user, audit, db, str(error),
+                                status.HTTP_502_BAD_GATEWAY if error.from_daftra else status.HTTP_409_CONFLICT)
+        except Exception as error:
+            # A fault of ours midway: still keep the ids of what Daftra already created
+            log.exception("Creating the Daftra documents of request %s failed", request.id)
+            raise daftra_failed(request, user, audit, db, f"خطأ غير متوقع أثناء الإنشاء في دفترة: {error}",
+                                status.HTTP_500_INTERNAL_SERVER_ERROR) from error
     request.status = "approved"
     request.returned_reason = None
     request.reviewed_by = user

@@ -45,6 +45,13 @@ export function matchesQuery(query, ...texts) {
   return words.every((word) => haystack.includes(word));
 }
 
+// The day an ISO time falls on here (2026-10-21), for comparing with a date picker's value
+export function localDay(iso) {
+  if (!iso) return '';
+  const at = new Date(iso);
+  return new Date(at.getTime() - at.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}
+
 export const formatDate = (iso) =>
   iso ? new Date(iso).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }).replace(',', '') : '';
 

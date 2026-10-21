@@ -2,7 +2,7 @@
 // helpers in src/formsMeta.js; the backend repeats the form checks (backend/tests/test_forms.py).
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { matchesQuery, normalize } from '../src/formsMeta.js';
+import { localDay, matchesQuery, normalize } from '../src/formsMeta.js';
 import {
   evaluateForm, initialValues, linePrice, normalizePhone, packageColors, packageQuantity, today,
 } from '../src/validation.js';
@@ -100,4 +100,16 @@ test('search forgives Arabic spelling variants', () => {
   assert.ok(matchesQuery('١٢٣', 'request 123'));
   assert.ok(!matchesQuery('دبي', 'الشارقة'));
   assert.ok(matchesQuery('', 'anything'));
+});
+
+test('a number that is no amount is refused', () => {
+  const spec = { key: 'n', sections: [{ title: 's', fields: [{ name: 'paid', type: 'number', required: true, min: 0 }] }] };
+  for (const typed of ['Infinity', '-Infinity', 'abc', '1e400']) {
+    assert.equal(evaluateForm(spec, { paid: typed }).errors.paid, 'أدخل رقمًا صحيحًا', typed);
+  }
+});
+
+test('localDay gives the local date of an ISO time', () => {
+  assert.equal(localDay(''), '');
+  assert.match(localDay('2026-10-21T10:00:00Z'), /^2026-10-2[01]$/);
 });

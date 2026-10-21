@@ -3,3 +3,6 @@ __pycache__
 *.pyc
 uploads
 .env
+tests
+requirements-dev.txt
+run-tests.sh

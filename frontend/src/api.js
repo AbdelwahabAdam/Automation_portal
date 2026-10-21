@@ -44,12 +44,18 @@ export function uploadAttachment(requestId, field, file) {
   return api(`/requests/${requestId}/attachments?${query}`, { method: 'POST', file });
 }
 
+// A file kept in memory for the browser to show or save; released after a minute, once it has
+const blobUrl = (blob) => {
+  const url = URL.createObjectURL(blob);
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  return url;
+};
+
 // Attachments need the auth header, so they are fetched and opened as a blob
 export async function openAttachment(id) {
   const tab = window.open('', '_blank');
   try {
-    const blob = await (await request(`/attachments/${id}`)).blob();
-    const url = URL.createObjectURL(blob);
+    const url = blobUrl(await (await request(`/attachments/${id}`)).blob());
     if (tab) tab.location = url;
     else window.location = url;
   } catch (err) {
@@ -60,10 +66,8 @@ export async function openAttachment(id) {
 
 // Saves an API response as a file; a plain link cannot send the auth header
 export async function downloadFile(path, filename) {
-  const blob = await (await request(path)).blob();
   const link = document.createElement('a');
-  link.href = URL.createObjectURL(blob);
+  link.href = blobUrl(await (await request(path)).blob());
   link.download = filename;
   link.click();
-  URL.revokeObjectURL(link.href);
 }

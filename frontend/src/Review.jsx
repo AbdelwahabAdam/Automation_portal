@@ -4,7 +4,7 @@ import { api } from './api.js';
 import {
   Alert, Button, EmptyState, Field, Loading, PageHeader, Pager, SearchInput, Select, StatusBadge, Tabs, TextInput, useWidth,
 } from './ds/index.jsx';
-import { formatDate, matchesQuery } from './formsMeta.js';
+import { formatDate, localDay, matchesQuery } from './formsMeta.js';
 import { TABLE_MIN_WIDTH } from './MyRequests.jsx';
 import RequestView from './RequestView.jsx';
 
@@ -37,7 +37,8 @@ export default function Review({ user, sales }) {
   useEffect(() => setPage(1), [tab, query, employee, formType, from, to, pageSize]);
 
   const filtered = useMemo(() => (requests || []).filter((r) => {
-    const day = (r.submitted_at || '').slice(0, 10);
+    // The day it was sent as the manager sees it, not the UTC one
+    const day = localDay(r.submitted_at);
     return (tab === 'all' || r.status === tab)
       && (!employee || String(r.created_by_id) === employee)
       && (!formType || r.form_type === formType)

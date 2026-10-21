@@ -206,3 +206,36 @@ def test_every_form_definition_is_consistent():
             for operand in spec.get("computed", []):
                 assert operand in names, f"{key}.{spec['name']} is computed from an unknown field"
     assert forms.VISIBLE_FORM_TYPES <= set(FORM_TYPES)
+
+
+def test_numbers_that_are_not_amounts_are_refused():
+    for typed in ("inf", "-Infinity", "nan", "1e400"):
+        _, errors = validate("new_sale", new_sale(paid_amount=typed), FILES)
+        assert errors["paid_amount"] == "أدخل رقمًا صحيحًا", typed
+
+
+def test_malformed_order_lines_do_not_break_validation_or_drafts():
+    lines = ["text", 5, None, {"product_id": "1", "quantity": 1, "details": "not a dict", "unit_price": float("inf")}]
+    clean, errors = validate("new_sale", new_sale(order_lines=lines), FILES)
+    assert len(clean["order_lines"]) == 1
+    draft = sanitize_draft("new_sale", {"order_lines": lines})
+    assert draft["order_lines"][0]["details"] == {} and draft["order_lines"][0]["unit_price"] is None
+
+
+def test_dates_are_checked_against_the_uae_day(monkeypatch):
+    monkeypatch.setattr(forms, "uae_today", lambda: date(2026, 10, 21))
+    _, errors = validate("new_sale", new_sale(request_date="2026-10-21", payment_date="2026-10-21",
+                                              remaining_due_date="2026-10-21"), FILES)
+    assert "request_date" not in errors
+    _, errors = validate("new_sale", new_sale(request_date="2026-10-22"), FILES)
+    assert errors["request_date"] == "التاريخ لا يمكن أن يكون في المستقبل"
+
+
+def test_text_helpers():
+    from app.text import day_month_year, digits, squash
+
+    assert day_month_year("2026-10-19") == "19/10/2026"
+    assert day_month_year("2026-10-19 10:30:00") == "19/10/2026"
+    assert day_month_year("soon") == "soon"
+    assert digits("٠٥٠-١٢٣ 4567") == "0501234567"
+    assert squash("  a \n  b ") == "a b"

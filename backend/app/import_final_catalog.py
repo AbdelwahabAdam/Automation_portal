@@ -11,7 +11,6 @@ rerun after only editing the workbook still assigns the same ids.
 """
 
 import argparse
-import re
 from collections import Counter, defaultdict
 from decimal import Decimal
 
