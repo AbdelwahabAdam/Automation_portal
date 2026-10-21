@@ -1,36 +1,61 @@
 // The controls a request form is made of, one per field type in backend/app/forms/.
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { openAttachment } from '../api.js';
+import { FileRow } from '../attachments.jsx';
 import { Button, Choice, Combobox, Icon, InputBox, Select, TextArea, TextInput } from '../ds/index.jsx';
 
 const ACCEPT = '.jpg,.jpeg,.png,.webp,.heic,.pdf,.mp4,.mov,.doc,.docx';
 // Selects with this many options or fewer show as option cards, as in the design
 export const CHOICE_MAX_OPTIONS = 3;
 
-const sizeText = (bytes) => (bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`);
-
 // Option cards for a short select (and for multiselect), a drop-down otherwise
 export const showsAsChoice = (spec) => spec.type === 'select' && spec.options.length <= CHOICE_MAX_OPTIONS && !spec.dropdown;
 
 export function FileField({ spec, files, busy, invalid, onAdd, onRemove }) {
+  // True while a file is being dragged over the box, so it is clear where to let go
+  const [over, setOver] = useState(false);
+
+  const add = (list) => {
+    const chosen = [...list].filter((file) => file.size > 0);
+    if (chosen.length) onAdd(spec.name, chosen);
+  };
+
+  function onDrop(e) {
+    e.preventDefault();
+    setOver(false);
+    if (!busy) add(e.dataTransfer.files);
+  }
+
   return (
     <div className="fl-files">
       {files.map((file) => (
-        <div key={file.id} className="fl-file">
-          <Icon name={/^image\//.test(file.content_type) ? 'image' : 'file-text'} size={18} />
-          <button type="button" className="fl-link fl-file__name" onClick={() => openAttachment(file.id)}><bdi>{file.filename}</bdi></button>
-          <span className="fl-file__size" data-fl-num>{sizeText(file.size)}</span>
+        <FileRow key={file.id} file={file}>
           <Button size="sm" variant="ghost" icon="trash" iconOnly label={`حذف ${file.filename}`} onClick={() => onRemove(file)} />
-        </div>
+        </FileRow>
       ))}
-      <label className={['fl-dropzone', busy && 'fl-dropzone--busy', invalid && 'fl-dropzone--invalid'].filter(Boolean).join(' ')}>
-        <Icon name={busy ? 'loader' : 'upload'} size={18} />
-        {busy ? 'جارٍ الرفع…' : 'إضافة ملف'}
-        <input
-          type="file" multiple hidden accept={ACCEPT} disabled={busy} aria-label={spec.label}
-          onChange={(e) => { onAdd(spec.name, [...e.target.files]); e.target.value = ''; }}
-        />
-      </label>
+      <div className="fl-uploads">
+        <label
+          className={['fl-dropzone', busy && 'fl-dropzone--busy', invalid && 'fl-dropzone--invalid', over && 'fl-dropzone--over'].filter(Boolean).join(' ')}
+          onDragOver={(e) => { e.preventDefault(); setOver(true); }}
+          onDragLeave={() => setOver(false)}
+          onDrop={onDrop}
+        >
+          <Icon name={busy ? 'loader' : 'upload'} size={18} />
+          {busy ? 'جارٍ الرفع…' : over ? 'أفلت الملفات هنا' : 'إضافة ملف أو إفلاته هنا'}
+          <input
+            type="file" multiple hidden accept={ACCEPT} disabled={busy} aria-label={spec.label}
+            onChange={(e) => { add(e.target.files); e.target.value = ''; }}
+          />
+        </label>
+        {/* On a phone this opens the camera; on a computer the browser offers the files instead */}
+        <label className={busy ? 'fl-camera fl-camera--busy' : 'fl-camera'}>
+          <Icon name="image" size={18} />
+          <span>التقاط صورة</span>
+          <input
+            type="file" hidden accept="image/*" capture="environment" disabled={busy} aria-label={`التقاط صورة — ${spec.label}`}
+            onChange={(e) => { add(e.target.files); e.target.value = ''; }}
+          />
+        </label>
+      </div>
     </div>
   );
 }

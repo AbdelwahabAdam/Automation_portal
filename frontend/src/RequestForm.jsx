@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, uploadAttachment } from './api.js';
-import { ActionBar, Alert, Badge, Button, Dialog, Field, Loading, PageHeader, Section, TextInput } from './ds/index.jsx';
+import {
+  ActionBar, Alert, Badge, Button, Dialog, Field, PageHeader, Section, Skeleton, TextInput, useToast,
+} from './ds/index.jsx';
 import { ClientLookupNote, SEARCH_FIELDS, useClientLookup } from './form/ClientLookup.jsx';
 import { Control, DaftraListSelect, FileField, ProductPicker, guessFromProductName, showsAsChoice } from './form/fields.jsx';
 import FormProgress, { Totals, formTotals } from './form/FormProgress.jsx';
 import OrderLines from './form/OrderLines.jsx';
+import { formatAmount, formatDay } from './formsMeta.js';
 import { DAFTRA_LIST_TYPES, allFields, evaluateForm, initialValues } from './validation.js';
 
 // Sections open when a form starts; the rest are folded until needed
@@ -52,7 +55,8 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
     autoFilled.current[name] = value;
   }
 
-  const client = useClientLookup({ fieldNames, needsClientInfo, setValues, setErrors, setMessage, autoFill, autoFilled });
+  const toast = useToast();
+  const client = useClientLookup({ fieldNames, needsClientInfo, setValues, setErrors, setMessage, autoFill, autoFilled, toast });
 
   useEffect(() => {
     if (!requestId) return;
@@ -96,7 +100,7 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
   });
 
   if (!formType) return <Alert tone="error">نوع هذا النموذج لم يعد متاحًا.</Alert>;
-  if (loading) return <Loading />;
+  if (loading) return <Skeleton lines={8} />;
 
   const clearError = (...names) => setErrors((current) => without(current, ...names));
 
@@ -260,7 +264,7 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
   const saveDraft = () => run('draft', async () => {
     await save('draft');
     setErrors({});
-    setMessage({ ok: saved.status === 'returned' ? 'تم حفظ التعديلات. أعد إرسال الطلب عندما تنتهي.' : 'تم حفظ المسودة. يمكنك العودة إليها من «طلباتي».' });
+    toast(saved.status === 'returned' ? 'تم حفظ التعديلات' : 'تم حفظ المسودة — تجدها في «طلباتي»');
   });
 
   function askSubmit() {
@@ -367,9 +371,13 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
       return { locked: 'للقراءة فقط', control: <TextInput id={spec.name} value={user.full_name || user.username} readOnly /> };
     }
     if (spec.computed) {
+      const value = evaluation.clean[spec.name];
       return {
         locked: 'يُحسب تلقائيًا',
-        control: <TextInput id={spec.name} dir="ltr" value={evaluation.clean[spec.name] ?? ''} readOnly placeholder="—" />,
+        control: (
+          <TextInput id={spec.name} dir={spec.money ? 'auto' : 'ltr'} readOnly placeholder="—"
+            value={value == null ? '' : (spec.money ? formatAmount(value) : value)} />
+        ),
       };
     }
     if (spec.type === 'product') {
@@ -402,8 +410,9 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
       return { control: <Control spec={{ ...spec, options, dropdown: true }} value={values.area} invalid={invalid} onChange={(_, v) => chooseArea(v)} /> };
     }
     const searchable = SEARCH_FIELDS.includes(spec.name);
+    const day = spec.type === 'date' ? formatDay(values[spec.name]) : '';
     return {
-      hint: searchable ? 'يُبحث عن العميل بعد الكتابة، أو اضغط أيقونة البحث.' : null,
+      hint: searchable ? 'يُبحث عن العميل بعد الكتابة، أو اضغط أيقونة البحث.' : (day ? `التاريخ المختار: ${day}` : null),
       control: <Control spec={spec} value={values[spec.name]} invalid={invalid} onChange={change}
         onBlur={searchable ? client.lookupClient : undefined} onSearch={searchable ? client.searchNow : undefined} />,
     };

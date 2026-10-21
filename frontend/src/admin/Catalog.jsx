@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api.js';
 import {
   Alert, Badge, Button, Checkbox, Drawer, EmptyState, Field, Loading, PageHeader, Pager, SearchInput, Select, Tabs, TextArea, TextInput,
-  useConfirm,
+  Skeleton, useConfirm, useToast,
 } from '../ds/index.jsx';
 import { formatMoney as money, matchesQuery } from '../formsMeta.js';
 import { useAction } from '../hooks.js';
@@ -139,17 +139,16 @@ function ProductDrawer({ product, onSaved, onDeleted, onClose }) {
   );
 }
 
-function Products({ products, onChange }) {
+function Products({ products, onChange, toast }) {
   // null | { product } (product undefined for a new one)
   const [panel, setPanel] = useState(null);
-  const [notice, setNotice] = useState('');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   useEffect(() => setPage(1), [search, pageSize]);
 
   function done(message) {
-    setNotice(message);
+    toast(message);
     setPanel(null);
     onChange();
   }
@@ -161,9 +160,8 @@ function Products({ products, onChange }) {
     <>
       <div className="fl-row fl-row--spread">
         <div className="fl-narrow-search"><SearchInput value={search} onChange={setSearch} placeholder="ابحث في المنتجات" /></div>
-        <Button variant="primary" icon="plus" onClick={() => { setNotice(''); setPanel({}); }}>إضافة منتج</Button>
+        <Button variant="primary" icon="plus" onClick={() => setPanel({})}>إضافة منتج</Button>
       </div>
-      {notice && <Alert tone="success" onDismiss={() => setNotice('')}>{notice}</Alert>}
       {!shown.length ? (
         <EmptyState icon="package" title={products.length ? 'لا توجد منتجات مطابقة' : 'لا توجد منتجات بعد'} />
       ) : (
@@ -195,7 +193,7 @@ function Products({ products, onChange }) {
                     <td data-fl-num>{product.stock_balance ?? '—'}</td>
                     <td data-fl-num>{product.package_count}</td>
                     <td>{product.is_active ? <Badge tone="success">مفعّل</Badge> : <Badge>موقوف</Badge>}</td>
-                    <td className="fl-cell--actions"><Button size="sm" icon="edit" onClick={() => { setNotice(''); setPanel({ product }); }}>تعديل</Button></td>
+                    <td className="fl-cell--actions"><Button size="sm" icon="edit" onClick={() => setPanel({ product })}>تعديل</Button></td>
                   </tr>
                 ))}
               </tbody>
@@ -397,9 +395,8 @@ function PackageRow({ pack, open, onToggle, onEdit }) {
   );
 }
 
-function Packages({ packages, products, onChange }) {
+function Packages({ packages, products, onChange, toast }) {
   const [panel, setPanel] = useState(null);
-  const [notice, setNotice] = useState('');
   const [search, setSearch] = useState('');
   const [openId, setOpenId] = useState(null);
   const [page, setPage] = useState(1);
@@ -407,7 +404,7 @@ function Packages({ packages, products, onChange }) {
   useEffect(() => setPage(1), [search, pageSize]);
 
   function done(message) {
-    setNotice(message);
+    toast(message);
     setPanel(null);
     onChange();
   }
@@ -417,9 +414,8 @@ function Packages({ packages, products, onChange }) {
     <>
       <div className="fl-row fl-row--spread">
         <div className="fl-narrow-search"><SearchInput value={search} onChange={setSearch} placeholder="ابحث في الباقات" /></div>
-        <Button variant="primary" icon="plus" onClick={() => { setNotice(''); setPanel({}); }}>إضافة باقة</Button>
+        <Button variant="primary" icon="plus" onClick={() => setPanel({})}>إضافة باقة</Button>
       </div>
-      {notice && <Alert tone="success" onDismiss={() => setNotice('')}>{notice}</Alert>}
       {!shown.length ? (
         <EmptyState icon="layers" title={packages.length ? 'لا توجد باقات مطابقة' : 'لا توجد باقات بعد'} />
       ) : (
@@ -430,7 +426,7 @@ function Packages({ packages, products, onChange }) {
               <tbody>
                 {shown.slice((page - 1) * pageSize, page * pageSize).map((pack) => (
                   <PackageRow key={pack.id} pack={pack} open={openId === pack.id} onToggle={() => setOpenId(openId === pack.id ? null : pack.id)}
-                    onEdit={() => { setNotice(''); setPanel({ pack }); }} />
+                    onEdit={() => setPanel({ pack })} />
                 ))}
               </tbody>
             </table>
@@ -453,6 +449,7 @@ function Packages({ packages, products, onChange }) {
 
 export default function Catalog() {
   const [tab, setTab] = useState('products');
+  const toast = useToast();
   const [products, setProducts] = useState(null);
   const [packages, setPackages] = useState(null);
   const [error, setError] = useState('');
@@ -469,7 +466,7 @@ export default function Catalog() {
   useEffect(load, []);
 
   const header = <PageHeader title="المنتجات والباقات" subtitle="المنتج وحدة واحدة لا يدخل فيها شيء آخر. الباقة منتج أو أكثر تُباع معًا." />;
-  if (!products || !packages) return <div className="fl-stack">{header}{error ? <Alert tone="error">{error}</Alert> : <Loading />}</div>;
+  if (!products || !packages) return <div className="fl-stack">{header}{error ? <Alert tone="error">{error}</Alert> : <Skeleton lines={6} />}</div>;
   return (
     <div className="fl-stack">
       {header}
@@ -477,8 +474,8 @@ export default function Catalog() {
       <Tabs label="المنتجات والباقات" value={tab} onChange={setTab}
         tabs={[{ value: 'products', label: 'المنتجات', count: products.length }, { value: 'packages', label: 'الباقات', count: packages.length }]} />
       {tab === 'products'
-        ? <Products products={products} onChange={load} />
-        : <Packages packages={packages} products={products} onChange={load} />}
+        ? <Products products={products} onChange={load} toast={toast} />
+        : <Packages packages={packages} products={products} onChange={load} toast={toast} />}
     </div>
   );
 }

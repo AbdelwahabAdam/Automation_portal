@@ -239,3 +239,13 @@ def test_text_helpers():
     assert day_month_year("soon") == "soon"
     assert digits("٠٥٠-١٢٣ 4567") == "0501234567"
     assert squash("  a \n  b ") == "a b"
+
+
+def test_every_amount_field_is_marked_as_money():
+    """The form and the request's page print a money field with «درهم»; a count must not be."""
+    for key in FORM_TYPES:
+        for spec in form_fields(key):
+            if spec["type"] != "number":
+                continue
+            looks_like_money = any(word in spec["name"] for word in ("amount", "price", "paid", "refund", "total", "value"))
+            assert spec.get("money", False) == looks_like_money, f"{key}.{spec['name']}"

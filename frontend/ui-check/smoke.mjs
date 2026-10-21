@@ -75,7 +75,9 @@ async function salesForm(page, prefix) {
   await page.locator('#paid_amount').fill('100');
   await page.waitForTimeout(300);
   const subtotal = await page.locator('#subtotal_amount').inputValue().catch(() => '');
-  if (!subtotal || Number(subtotal) <= 0) problems.push(`[value] subtotal after picking a package: «${subtotal}»`);
+  // It reads «8,600 درهم»: the amount with its unit
+  const amount = Number(String(subtotal).replace(/[^\d.]/g, ''));
+  if (!(amount > 0) || !subtotal.includes('درهم')) problems.push(`[value] subtotal after picking a package: «${subtotal}»`);
   log(`${prefix} subtotal after package x2:`, subtotal);
   await shot(page, `${prefix}-form-filled`);
   await page.locator('#order_lines').scrollIntoViewIfNeeded();

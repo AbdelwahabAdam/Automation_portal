@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api.js';
 import {
   Alert, Badge, Button, Checkbox, Choice, Drawer, EmptyState, Field, Filters, Loading, PageHeader, Pager, SearchInput, Select, TextInput,
-  useConfirm, useWidth,
+  Skeleton, useConfirm, useToast, useWidth,
 } from '../ds/index.jsx';
 import { formatDate, matchesQuery } from '../formsMeta.js';
 import { useAction } from '../hooks.js';
@@ -160,7 +160,6 @@ export default function Users({ user: me }) {
   // Daftra's active staff, to link a user to; null until loaded, or if Daftra cannot be reached
   const [staff, setStaff] = useState(null);
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
   // null | { mode: 'new' } | { mode: 'edit', user }
   const [panel, setPanel] = useState(null);
   const [invite, setInvite] = useState(null);
@@ -171,6 +170,7 @@ export default function Users({ user: me }) {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [confirmDialog, confirm] = useConfirm();
+  const toast = useToast();
   // A table on a wide area, cards on a narrow one
   const [area, areaWidth] = useWidth();
 
@@ -194,7 +194,6 @@ export default function Users({ user: me }) {
   [users, query, roleFilter, statusFilter]);
 
   function open(next) {
-    setNotice('');
     setInvite(null);
     setError('');
     setPanel(next);
@@ -220,14 +219,14 @@ export default function Users({ user: me }) {
     setUsers((current) => (current.some((u) => u.id === savedUser.id)
       ? current.map((u) => (u.id === savedUser.id ? savedUser : u))
       : [...current, savedUser]));
-    setNotice(`تم حفظ المستخدم ${savedUser.username}.`);
+    toast(`تم حفظ المستخدم ${savedUser.username}`);
     setInvite(sentInvite || null);
     setPanel(null);
   }
 
   function deleted(deletedUser) {
     setUsers((current) => current.filter((u) => u.id !== deletedUser.id));
-    setNotice(`تم حذف المستخدم ${deletedUser.username}.`);
+    toast(`تم حذف المستخدم ${deletedUser.username}`);
     setPanel(null);
   }
 
@@ -235,7 +234,7 @@ export default function Users({ user: me }) {
     <PageHeader title="المستخدمون" subtitle="عرض حسابات الموظفين وإضافة مستخدم جديد"
       actions={<Button variant="primary" icon="plus" onClick={() => open({ mode: 'new' })}>إضافة مستخدم</Button>} />
   );
-  if (!users) return <div className="fl-stack" ref={area}>{header}{error ? <Alert tone="error">{error}</Alert> : <Loading />}</div>;
+  if (!users) return <div className="fl-stack" ref={area}>{header}{error ? <Alert tone="error">{error}</Alert> : <Skeleton lines={6} />}</div>;
 
   const shown = filtered.slice((page - 1) * pageSize, page * pageSize);
   const permissions = (user) => (
@@ -325,7 +324,6 @@ export default function Users({ user: me }) {
   return (
     <div className="fl-stack" ref={area}>
       {header}
-      {notice && <Alert tone="success" onDismiss={() => setNotice('')}>{notice}</Alert>}
       {error && <Alert tone="error">{error}</Alert>}
       {invite && <InviteResult key={invite.link || invite.user.id} invite={invite} onDismiss={() => setInvite(null)} />}
       <Filters

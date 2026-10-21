@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api } from './api.js';
 import {
-  Alert, Button, EmptyState, Field, Filters, Loading, PageHeader, SearchInput, Select, Tabs, TextInput, useWidth,
+  Alert, Button, EmptyState, Field, Filters, PageHeader, SearchInput, Select, Skeleton, Tabs, TextInput, useToast, useWidth,
 } from './ds/index.jsx';
 import { localDay, matchesQuery } from './formsMeta.js';
 import RequestList, { TABLE_MIN_WIDTH } from './RequestList.jsx';
@@ -19,7 +19,6 @@ const TABS = [
 export default function Review({ user, sales }) {
   const [requests, setRequests] = useState(null);
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
   const [params, setParams] = useSearchParams();
   const [query, setQuery] = useState('');
   const [employee, setEmployee] = useState('');
@@ -31,6 +30,7 @@ export default function Review({ user, sales }) {
   const [viewing, setViewing] = useState(null);
   const [area, areaWidth] = useWidth();
   const tab = TABS.some((t) => t.value === params.get('tab')) ? params.get('tab') : 'submitted';
+  const toast = useToast();
 
   const load = () => api('/review/requests').then(setRequests).catch((err) => setError(err.message));
   useEffect(() => { load(); }, []);
@@ -48,7 +48,7 @@ export default function Review({ user, sales }) {
 
   const header = <PageHeader title="مراجعة الطلبات" subtitle="راجع الطلبات المرسلة واعتمدها أو أعدها للموظف مع سبب التعديل" />;
   if (sales.error || error) return <div className="fl-stack">{header}<Alert tone="error">{sales.error || error}</Alert></div>;
-  if (!requests || !sales.formTypes) return <div className="fl-stack" ref={area}>{header}<Loading /></div>;
+  if (!requests || !sales.formTypes) return <div className="fl-stack" ref={area}>{header}<Skeleton lines={6} /></div>;
   if (viewing) {
     return (
       <RequestView
@@ -56,7 +56,7 @@ export default function Review({ user, sales }) {
         onBack={() => setViewing(null)}
         review={{
           own: () => viewing.created_by_id === user.id && !user.is_admin,
-          onDone: (message) => { setNotice(message); setViewing(null); load(); },
+          onDone: (message) => { toast(message); setViewing(null); load(); },
         }}
       />
     );
@@ -89,7 +89,6 @@ export default function Review({ user, sales }) {
   return (
     <div className="fl-stack" ref={area}>
       {header}
-      {notice && <Alert tone="success" onDismiss={() => setNotice('')}>{notice}</Alert>}
       <Tabs
         label="حالة الطلب" value={tab}
         onChange={(value) => setParams(value === 'submitted' ? {} : { tab: value }, { replace: true })}

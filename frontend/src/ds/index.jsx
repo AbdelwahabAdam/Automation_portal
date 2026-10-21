@@ -1,6 +1,6 @@
 // React versions of the Future Life design system components (Design/portal/Fl*.dc.html).
 // Styling lives in ds.css and uses the tokens in tokens.css only.
-import { useEffect, useId, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useId, useRef, useState } from 'react';
 import Icon from './Icon.jsx';
 
 export { Icon };
@@ -574,6 +574,58 @@ export function Dialog({
       </div>
     </div>
   );
+}
+
+// ---------- Skeleton: the shape of what is loading, instead of a line of text ----------
+
+// lines: how many grey bars; card wraps them in a surface, as a list of rows is
+export function Skeleton({ lines = 3, card = true, label = 'جارٍ التحميل…' }) {
+  const bars = Array.from({ length: lines }, (_, index) => <span key={index} className="fl-skeleton__bar" />);
+  return (
+    <div className={cx('fl-skeleton', card && 'fl-skeleton--card')} role="status" aria-busy="true" aria-label={label}>
+      {bars}
+    </div>
+  );
+}
+
+// ---------- Toasts: a short message in the corner, for something that just worked ----------
+
+const ToastContext = createContext(null);
+const TOAST_SECONDS = 5;
+
+// Wraps the app once; useToast() below sends the messages
+export function ToastHost({ children }) {
+  const [toasts, setToasts] = useState([]);
+  const remove = (id) => setToasts((current) => current.filter((toast) => toast.id !== id));
+  const show = useCallback((message, tone = 'success') => {
+    const id = Math.random().toString(36).slice(2);
+    setToasts((current) => [...current.filter((toast) => toast.message !== message), { id, message, tone }]);
+    setTimeout(() => remove(id), TOAST_SECONDS * 1000);
+  }, []);
+  return (
+    <ToastContext.Provider value={show}>
+      {children}
+      {toasts.length > 0 && (
+        // Announced to a screen reader as it appears, without taking the focus away
+        <div className="fl-toasts" role="status" aria-live="polite">
+          {toasts.map((toast) => (
+            <div key={toast.id} className={`fl-toast fl-toast--${toast.tone}`}>
+              <Icon name={toast.tone === 'error' ? 'alert-circle' : 'check-circle'} size={18} />
+              <span className="fl-toast__text">{toast.message}</span>
+              <button type="button" className="fl-toast__close" aria-label="إغلاق" onClick={() => remove(toast.id)}>
+                <Icon name="x" size={16} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </ToastContext.Provider>
+  );
+}
+
+// show(message) for something that worked; show(message, 'error') for something that did not
+export function useToast() {
+  return useContext(ToastContext) ?? (() => {});
 }
 
 // ---------- Confirmation asked in the portal's own dialog (instead of window.confirm) ----------

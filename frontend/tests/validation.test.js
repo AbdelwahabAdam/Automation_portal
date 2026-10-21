@@ -2,7 +2,7 @@
 // helpers in src/formsMeta.js; the backend repeats the form checks (backend/tests/test_forms.py).
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { localDay, matchesQuery, normalize } from '../src/formsMeta.js';
+import { formatAmount, formatDay, localDay, matchesQuery, normalize } from '../src/formsMeta.js';
 import {
   evaluateForm, groupLines, initialValues, linePrice, normalizePhone, packageColors, packageQuantity, today,
 } from '../src/validation.js';
@@ -120,4 +120,12 @@ test('groupLines keeps a package together and each product on its own', () => {
     { name: 'x', group_id: null }, { name: 'x', group_id: null },
   ]);
   assert.deepEqual(groups.map((g) => [g.groupName, g.rows.map((r) => r.index)]), [['Pack', [0, 1]], [null, [2]], [null, [3]]]);
+});
+
+test('amounts and dates are written the way the portal reads them', () => {
+  assert.equal(formatAmount(8600), '8,600 درهم');
+  assert.equal(formatAmount(1234.5), '1,234.5 درهم');
+  assert.equal(formatDay('2026-10-21'), '21/10/2026');
+  assert.equal(formatDay(''), '');
+  assert.equal(formatDay('soon'), '');
 });

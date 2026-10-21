@@ -2,6 +2,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import App from './App.jsx';
+import { ToastHost } from './ds/index.jsx';
 import './ds/tokens.css';
 import './ds/ds.css';
 import './styles.css';
@@ -9,7 +10,9 @@ import './styles.css';
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>
-      <App />
+      <ToastHost>
+        <App />
+      </ToastHost>
     </BrowserRouter>
   </React.StrictMode>,
 );

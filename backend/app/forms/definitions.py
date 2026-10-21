@@ -103,8 +103,8 @@ FORM_TYPES = {
             ),
             section(
                 "قيمة الطلب",
-                f("subtotal_amount", "قيمة البنود قبل الخصم، شامل الضريبة", "number", computed=[]),
-                f("total_amount", "قيمة الطلب النهائية بعد الخصم، شامل الضريبة", "number",
+                f("subtotal_amount", "قيمة البنود قبل الخصم، شامل الضريبة", "number", money=True, computed=[]),
+                f("total_amount", "قيمة الطلب النهائية بعد الخصم، شامل الضريبة", "number", money=True,
                   computed=["subtotal_amount", "discount_amount"], negative_message="قيمة الخصم أكبر من قيمة البنود"),
                 *discount_fields(),
                 # A maintenance visit is paid in full (or is free: 0)
@@ -338,7 +338,7 @@ FORM_TYPES = {
                 f("refund_approved_by", "اسم المسؤول الذي اعتمد مبلغ الرد", "staff",
                   required_if={"field": "approved_refund", "gt": 0}),
                 money("refunded_amount", "المبلغ المردود فعليًا الآن", True),
-                f("refund_remaining", "المبلغ المتبقي من مبلغ الرد المعتمد", "number",
+                f("refund_remaining", "المبلغ المتبقي من مبلغ الرد المعتمد", "number", money=True,
                   computed=["approved_refund", "refunded_amount"],
                   negative_message="المبلغ المردود أكبر من مبلغ الرد المعتمد"),
                 f("refund_remaining_date", "موعد رد المتبقي، إن تم تحديده", "date"),

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import {
-  Alert, Badge, Button, Choice, Drawer, EmptyState, Field, Loading, PageHeader, SearchInput, TextInput, useConfirm,
+  Alert, Badge, Button, Choice, Drawer, EmptyState, Field, PageHeader, SearchInput, Skeleton, TextInput, useConfirm, useToast,
 } from '../ds/index.jsx';
 import { matchesQuery } from '../formsMeta.js';
 import { useAction } from '../hooks.js';
@@ -80,10 +80,10 @@ export default function Permissions() {
   const [roles, setRoles] = useState(null);
   const [departments, setDepartments] = useState([]);
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
   const [query, setQuery] = useState('');
   // null | { role } (role undefined for a new one)
   const [panel, setPanel] = useState(null);
+  const toast = useToast();
 
   useEffect(() => {
     Promise.all([api('/admin/roles'), api('/admin/pages')])
@@ -99,7 +99,6 @@ export default function Permissions() {
   );
 
   function open(next) {
-    setNotice('');
     setError('');
     setPanel(next);
   }
@@ -108,13 +107,13 @@ export default function Permissions() {
     setRoles((current) => (current.some((r) => r.id === savedRole.id)
       ? current.map((r) => (r.id === savedRole.id ? savedRole : r))
       : [...current, savedRole]));
-    setNotice(`تم حفظ الدور ${savedRole.name}.`);
+    toast(`تم حفظ الدور ${savedRole.name}`);
     setPanel(null);
   }
 
   function deleted(role) {
     setRoles((current) => current.filter((r) => r.id !== role.id));
-    setNotice(`تم حذف الدور ${role.name}.`);
+    toast(`تم حذف الدور ${role.name}`);
     setPanel(null);
   }
 
@@ -122,13 +121,12 @@ export default function Permissions() {
     <PageHeader title="الأدوار والصلاحيات" subtitle="حدد الصفحات التي يفتحها كل دور، ثم أسند الأدوار للمستخدمين"
       actions={<Button variant="primary" icon="plus" onClick={() => open({})}>إضافة دور</Button>} />
   );
-  if (!roles) return <div className="fl-stack">{header}{error ? <Alert tone="error">{error}</Alert> : <Loading />}</div>;
+  if (!roles) return <div className="fl-stack">{header}{error ? <Alert tone="error">{error}</Alert> : <Skeleton lines={5} />}</div>;
 
   const shown = roles.filter((role) => matchesQuery(query, role.name, ...role.pages.map((key) => pageLabels[key] || '')));
   return (
     <div className="fl-stack">
       {header}
-      {notice && <Alert tone="success" onDismiss={() => setNotice('')}>{notice}</Alert>}
       {error && <Alert tone="error">{error}</Alert>}
       <SearchInput value={query} onChange={setQuery} placeholder="ابحث باسم الدور أو الصفحة" />
       <p className="fl-results">النتائج: {shown.length} من {roles.length}</p>

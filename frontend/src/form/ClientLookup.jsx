@@ -15,6 +15,7 @@ const addressLabel = (address) => [address.emirate, address.area, address.street
 
 // form: { fieldNames, needsClientInfo, setValues, setErrors, setMessage, autoFill, autoFilled } from RequestForm
 export function useClientLookup(form) {
+  const toast = form.toast;
   // Result of the last search: { field, status: 'loading' | 'found' | 'many' | 'none' | 'error', ... }
   const [lookup, setLookup] = useState(null);
   // id of the found client's address currently filled in, or 'new' while typing one to save
@@ -91,7 +92,7 @@ export function useClientLookup(form) {
       });
       setLookup((current) => ({ ...current, client: { ...current.client, addresses: [...current.client.addresses, address] } }));
       setAddressChoice(String(address.id));
-      form.setMessage({ ok: 'تم حفظ العنوان الجديد لهذا العميل.' });
+      toast('تم حفظ العنوان الجديد لهذا العميل');
     } catch (err) {
       form.setMessage({ error: err.message });
     } finally {

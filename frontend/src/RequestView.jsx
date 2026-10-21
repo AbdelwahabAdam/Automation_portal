@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { api, openAttachment } from './api.js';
+import { FileRow } from './attachments.jsx';
 import {
   ActionBar, Alert, Badge, Button, Card, Dialog, Field, Icon, Loading, PageHeader, StatusBadge, TextArea,
 } from './ds/index.jsx';
-import { formatDate, formatMoney } from './formsMeta.js';
+import { formatAmount, formatDate, formatDay, formatMoney } from './formsMeta.js';
 import { DAFTRA_LIST_TYPES, groupLines } from './validation.js';
 
 // The PDFs approving a request saves on it (see backend/app/daftra_sync/)
@@ -231,18 +232,18 @@ export default function RequestView({ requestId, formTypes, onBack, ownerName, r
     }
     if (spec.type === 'files') {
       const files = request.attachments.filter((a) => a.field === spec.name);
+      // The pictures themselves: a reviewer sees the payment proof without opening each one
       return files.length ? (
         <span className="fl-files">
-          {files.map((file) => (
-            <button key={file.id} type="button" className="fl-link fl-row" onClick={() => openAttachment(file.id)}>
-              <Icon name="file-text" size={16} /><bdi>{file.filename}</bdi>
-            </button>
-          ))}
+          {files.map((file) => <FileRow key={file.id} file={file} />)}
         </span>
       ) : null;
     }
     const value = DAFTRA_LIST_TYPES.includes(spec.type) ? request.data[`${spec.name}_name`] || request.data[spec.name] : request.data[spec.name];
     if (value == null || value === '') return null;
+    // Amounts and dates are read the way the rest of the portal writes them
+    if (spec.money && typeof value === 'number') return <bdi data-fl-num>{formatAmount(value)}</bdi>;
+    if (spec.type === 'date') return <bdi data-fl-num>{formatDay(value) || String(value)}</bdi>;
     return <bdi>{Array.isArray(value) ? value.join('، ') : String(value)}</bdi>;
   }
 

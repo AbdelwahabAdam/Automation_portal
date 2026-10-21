@@ -66,6 +66,16 @@ const blobUrl = (blob) => {
   return url;
 };
 
+// A picture of an attachment to show on the page. Kept for as long as the page lives, since the
+// same file is shown again as the user scrolls; openAttachment is for opening one, which is one-off.
+const shownAttachments = new Map();
+export async function attachmentUrl(id) {
+  if (!shownAttachments.has(id)) {
+    shownAttachments.set(id, (await (await request(`/attachments/${id}`)).blob().then(URL.createObjectURL)));
+  }
+  return shownAttachments.get(id);
+}
+
 // Attachments need the auth header, so they are fetched and opened as a blob
 export async function openAttachment(id) {
   const tab = window.open('', '_blank');

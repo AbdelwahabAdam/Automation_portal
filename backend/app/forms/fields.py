@@ -9,7 +9,8 @@ def f(name, label, type="text", required=False, **extra):
 
 
 def money(name, label, required=False, **extra):
-    return f(name, label, "number", required, min=0, **extra)
+    # money=True: an amount in dirhams, which the form and the request's page print with its unit
+    return f(name, label, "number", required, min=0, money=True, **extra)
 
 
 def yes_no(name, label, required=True, **extra):
@@ -94,12 +95,13 @@ def amounts(total_label="قيمة الطلب النهائية بعد الخصم�
     # invoiced: the discount is printed on the Daftra invoice under a name, e.g. «مبادرة دعم نبع المزن»
     computed_total = auto_total or price_label
     total_field = (
-        f("total_amount", total_label, "number", computed=["subtotal_amount", "discount_amount"],
+        f("total_amount", total_label, "number", money=True, computed=["subtotal_amount", "discount_amount"],
           negative_message="قيمة الخصم أكبر من قيمة الطلب قبل الخصم")
         if computed_total else money("total_amount", total_label, True)
     )
     if auto_total:
-        subtotal = [f("subtotal_amount", "قيمة الطلب النهائية قبل الخصم، شامل الضريبة والإضافات", "number", computed=[])]
+        subtotal = [f("subtotal_amount", "قيمة الطلب النهائية قبل الخصم، شامل الضريبة والإضافات", "number",
+                      money=True, computed=[])]
     elif price_label:
         subtotal = [money("subtotal_amount", price_label, True, positive=True,
                           **({"default": str(price_default)} if price_default else {}))]
@@ -114,7 +116,7 @@ def amounts(total_label="قيمة الطلب النهائية بعد الخصم�
         money("paid_amount", paid_label, True, positive=must_pay),
         *([f("discount_label", "اسم الخصم كما يظهر في الفاتورة", required_if=DISCOUNTED, max_length=100,
              suggestions=DISCOUNT_LABELS)] if invoiced else []),
-        f("remaining_amount", remaining_label, "number", computed=["total_amount", "paid_amount"],
+        f("remaining_amount", remaining_label, "number", money=True, computed=["total_amount", "paid_amount"],
           negative_message="المبلغ المدفوع أكبر من قيمة الطلب"),
         # invoiced: what is left becomes a one-installment agreement in Daftra, due on this date
         f("remaining_due_date", "موعد سداد المتبقي (قسط اتفاقية التقسيط)", "date",

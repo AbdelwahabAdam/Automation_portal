@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api } from './api.js';
-import { Alert, Button, EmptyState, Field, Loading, PageHeader, SearchInput, Select, Tabs, useConfirm, useWidth } from './ds/index.jsx';
+import {
+  Alert, Button, EmptyState, Field, Filters, PageHeader, SearchInput, Select, Skeleton, Tabs, useConfirm, useToast, useWidth,
+} from './ds/index.jsx';
 import { matchesQuery } from './formsMeta.js';
 import RequestList, { TABLE_MIN_WIDTH } from './RequestList.jsx';
 
@@ -18,7 +20,6 @@ const searchText = (r) => [r.id, r.data.customer_name, r.data.phone, r.data.clie
 export default function MyRequests({ formTypes, onNew, onEdit, onView }) {
   const [requests, setRequests] = useState(null);
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
   const [params, setParams] = useSearchParams();
   const [query, setQuery] = useState('');
   const [formType, setFormType] = useState('');
@@ -29,6 +30,7 @@ export default function MyRequests({ formTypes, onNew, onEdit, onView }) {
   const tab = TABS.some((t) => t.value === params.get('tab')) ? params.get('tab') : 'all';
   const labels = Object.fromEntries(formTypes.map((type) => [type.key, type.label]));
   const [confirmDialog, confirm] = useConfirm();
+  const toast = useToast();
 
   useEffect(() => {
     api('/requests/mine').then(setRequests).catch((err) => setError(err.message));
@@ -48,7 +50,7 @@ export default function MyRequests({ formTypes, onNew, onEdit, onView }) {
     try {
       await api(`/requests/${request.id}`, { method: 'DELETE' });
       setRequests((current) => current.filter((r) => r.id !== request.id));
-      setNotice(`تم حذف المسودة رقم ${request.id}.`);
+      toast(`تم حذف المسودة رقم ${request.id}`);
     } catch (err) {
       setError(err.message);
     }
@@ -58,7 +60,7 @@ export default function MyRequests({ formTypes, onNew, onEdit, onView }) {
     <PageHeader title="طلباتي" subtitle="تابع طلباتك واستكمل المسودات والتعديلات المطلوبة"
       actions={<Button variant="primary" icon="plus" onClick={onNew}>طلب جديد</Button>} />
   );
-  if (!requests) return <div className="fl-stack" ref={area}>{header}{error ? <Alert tone="error">{error}</Alert> : <Loading />}</div>;
+  if (!requests) return <div className="fl-stack" ref={area}>{header}{error ? <Alert tone="error">{error}</Alert> : <Skeleton lines={6} />}</div>;
 
   const shown = filtered.slice((page - 1) * pageSize, page * pageSize);
   // A request still with its owner was last changed by them; a sent one, when it was sent or decided
@@ -116,7 +118,6 @@ export default function MyRequests({ formTypes, onNew, onEdit, onView }) {
           </Select>
         </Field>
       </div>
-      {notice && <Alert tone="success" onDismiss={() => setNotice('')}>{notice}</Alert>}
       {error && <Alert tone="error">{error}</Alert>}
       {list}
       {confirmDialog}

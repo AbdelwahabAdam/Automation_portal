@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState } from 'react';
 import { api, downloadFile } from '../api.js';
 import {
-  Alert, Badge, Button, EmptyState, Field, Filters, Loading, PageHeader, Pager, SearchInput, Select, TextInput,
+  Alert, Badge, Button, EmptyState, Field, Filters, PageHeader, Pager, SearchInput, Select, Skeleton, TextInput,
 } from '../ds/index.jsx';
 import { formatDate } from '../formsMeta.js';
 
@@ -91,7 +91,7 @@ export default function AuditLog() {
     <PageHeader title="سجل النشاط" subtitle="كل دخول وتعديل وتحميل ملف، مع القيم قبل التعديل وبعده"
       actions={<Button icon="download" loading={exporting} disabled={!total} onClick={exportCsv}>تصدير إلى Excel</Button>} />
   );
-  if (!options) return <div className="fl-stack">{header}{error ? <Alert tone="error">{error}</Alert> : <Loading />}</div>;
+  if (!options) return <div className="fl-stack">{header}{error ? <Alert tone="error">{error}</Alert> : <Skeleton lines={6} />}</div>;
 
   const filtered = Object.values(filters).some((value) => value !== '');
   const actionTone = (action) => (FAILED.has(action) || DELETES.has(action) ? 'error' : action.startsWith('auth.') ? 'neutral' : 'info');
@@ -135,7 +135,7 @@ export default function AuditLog() {
       </Filters>
       {error && <Alert tone="error">{error}</Alert>}
       {!result ? (
-        <Loading />
+        <Skeleton lines={6} />
       ) : !total ? (
         <EmptyState icon="history" title={filtered ? 'لا توجد سجلات مطابقة' : 'لا توجد سجلات بعد'} />
       ) : (
