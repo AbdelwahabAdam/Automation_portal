@@ -13,7 +13,10 @@ const COLUMNS = 5;
 // forPackage: a product picked on its own has its own quantity box instead of «الكمية».
 // packageName: the package's (or the product's) name, which decides the cover colours offered.
 function DetailFields({ lineFields, details, errors, keyPrefix, onChange, forPackage, packageName }) {
-  const shown = lineFields.filter((dspec) => forPackage || !dspec.package_only);
+  // A colour field with no colours for this package (or for a product picked on its own) would only
+  // render as a disabled box saying so, which is a field's worth of space for nothing
+  const shown = lineFields.filter((dspec) => (forPackage || !dspec.package_only)
+    && (dspec.type !== 'package_color' || packageColors(dspec, packageName).length > 0));
   if (!shown.length) return null;
   // A field with a partner (one marked "beside" it) shares a full line with it: two thirds and one third
   const besides = Object.fromEntries(shown.filter((dspec) => dspec.beside).map((dspec) => [dspec.beside, dspec]));
@@ -152,15 +155,15 @@ export default function OrderLines({ spec, value, invalid, catalog, onChange, li
       <Fragment key={`line-${index}`}>
         <tr className={inPackage ? 'fl-row--child' : undefined}>
           <td className="fl-cell--wrap fl-cell--title"><bdi>{line.name}</bdi></td>
-          <td data-label="الكمية">
+          <td className="fl-cell--qty" data-label="الكمية">
             <input
               className="fl-mini fl-order-lines__qty" type="number" min="1" inputMode="numeric"
               aria-label={`الكمية — ${line.name}`} value={line.quantity}
               onChange={(e) => setQuantity(index, Math.max(1, Number(e.target.value) || 1))}
             />
           </td>
-          <td data-label="سعر الوحدة (درهم)" data-fl-num><bdi dir="ltr">{formatMoney(unit)}</bdi></td>
-          <td data-label="الإجمالي (درهم)" data-fl-num><bdi dir="ltr">{formatMoney(unit * (Number(line.quantity) || 0))}</bdi></td>
+          <td className="fl-cell--unit" data-label="سعر الوحدة (درهم)" data-fl-num><bdi dir="ltr">{formatMoney(unit)}</bdi></td>
+          <td className="fl-cell--total" data-label="الإجمالي (درهم)" data-fl-num><bdi dir="ltr">{formatMoney(unit * (Number(line.quantity) || 0))}</bdi></td>
           <td className="fl-cell--actions">
             <Button type="button" size="sm" variant="ghost" icon="trash" iconOnly label={`إزالة ${line.name}`} onClick={() => removeLine(index)} />
           </td>
@@ -191,9 +194,9 @@ export default function OrderLines({ spec, value, invalid, catalog, onChange, li
             <span className="fl-cell__sub">باقة — <span data-fl-num>{group.rows.length}</span> منتجات</span>
           </td>
           {/* The package's own «الكمية» is set by its stepper below; here it is what the number means */}
-          <td data-label="عدد الباقات" data-fl-num>{count}</td>
-          <td data-label="سعر الوحدة (درهم)" className="fl-muted">—</td>
-          <td data-label="الإجمالي (درهم)" data-fl-num><strong><bdi dir="ltr">{formatMoney(total)}</bdi></strong></td>
+          <td className="fl-cell--qty" data-label="عدد الباقات" data-fl-num>{count}</td>
+          <td className="fl-cell--unit fl-muted" data-label="سعر الوحدة (درهم)">—</td>
+          <td className="fl-cell--total" data-label="الإجمالي (درهم)" data-fl-num><strong><bdi dir="ltr">{formatMoney(total)}</bdi></strong></td>
           <td className="fl-cell--actions">
             <Button type="button" size="sm" variant="ghost" icon={open ? 'chevron-up' : 'chevron-down'} iconOnly
               aria-expanded={open} label={open ? `إخفاء منتجات ${group.groupName}` : `عرض منتجات ${group.groupName}`}
