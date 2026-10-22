@@ -77,10 +77,15 @@ def test_approving_a_new_sale_creates_everything_in_daftra(client, db, fake_daft
     assert fields["description"].endswith(f"PORTAL-{request_id}")
     assert "■ المسؤول: Manager One" in fields["description"]
     saved = next(iter(fake_daftra.work_orders.values()))
+    # Every field goes, blank ones included: Daftra empties any field the body leaves out. The flag is
+    # Daftra's own (its spelling), and صورة المنتج carries a file id — text in it makes the save 500.
     assert saved["custom"] == {
-        "field_30": "لا توجد صورة — أُنشئ من البوابة", "field_32": "سقيا الخير-  اللون الاسود مقاس طبيعي",
-        "field_37": "https://maps.google.com/?q=24.17870,55.60451", "field_39": "Sales One",
-        "field_44": "اللون الاسود", "field_47": "بسم الله", "field_49": "اللون الاسود مقاس طبيعي",
+        "CONTAINE_CUSTOM_DATA": "1",
+        # field_30 is the first line's product image (seed.catalog gives the cooler file_id 7809)
+        "field_8": "", "field_30": "7809", "field_32": "سقيا الخير-  اللون الاسود مقاس طبيعي",
+        "field_33": "", "field_36": "", "field_37": "https://maps.google.com/?q=24.17870,55.60451",
+        "field_38": "", "field_39": "Sales One", "field_44": "اللون الاسود", "field_45": "", "field_46": "",
+        "field_47": "بسم الله", "field_49": "اللون الاسود مقاس طبيعي",
     }
     assert fake_daftra.invoices[invoice_id]["work_order_id"] == saved["id"]
 

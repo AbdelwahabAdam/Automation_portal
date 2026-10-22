@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     daftra_inscription_product_id: int = 194
     # "exchange contract": the one line of a maintenance contract renewal invoice
     daftra_renewal_product_id: int = 37
+    # File id for the work order's صورة المنتج (field_30). Daftra requires that field and treats it
+    # as a file: text in it makes the save answer 500 and the work order's التفاصيل tab error. The
+    # portal cannot upload, so it points every work order at one image uploaded there by hand.
+    daftra_work_order_image_id: int = 16412
     # Keys of the client custom fields Daftra requires on a new client: اسم الجهاز and Coordinates
     daftra_client_device_field: str = "test"
     # The اسم الجهاز every new client gets (Nabaa + food cooler); the form does not ask for it

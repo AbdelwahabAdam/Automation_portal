@@ -11,7 +11,8 @@ from .test_forms import PACKAGE, TODAY, new_sale
 
 def catalog(db) -> dict:
     """The two products and the package of tests.test_forms, with the same ids and prices."""
-    cooler = Product(id=1, name="WATER COOLER BLACK 3 T", unit_price=Decimal("1000"), daftra_id=501)
+    # file_id: its image in Daftra, which the work order's صورة المنتج carries
+    cooler = Product(id=1, name="WATER COOLER BLACK 3 T", unit_price=Decimal("1000"), daftra_id=501, file_id=7809)
     contract = Product(id=2, name="exchange contract", unit_price=Decimal("1200"), daftra_id=37,
                        description="عقد تبديل")
     filter_ = Product(id=3, name="RO .PP 10", unit_price=Decimal("50"), daftra_id=625, maintenance_group="الفلاتر")

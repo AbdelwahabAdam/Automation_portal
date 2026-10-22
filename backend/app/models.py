@@ -162,6 +162,8 @@ class Product(Base):
     sku: Mapped[str | None] = mapped_column(String(20), unique=True)
     # Daftra's own product id, so a re-import from products.json matches the same row, not by name
     daftra_id: Mapped[int | None] = mapped_column(unique=True)
+    # Its image in Daftra (ProductImageS3), as a file id: what the work order's صورة المنتج holds
+    file_id: Mapped[int | None]
     # As written on quotations and invoices
     name: Mapped[str] = mapped_column(String(200), unique=True)
     name_ar: Mapped[str] = mapped_column(String(200), default="", server_default="")

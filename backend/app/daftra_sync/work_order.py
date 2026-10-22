@@ -7,9 +7,10 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 
 from .. import daftra, printouts
+from ..config import settings
 from ..daftra import DaftraError
 from ..forms import NO_INSCRIPTION, package_colors, package_quantity
-from ..models import Request, User
+from ..models import Product, Request, User
 from ..text import UAE, day_month_year, display_name
 from .common import WORK_ORDER_ATTACHMENT_FIELD, attach_pdf, marker
 
@@ -30,8 +31,9 @@ WORK_ORDER_FIELDS = {
     "inscription": "field_47",               # الآية القرآنية المطبوعة
     "plate_color": "field_49",               # لون اللوحه
 }
-# The portal cannot upload a file, and Daftra will not save the other fields while صورة المنتج is empty
-PRODUCT_IMAGE_PLACEHOLDER = "لا توجد صورة — أُنشئ من البوابة"
+# Daftra replaces the whole custom form on every save, so a field left out of the body is emptied,
+# not kept. Every field is therefore always sent, blank ones included.
+CONTAINS_CUSTOM_DATA = {"CONTAINE_CUSTOM_DATA": "1"}  # Daftra's own spelling; required on every save
 # Colours as staff write them in those fields
 COLOR_TEXT = {"أبيض": "اللون الابيض", "أسود": "اللون الاسود", "ذهبي": "اللون الدهبي"}
 BASE_TEXT = {"أسود": "لون القاعده ( الاسود)", "أبيض": "لون القاعده ( الابيض )"}
@@ -44,7 +46,19 @@ def package_lines(data: dict) -> list[dict]:
             if not line.get("group_id") or line["group_id"] not in {l.get("group_id") for l in lines[:i]}]
 
 
-def work_order_custom_fields(request: Request) -> dict:
+def product_image_id(data: dict, db: Session) -> str:
+    """The file id for صورة المنتج: the image of the first line's product, which is what the work
+    order is about. Falls back to the account's stand-in image when that product has none."""
+    first = next((line for line in (data.get("order_lines") or [])
+                  if str(line.get("product_id", "")).isdigit()), None)
+    if first is not None:
+        product = db.get(Product, int(first["product_id"]))
+        if product is not None and product.file_id:
+            return str(product.file_id)
+    return str(settings.daftra_work_order_image_id)
+
+
+def work_order_custom_fields(request: Request, db: Session) -> dict:
     """The custom field values for the work order, from the request. A field the request has
     nothing for is left out. Several packages' values are joined with « / »."""
     data = request.data
@@ -87,28 +101,35 @@ def work_order_custom_fields(request: Request) -> dict:
         "front_design": joined(lambda d, _: d.get("front_design")),
         "inscription": joined(inscription),
         "plate_color": joined(lambda d, _: COLOR_TEXT.get(d.get("cover_color")) or (f"اللون {d['cover_color']}" if d.get("cover_color") else "")),
-        "product_image": PRODUCT_IMAGE_PLACEHOLDER,
+        "product_image": product_image_id(data, db),
     }
-    return {WORK_ORDER_FIELDS[name]: value for name, value in values.items() if value}
+    # Every field, blank ones included: Daftra empties any field the body leaves out
+    return {WORK_ORDER_FIELDS[name]: value or "" for name, value in values.items()}
 
 
-def set_work_order_fields(request: Request, row: dict) -> bool:
-    """Writes the work order's custom fields, then reads them back: Daftra saves them but answers
-    with an error page, so its answer cannot tell whether they were saved. A failure here does not
-    stop the approval; the same details are in the work order's description and PDF."""
-    fields = work_order_custom_fields(request)
+def set_work_order_fields(request: Request, row: dict, db: Session) -> bool:
+    """Writes the work order's custom fields, then reads them back to be sure. With a real file id in
+    صورة المنتج Daftra answers 200, but it answered 500 for a while and the values saved anyway, so the
+    read decides. A failure here does not stop the approval; the same details are in the description
+    and the PDF."""
+    fields = work_order_custom_fields(request, db)
     try:
         daftra.update_unconfirmed(f"work_orders/{request.daftra_work_order_id}.json", {
             # An edit needs these again, as the work order has them
             "WorkOrder": {"title": row.get("title"), "start_date": str(row.get("start_date") or "")[:10],
                           "delivery_date": str(row.get("delivery_date") or "")[:10]},
-            "CustomModel": fields,
+            "CustomModel": {**CONTAINS_CUSTOM_DATA, **fields},
         })
-        # The values show up a moment after Daftra answers
+        # The values show up a moment after Daftra answers. Daftra reads an empty field back as the
+        # text "None", so both it and "" count as blank.
+        def blank_or(value) -> str:
+            text = str(value) if value is not None else ""
+            return "" if text in ("None", "") else text
+
         for attempt in range(4):
             time.sleep(1 + attempt)
             saved = daftra.read_v2("work_order", request.daftra_work_order_id).get("custom_data") or {}
-            if all(str(saved.get(key) or "") == str(value) for key, value in fields.items()):
+            if all(blank_or(saved.get(key)) == blank_or(value) for key, value in fields.items()):
                 return True
     except DaftraError:
         pass
@@ -199,7 +220,7 @@ def ensure_work_order(request: Request, invoice: dict, reviewer: User, db: Sessi
     if str(invoice.get("work_order_id") or "0") != str(request.daftra_work_order_id):
         daftra.post(f"invoices/assign_work_order/{request.daftra_invoice_id}.json",
                     {"Invoice": {"work_order_id": request.daftra_work_order_id}})
-    fields_saved = set_work_order_fields(request, row)
+    fields_saved = set_work_order_fields(request, row, db)
     return save_work_order_pdf(request, row, invoice, reviewer, db), fields_saved
 
 
