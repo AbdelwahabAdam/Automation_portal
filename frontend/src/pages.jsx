@@ -1,5 +1,6 @@
 import AuditLog from './admin/AuditLog.jsx';
 import Catalog from './admin/Catalog.jsx';
+import DaftraSync from './admin/DaftraSync.jsx';
 import MailTest from './admin/MailTest.jsx';
 import Permissions from './admin/Permissions.jsx';
 import Users from './admin/Users.jsx';
@@ -16,6 +17,7 @@ export const PAGE_COMPONENTS = {
   'admin.permissions': Permissions,
   'admin.audit': AuditLog,
   'admin.catalog': Catalog,
+  'admin.daftra_sync': DaftraSync,
   'admin.mail': MailTest,
 };
 
@@ -31,5 +33,6 @@ export const PAGE_ICONS = {
   'admin.permissions': 'shield',
   'admin.audit': 'history',
   'admin.catalog': 'package',
+  'admin.daftra_sync': 'refresh',
   'admin.mail': 'mail',
 };

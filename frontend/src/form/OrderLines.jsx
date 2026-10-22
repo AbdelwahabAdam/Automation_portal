@@ -162,8 +162,8 @@ export default function OrderLines({ spec, value, invalid, catalog, onChange, li
               onChange={(e) => setQuantity(index, Math.max(1, Number(e.target.value) || 1))}
             />
           </td>
-          <td className="fl-cell--unit" data-label="سعر الوحدة (درهم)" data-fl-num><bdi dir="ltr">{formatMoney(unit)}</bdi></td>
-          <td className="fl-cell--total" data-label="الإجمالي (درهم)" data-fl-num><bdi dir="ltr">{formatMoney(unit * (Number(line.quantity) || 0))}</bdi></td>
+          <td className="fl-cell--unit" data-label="سعر الوحدة" data-fl-num><bdi dir="ltr">{formatMoney(unit)}</bdi></td>
+          <td className="fl-cell--total" data-label="الإجمالي" data-fl-num><bdi dir="ltr">{formatMoney(unit * (Number(line.quantity) || 0))}</bdi></td>
           <td className="fl-cell--actions">
             <Button type="button" size="sm" variant="ghost" icon="trash" iconOnly label={`إزالة ${line.name}`} onClick={() => removeLine(index)} />
           </td>
@@ -195,8 +195,8 @@ export default function OrderLines({ spec, value, invalid, catalog, onChange, li
           </td>
           {/* The package's own «الكمية» is set by its stepper below; here it is what the number means */}
           <td className="fl-cell--qty" data-label="عدد الباقات" data-fl-num>{count}</td>
-          <td className="fl-cell--unit fl-muted" data-label="سعر الوحدة (درهم)">—</td>
-          <td className="fl-cell--total" data-label="الإجمالي (درهم)" data-fl-num><strong><bdi dir="ltr">{formatMoney(total)}</bdi></strong></td>
+          <td className="fl-cell--unit fl-muted" data-label="سعر الوحدة">—</td>
+          <td className="fl-cell--total" data-label="الإجمالي" data-fl-num><strong><bdi dir="ltr">{formatMoney(total)}</bdi></strong></td>
           <td className="fl-cell--actions">
             <Button type="button" size="sm" variant="ghost" icon={open ? 'chevron-up' : 'chevron-down'} iconOnly
               aria-expanded={open} label={open ? `إخفاء منتجات ${group.groupName}` : `عرض منتجات ${group.groupName}`}

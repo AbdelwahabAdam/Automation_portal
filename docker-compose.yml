@@ -34,6 +34,7 @@ services:
       MAIL_FROM: ${MAIL_FROM:-FutureLife Portal <no-reply@futurelife.local>}
       DAFTRA_SUBDOMAIN: ${DAFTRA_SUBDOMAIN:-}
       DAFTRA_API_KEY: ${DAFTRA_API_KEY:-}
+      DAFTRA_SEND_PAYMENT_PROOF: ${DAFTRA_SEND_PAYMENT_PROOF:-false}
     ports:
       - "8001:8001"
     volumes:

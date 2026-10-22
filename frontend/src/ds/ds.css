@@ -343,38 +343,46 @@ input.fl-input[type="date"] { min-block-size: calc(var(--fl-field-height) - 2px)
 /* A product that came with a package, listed under it */
 .fl-table tr.fl-row--child > td:first-child { padding-inline-start: var(--fl-space-6); }
 .fl-order-lines__qty { inline-size: 72px; }
-/* Five columns cannot fit a phone, and a form is no place to scroll sideways for a price: below
-   this width each row becomes its own block, every number keeping the heading it had as a column */
+/* Five columns cannot fit a phone, and a form is no place to scroll sideways for a price. Below
+   this width the table becomes a short stack of cards, one per line, each as small as it can be
+   while every number still says what it is. The desktop table above is untouched. */
 @media (max-width: 36rem) {
+  .fl-order-lines.fl-table-wrap { border: 0; border-radius: 0; background: none; overflow: visible; }
+  .fl-order-lines .fl-table-scroll { overflow: visible; }
   .fl-order-lines .fl-table, .fl-order-lines .fl-table tbody, .fl-order-lines .fl-table td { display: block; }
   .fl-order-lines .fl-table thead { display: none; }
-  /* Two lines per row: the name with its buttons, then «الكمية × السعر = الإجمالي» as one strip */
+  /* The card: the name and its buttons on one line, the three numbers under them on the next */
   .fl-order-lines .fl-table tr {
     display: flex; flex-wrap: wrap; align-items: center; column-gap: var(--fl-space-3); row-gap: var(--fl-space-1);
-    padding: var(--fl-space-3) var(--fl-table-cell-padding-inline);
-    border-block-end: var(--fl-border-width-default) solid var(--fl-color-border-default);
+    padding: var(--fl-space-2) var(--fl-space-3);
+    border: var(--fl-border-width-default) solid var(--fl-color-border-default);
+    border-radius: var(--fl-radius-md); background: var(--fl-color-background-surface);
+    margin-block-end: var(--fl-space-2);
   }
-  .fl-order-lines .fl-table tr.fl-row--detail, .fl-order-lines .fl-table tr:last-child { border-block-end: 0; }
+  .fl-order-lines .fl-table tbody tr:hover > td { background: none; }
   .fl-order-lines .fl-table td {
-    display: flex; align-items: center; gap: var(--fl-space-2);
+    display: flex; align-items: baseline; gap: var(--fl-space-2);
     block-size: auto; min-block-size: 0; padding: 0; border-block-end: 0;
+    font-size: var(--fl-type-body-sm-size);
   }
-  /* The column headings are gone, so each number says what it is with a sign instead of a word */
-  .fl-order-lines .fl-table td::before { content: none; }
-  .fl-order-lines .fl-table td.fl-cell--title { flex: 1 1 55%; min-inline-size: 0; }
+  .fl-order-lines .fl-table td.fl-cell--title { flex: 1 1 60%; min-inline-size: 0; align-items: center; }
   .fl-order-lines .fl-table td.fl-cell--actions { position: static; margin-inline-start: auto; }
-  .fl-order-lines .fl-table td.fl-cell--qty::before {
+  /* Each number keeps the heading its column gave it, in small print beside it */
+  .fl-order-lines .fl-table td[data-label]::before {
     content: attr(data-label); color: var(--fl-color-text-secondary); font-size: var(--fl-type-caption-size);
   }
-  .fl-order-lines .fl-table td.fl-cell--unit::before,
-  .fl-order-lines .fl-table td.fl-cell--total::before { content: "×"; color: var(--fl-color-text-secondary); }
-  .fl-order-lines .fl-table td.fl-cell--total::before { content: "="; }
+  /* The unit is on the total alone: it says the three of them are money, without repeating itself */
   .fl-order-lines .fl-table td.fl-cell--total { font-weight: var(--fl-font-weight-semibold); }
+  .fl-order-lines .fl-table td.fl-cell--total::after { content: " درهم"; font-weight: var(--fl-font-weight-regular); color: var(--fl-color-text-secondary); }
   /* A package counts in packages, and has no unit price of its own to show */
   .fl-order-lines .fl-table tr.fl-row--group td.fl-cell--unit { display: none; }
-  .fl-order-lines .fl-table tr.fl-row--detail { padding-block: 0 var(--fl-space-3); }
-  .fl-order-lines .fl-table tr.fl-row--child > td:first-child { padding-inline-start: var(--fl-space-5); }
-  .fl-order-lines .fl-table tr.fl-row--child { background: var(--fl-color-background-sunken); }
+  .fl-order-lines .fl-table tr.fl-row--group { background: var(--fl-color-background-sunken); }
+  /* A product that came with a package sits under it, slightly in and quieter */
+  .fl-order-lines .fl-table tr.fl-row--child { margin-inline-start: var(--fl-space-4); }
+  /* The fields of a package are not a card; they follow the one they belong to */
+  .fl-order-lines .fl-table tr.fl-row--detail {
+    display: block; border: 0; background: none; padding: 0; margin-block-end: var(--fl-space-2);
+  }
   /* The fields under a package or a product: tighter than a page's own form */
   .fl-order-lines__details { padding: var(--fl-space-3); }
   .fl-order-lines__details.fl-grid { gap: var(--fl-space-3); }

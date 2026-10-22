@@ -294,3 +294,23 @@ class RequestEvent(Base):
     note: Mapped[str | None] = mapped_column(Text)
 
     request: Mapped[Request] = relationship(back_populates="events")
+
+
+class SyncRun(Base):
+    """One refresh of our copy of a Daftra list (products or clients), from the «المزامنة مع دفترة»
+    admin page or the nightly client job, with what it changed (summary) or why it failed."""
+
+    __tablename__ = "sync_runs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # "products" or "clients" (app.daftra_refresh.KINDS)
+    kind: Mapped[str] = mapped_column(String(20), index=True)
+    # queued -> running -> done | failed
+    status: Mapped[str] = mapped_column(String(10))
+    started_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    # Name at the time (or «المزامنة الليلية»), kept if the user is later deleted
+    started_by_name: Mapped[str] = mapped_column(String(120), default="", server_default="")
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    summary: Mapped[dict | None] = mapped_column(JSONB)
+    error: Mapped[str] = mapped_column(Text, default="", server_default="")

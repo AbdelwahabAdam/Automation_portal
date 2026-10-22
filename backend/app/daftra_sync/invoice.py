@@ -173,7 +173,11 @@ def send_payment_proof(request: Request, invoice: dict) -> bool:
     Two steps: the file goes into Daftra's file store, then its id is linked to the invoice.
     Best effort, like the PDFs — the invoice and its receipt already exist, so a proof that
     cannot be sent does not stop the approval, and the approval's log says it was not sent.
+
+    Off unless settings.daftra_send_payment_proof says otherwise.
     """
+    if not settings.daftra_send_payment_proof:
+        return False
     if invoice.get("InvoiceDocument"):
         return True
     sent = False

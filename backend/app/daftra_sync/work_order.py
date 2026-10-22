@@ -11,7 +11,7 @@ from ..config import settings
 from ..daftra import DaftraError
 from ..forms import NO_INSCRIPTION, package_colors, package_quantity
 from ..models import Product, Request, User
-from ..text import UAE, day_month_year, display_name
+from ..text import UAE, day_month_year, display_name, squash
 from .common import WORK_ORDER_ATTACHMENT_FIELD, attach_pdf, marker
 
 # The work order's custom fields in our Daftra account (its form «نموذج أمر تشغيل ومتابعة عقد»), worked
@@ -58,7 +58,7 @@ def product_image_id(data: dict, db: Session) -> str:
     return str(settings.daftra_work_order_image_id)
 
 
-def work_order_custom_fields(request: Request, db: Session) -> dict:
+def work_order_values(request: Request, db: Session) -> dict:
     """The custom field values for the work order, from the request. A field the request has
     nothing for is left out. Several packages' values are joined with « / »."""
     data = request.data
@@ -103,8 +103,13 @@ def work_order_custom_fields(request: Request, db: Session) -> dict:
         "plate_color": joined(lambda d, _: COLOR_TEXT.get(d.get("cover_color")) or (f"اللون {d['cover_color']}" if d.get("cover_color") else "")),
         "product_image": product_image_id(data, db),
     }
+    return values
+
+
+def work_order_custom_fields(request: Request, db: Session) -> dict:
+    """The same values under the field ids Daftra knows them by."""
     # Every field, blank ones included: Daftra empties any field the body leaves out
-    return {WORK_ORDER_FIELDS[name]: value or "" for name, value in values.items()}
+    return {WORK_ORDER_FIELDS[name]: value or "" for name, value in work_order_values(request, db).items()}
 
 
 def set_work_order_fields(request: Request, row: dict, db: Session) -> bool:
@@ -225,16 +230,25 @@ def ensure_work_order(request: Request, invoice: dict, reviewer: User, db: Sessi
 
 
 def save_work_order_pdf(request: Request, row: dict, invoice: dict, reviewer: User, db: Session) -> bool:
-    """Attaches the work order PDF once; Daftra has no file for a work order, so the portal draws it.
+    """Attaches the work order PDF once, drawn to match «نموذج أمر تشغيل ومتابعة عقد» as Daftra
+    prints it: Daftra's own file is behind a staff login, which an API key cannot open.
     row: the work order as Daftra returns it, for its number, title and dates."""
     if any(a.field == WORK_ORDER_ATTACHMENT_FIELD for a in request.attachments):
         return True
+    data = request.data
     start, delivery = str(row.get("start_date") or ""), str(row.get("delivery_date") or "")
+    address = "، ".join(str(data[key]) for key in ("emirate", "area", "street", "house") if data.get(key))
     try:
         content = printouts.work_order(
-            number=request.daftra_work_order_no or "", title=row.get("title") or work_order_title(request.data, invoice),
+            number=request.daftra_work_order_no or "", title=row.get("title") or work_order_title(data, invoice),
             start=day_month_year(start), delivery=day_month_year(delivery),
-            days=int(request.data.get("installation_days") or 0), rows=work_order_rows(request, reviewer),
+            rows=work_order_rows(request, reviewer), values=work_order_values(request, db),
+            client_name=squash(data.get("customer_name")), client_code=str(data.get("client_code") or ""),
+            phone=str(data.get("phone") or ""), address=address,
+            location_url=str(data.get("location_url") or ""), coordinates=str(data.get("coordinates") or ""),
+            # Daftra holds the picture by a file id and gives no address for it, so the line is
+            # left to fill in, as صورة المعاينة is on its own form
+            product_image="", invoice_no=request.daftra_invoice_no or "",
             responsible=display_name(reviewer), sales_person=display_name(request.created_by),
         )
     except printouts.PrintoutError:

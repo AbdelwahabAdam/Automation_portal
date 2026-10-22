@@ -3,7 +3,7 @@
 Usage: python -m app.import_clients [path-to-a-client-export.json]
 
 With no argument, fetches every client live from Daftra (app.daftra.list_clients) — this is
-what the nightly cron job runs. With a path, reads a Daftra client export instead (the shape
+what the nightly cron job runs, recorded as a sync run (app.daftra_refresh) like the admin page's button. With a path, reads a Daftra client export instead (the shape
 GET /clients.json returns, saved to a file), for offline use or a one-off re-import.
 
 Only clients with a phone number are kept, since phone is how the sales forms look one up.
@@ -17,7 +17,8 @@ Daftra's own client id — this is a straight reflection of Daftra, not a merge.
 import argparse
 import json
 
-from . import daftra
+from sqlalchemy import select
+
 from .daftra import address_from_daftra, local_phone
 from .database import SessionLocal, run_migrations
 from .models import Address, Client
@@ -65,21 +66,38 @@ def main():
     parser.add_argument("clients_json", nargs="?", help="a saved Daftra client export; omit to fetch live from Daftra")
     args = parser.parse_args()
 
-    if args.clients_json:
+    run_migrations()
+    if not args.clients_json:
+        # Live from Daftra (the nightly job): recorded as a run, so the admin page shows it
+        from .daftra_refresh import run_now
+        run = run_now("clients", by_name="المزامنة الليلية")
+        if run.status != "done":
+            raise SystemExit(f"Client sync failed: {run.error}")
+        summary = run.summary
+    else:
         with open(args.clients_json, encoding="utf-8-sig") as f:
             raw_clients = [entry["Client"] for entry in json.load(f)["data"]]
-    else:
-        raw_clients = daftra.list_clients()
+        with SessionLocal() as db:
+            summary = replace_clients(db, raw_clients)
+            db.commit()
+    print(f"{summary['kept']} of {summary['daftra_clients']} clients kept (had a phone number) and loaded, "
+          f"with {summary['addresses']} addresses")
 
+
+def replace_clients(db, raw_clients: list[dict]) -> dict:
+    """Empties clients and addresses and fills them again from raw_clients, in the caller's
+    transaction (the caller commits). Returns counts, and which clients came or went."""
     rows = client_rows(raw_clients)
-    run_migrations()
-    with SessionLocal() as db:
-        db.query(Address).delete()
-        db.query(Client).delete()
-        db.add_all(Client(**row) for row in rows)
-        db.commit()
-    n_addresses = sum(len(row["addresses"]) for row in rows)
-    print(f"{len(rows)} of {len(raw_clients)} clients kept (had a phone number) and loaded, with {n_addresses} addresses")
+    before = set(db.scalars(select(Client.daftra_id)))
+    db.query(Address).delete()
+    db.query(Client).delete()
+    db.add_all(Client(**row) for row in rows)
+    after = {row["daftra_id"] for row in rows}
+    return {
+        "daftra_clients": len(raw_clients), "kept": len(rows), "without_phone": len(raw_clients) - len(rows),
+        "addresses": sum(len(row["addresses"]) for row in rows),
+        "added": len(after - before), "removed": len(before - after),
+    }
 
 
 if __name__ == "__main__":

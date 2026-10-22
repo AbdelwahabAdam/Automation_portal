@@ -6,6 +6,7 @@ These pin the exact payloads sent to Daftra, since they were tuned against the l
 from datetime import datetime, timedelta, timezone
 
 from app import daftra
+from app.config import settings
 from app.daftra_sync.invoice import WARRANTY_TERMS_HTML
 from app.models import Attachment, Request
 
@@ -15,6 +16,11 @@ from .test_forms import TODAY
 from .test_requests import create, submitted_sale, upload
 
 UAE = timezone(timedelta(hours=4))
+
+
+def sending_payment_proof(monkeypatch):
+    """Turns on putting the إثبات الدفع on the invoice in Daftra (off by default)."""
+    monkeypatch.setattr(settings, "daftra_send_payment_proof", True)
 
 
 def approve(client, user, request_id, revision=1):
@@ -31,7 +37,9 @@ def test_review_queue_shows_sent_requests_only(client, db, sales, manager):
     assert client.get("/api/review/requests", headers=auth(sales)).status_code == 403
 
 
-def test_approving_a_new_sale_creates_everything_in_daftra(client, db, fake_daftra, sales, manager, outbox):
+def test_approving_a_new_sale_creates_everything_in_daftra(client, db, fake_daftra, sales, manager, outbox,
+                                                           monkeypatch):
+    sending_payment_proof(monkeypatch)
     seed.catalog(db)
     request_id = submitted_sale(client, db, sales)
     response = approve(client, manager, request_id)
@@ -130,8 +138,10 @@ def test_a_failed_step_is_resumed_without_duplicates(client, db, fake_daftra, sa
     assert request.status == "approved" and request.daftra_error is None
 
 
-def test_a_payment_proof_daftra_refuses_does_not_stop_the_approval(client, db, fake_daftra, sales, manager):
+def test_a_payment_proof_daftra_refuses_does_not_stop_the_approval(client, db, fake_daftra, sales, manager,
+                                                                  monkeypatch):
     """The invoice and receipt are already made, so an attachment Daftra will not take is let go."""
+    sending_payment_proof(monkeypatch)
     seed.catalog(db)
     request_id = submitted_sale(client, db, sales, create_work_order="لا", installation_days="")
     fake_daftra.fail_once = "/v2/api/entity/invoice_document"
@@ -141,6 +151,15 @@ def test_a_payment_proof_daftra_refuses_does_not_stop_the_approval(client, db, f
     assert request.status == "approved" and request.daftra_error is None
     assert [path for _, path, _, _ in fake_daftra.failed] == ["/v2/api/entity/invoice_document"]
     assert fake_daftra.invoices[request.daftra_invoice_id]["documents"] == []
+
+
+def test_the_payment_proof_is_not_sent_to_daftra_unless_it_is_turned_on(client, db, fake_daftra, sales, manager):
+    seed.catalog(db)
+    request_id = submitted_sale(client, db, sales, create_work_order="لا", installation_days="")
+    assert approve(client, manager, request_id).status_code == 200
+    assert fake_daftra.uploads == []
+    invoice_id = db.get(Request, request_id).daftra_invoice_id
+    assert fake_daftra.invoices[invoice_id]["documents"] == []
 
 
 def test_a_lost_invoice_id_is_found_again_by_its_marker(client, db, fake_daftra, sales, manager):

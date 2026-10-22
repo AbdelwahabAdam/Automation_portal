@@ -53,6 +53,8 @@ ACTIONS = {
     "package.create": "إضافة باقة",
     "package.update": "تعديل باقة",
     "package.delete": "حذف باقة",
+    "daftra.sync": "مزامنة مع دفترة",
+    "product.daftra_sync": "تحديث منتج من دفترة",
 }
 
 ENTITY_TYPES = {"user": "مستخدم", "role": "دور", "request": "طلب", "attachment": "مرفق", "product": "منتج",
@@ -81,6 +83,7 @@ FIELD_LABELS = {
     "manages": "يدير الأقسام",
     "reason": "السبب",
     "name": "الاسم",
+    "kinds": "ما تمت مزامنته",
     "pages": "الصفحات",
     "form_type": "نوع النموذج",
     "status": "الحالة",

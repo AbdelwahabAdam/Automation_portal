@@ -298,6 +298,12 @@ def list_clients() -> list[dict]:
     return _all("clients", "Client")
 
 
+def list_products() -> list[dict]:
+    """Every Daftra product, raw and including deactivated ones, for refreshing the catalog's
+    linked products (app.daftra_refresh)."""
+    return _all("products", "Product")
+
+
 def list_treasuries() -> list[dict]:
     """Active treasuries and bank accounts a payment can be received into."""
     def load():

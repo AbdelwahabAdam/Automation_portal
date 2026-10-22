@@ -255,6 +255,7 @@ async function pages(page, prefix) {
     ['/admin/permissions', 'الأدوار والصلاحيات', 'roles'],
     ['/admin/audit', 'سجل النشاط', 'audit'],
     ['/admin/catalog', 'المنتجات والباقات', 'products'],
+    ['/admin/daftra_sync', 'المزامنة مع دفترة', 'daftra-sync'],
     ['/admin/mail', 'اختبار البريد', 'mail'],
     ['/account', 'حسابي', 'account'],
   ];

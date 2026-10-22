@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     # as a file: text in it makes the save answer 500 and the work order's التفاصيل tab error. The
     # portal cannot upload, so it points every work order at one image uploaded there by hand.
     daftra_work_order_image_id: int = 16412
+    # Off: the إثبات الدفع is not sent to the invoice in Daftra. Both calls it needs are proven
+    # against the live account (see daftra-api.md 4a); set DAFTRA_SEND_PAYMENT_PROOF=true to turn on.
+    daftra_send_payment_proof: bool = False
     # Keys of the client custom fields Daftra requires on a new client: اسم الجهاز and Coordinates
     daftra_client_device_field: str = "test"
     # The اسم الجهاز every new client gets (Nabaa + food cooler); the form does not ask for it

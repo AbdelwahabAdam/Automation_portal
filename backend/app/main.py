@@ -15,7 +15,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from sqlalchemy import func, select
 
-from . import account, admin, auth, catalog, daftra, import_client_categories, lookups, requests_api, review
+from . import account, admin, auth, catalog, daftra, daftra_refresh, import_client_categories, lookups, requests_api, review
 from .config import settings
 from .database import SessionLocal, run_migrations
 from .models import ClientCategory
@@ -53,5 +53,5 @@ def warm_daftra_lists():
 
 
 app = FastAPI(title="FutureLife Portal", lifespan=lifespan)
-for module in (auth, requests_api, lookups, review, account, admin, catalog):
+for module in (auth, requests_api, lookups, review, account, admin, catalog, daftra_refresh):
     app.include_router(module.router)

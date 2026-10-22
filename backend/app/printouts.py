@@ -32,8 +32,12 @@ def receipt(number: str, date: str, client: str, amount: str, method: str, invoi
                 invoice_no=invoice_no, receiver=receiver, treasury=treasury)
 
 
-def work_order(number: str, title: str, start: str, delivery: str, days: int, rows: list[str],
-               responsible: str, sales_person: str) -> bytes:
-    """rows: the work order's details, one line each, as in its Daftra description."""
-    return _pdf("work_order.html", number=number, title=title, start=start, delivery=delivery, days=days, rows=rows,
-                responsible=responsible, sales_person=sales_person)
+def work_order(number: str, title: str, start: str, delivery: str, rows: list[str], values: dict,
+               client_name: str, client_code: str, phone: str, address: str, location_url: str,
+               coordinates: str, product_image: str, invoice_no: str, responsible: str, sales_person: str) -> bytes:
+    """rows: the work order's details, one line each, as in its Daftra description.
+    values: the work order's custom fields by their own names (daftra_sync.work_order_values)."""
+    return _pdf("work_order.html", number=number, title=title, start=start, delivery=delivery, rows=rows,
+                values=values, client_name=client_name, client_code=client_code, phone=phone, address=address,
+                location_url=location_url, coordinates=coordinates, product_image=product_image,
+                invoice_no=invoice_no, responsible=responsible, sales_person=sales_person)

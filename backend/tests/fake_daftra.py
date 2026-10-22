@@ -29,6 +29,8 @@ class FakeDaftra:
         self.order_sources = [{"id": 16, "name": "Sales-جديد", "status": 1, "display_order": 2},
                               {"id": 12, "name": "water", "status": 1, "display_order": 1},
                               {"id": 3, "name": "old", "status": 0, "display_order": 0}]
+        # Raw Daftra products, as GET /api2/products.json lists them
+        self.products = []
         self.next_id = 7000
         # Set to a path prefix (e.g. "/api2/invoice_payments.json") to make that call fail once
         self.fail_once = None
@@ -72,6 +74,7 @@ class FakeDaftra:
     def routes(self):
         return [
             (r"GET /api2/staff\.json", lambda **kw: self._page([{"Staff": s} for s in self.staff])),
+            (r"GET /api2/products\.json", lambda **kw: self._page([{"Product": p} for p in self.products])),
             (r"GET /api2/treasuries\.json", lambda **kw: self._page([{"Treasury": t} for t in self.treasuries])),
             (r"GET /v2/api/entity/order_source/list/1", lambda **kw: {"data": self.order_sources}),
             (r"GET /api2/clients\.json", self.search_clients),

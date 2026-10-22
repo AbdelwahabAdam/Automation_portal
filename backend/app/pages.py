@@ -31,6 +31,7 @@ PAGES = [
     {"key": "admin.permissions", "label": "الأدوار والصلاحيات"},
     {"key": "admin.audit", "label": "سجل النشاط"},
     {"key": "admin.catalog", "label": "المنتجات والباقات"},
+    {"key": "admin.daftra_sync", "label": "المزامنة مع دفترة"},
     {"key": "admin.mail", "label": "اختبار البريد"},
 ]
 
