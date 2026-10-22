@@ -18,6 +18,8 @@ class FakeDaftra:
         self.invoices = {}
         self.payments = {}
         self.work_orders = {}
+        # Files uploaded to the account's file store, and the next id one gets
+        self.uploads = []
         self.staff = [{"id": "71", "full_name": "Sales One", "active": "1"},
                       {"id": "40", "full_name": "Manager One", "active": "1"},
                       {"id": "9", "full_name": "Old Staff", "active": "0"}]
@@ -49,7 +51,7 @@ class FakeDaftra:
         self.invoices[invoice_id] = {
             "id": str(invoice_id), "client_id": str(client_id), "no": no or f"0{invoice_id}", "draft": draft,
             "date": "2026-10-18", "po_number": "", "summary_total": str(total), "items": [], "payments": [],
-            "initial_paid": paid,
+            "documents": [], "initial_paid": paid,
         }
         return invoice_id
 
@@ -88,6 +90,7 @@ class FakeDaftra:
             (r"PUT /api2/work_orders/(\d+)\.json", self.update_work_order),
             (r"GET /v2/api/entity/work_order/(\d+)/3", self.read_work_order_v2),
             (r"GET /v2/api/entity/client/(\d+)/3", self.read_client_v2),
+            (r"POST /v2/api/entity/invoice_document", self.attach_document),
         ]
 
     @staticmethod
@@ -145,11 +148,13 @@ class FakeDaftra:
         total = float(invoice["summary_total"])
         paid = invoice["initial_paid"] + sum(p["amount"] for p in invoice["payments"])
         client = self.clients.get(int(invoice["client_id"]), {})
-        return {**{k: v for k, v in invoice.items() if k not in ("payments", "initial_paid")},
+        return {**{k: v for k, v in invoice.items() if k not in ("payments", "documents", "initial_paid")},
                 "summary_unpaid": str(round(total - paid, 2)),
                 "invoice_pdf_url": f"https://fake.daftra.test/invoices/view/{invoice['id']}.pdf?hash=x",
                 "Client": {"client_number": client.get("client_number", "")},
-                "InvoicePayment": [{"id": str(p["id"]), "notes": p["notes"]} for p in invoice["payments"]]}
+                "InvoicePayment": [{"id": str(p["id"]), "notes": p["notes"]} for p in invoice["payments"]],
+                "InvoiceDocument": [{"id": str(i + 1), "invoice_id": invoice["id"], "document_id": str(d)}
+                                    for i, d in enumerate(invoice["documents"])]}
 
     def list_invoices(self, params, body):
         rows = [i for i in self.invoices.values() if str(i["client_id"]) == str(params.get("client_id"))]
@@ -161,7 +166,7 @@ class FakeDaftra:
         total = sum(item["unit_price"] * item["quantity"] for item in items) + fields.get("adjustment_value", 0)
         self.invoices[invoice_id] = {**fields, "id": str(invoice_id), "no": f"0{invoice_id}", "draft": "0",
                                      "summary_total": str(round(total, 2)), "items": items, "payments": [],
-                                     "initial_paid": 0.0}
+                                     "documents": [], "initial_paid": 0.0}
         return {"id": invoice_id}
 
     def get_invoice(self, invoice_id, params, body):
@@ -169,6 +174,17 @@ class FakeDaftra:
         if invoice is None:
             raise NotFound("HTTP 404: no invoice")
         return {"data": {"Invoice": self._invoice_out(invoice)}}
+
+    def upload_file(self, content, filename, content_type, entity="invoice", field="invoices.documents"):
+        """What app.daftra.upload_file is replaced with: keeps the file and gives it an id."""
+        file_id = self._new_id()
+        self.uploads.append({"id": file_id, "filename": filename, "content_type": content_type,
+                             "size": len(content), "entity": entity, "field": field})
+        return file_id
+
+    def attach_document(self, params, body):
+        self.invoices[int(body["invoice_id"])]["documents"].append(body["document_id"])
+        return {"message": "added", "id": len(self.uploads)}
 
     def assign_work_order(self, invoice_id, params, body):
         self.invoices[int(invoice_id)]["work_order_id"] = str(body["Invoice"]["work_order_id"])

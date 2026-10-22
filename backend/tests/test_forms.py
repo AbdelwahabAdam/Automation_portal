@@ -82,6 +82,14 @@ def test_new_sale_without_work_order_needs_no_installation_days():
     assert "installation_days" not in errors
 
 
+def test_new_sale_work_order_starts_unanswered_and_must_be_chosen():
+    spec = next(s for s in form_fields("new_sale") if s["name"] == "create_work_order")
+    assert "default" not in spec
+    _, errors = validate("new_sale", new_sale(create_work_order="", installation_days=""), FILES)
+    assert errors["create_work_order"] == "مطلوب"
+    assert "installation_days" not in errors
+
+
 def test_new_sale_must_pay_something():
     _, errors = validate("new_sale", new_sale(paid_amount="0"), FILES)
     assert errors["paid_amount"] == "يجب أن يكون أكبر من صفر"

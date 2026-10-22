@@ -97,6 +97,7 @@ FIELD_LABELS = {
     "daftra_work_order_no": "رقم أمر الشغل في دفترة",
     "invoice_pdf_saved": "تم حفظ PDF الفاتورة",
     "receipt_pdf_saved": "تم حفظ PDF سند القبض",
+    "payment_proof_sent": "تم إرفاق إثبات الدفع بالفاتورة في دفترة",
     "work_order_pdf_saved": "تم حفظ PDF أمر الشغل",
     "work_order_fields_saved": "تم ملء حقول أمر الشغل في دفترة",
     "error": "الخطأ",

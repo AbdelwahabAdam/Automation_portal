@@ -8,7 +8,7 @@ from ..config import settings
 from ..daftra import DaftraError, local_phone
 from ..models import Address, Client, Request
 from ..text import digits, squash
-from .common import SyncError
+from .common import SyncError, address_fields
 
 
 def client_id(data: dict, db: Session) -> int:
@@ -66,14 +66,6 @@ def custom_fields(data: dict, held: dict | None = None) -> dict:
         settings.daftra_client_device_field: device,
         settings.daftra_client_coordinates_field: coordinates,
     }
-
-
-def address_fields(data: dict) -> dict:
-    """An address as Daftra keeps one: the city holds the emirate and the state holds the area
-    (daftra.address_from_daftra reads them back that way)."""
-    return {"address1": str(data.get("street") or "").strip(), "address2": str(data.get("house") or "").strip(),
-            "city": str(data.get("emirate") or "").strip(), "state": str(data.get("area") or "").strip(),
-            "country_code": "AE"}
 
 
 def address_change(saved: dict, address: dict) -> dict:

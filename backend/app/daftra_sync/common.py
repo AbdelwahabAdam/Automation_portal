@@ -49,6 +49,15 @@ def reports_daftra_errors(step):
     return run
 
 
+def address_fields(data: dict) -> dict:
+    """An address as Daftra keeps one: the city holds the emirate and the state holds the area
+    (daftra.address_from_daftra reads them back that way). It goes on the client, and on the
+    invoice, where it is the address printed for that request."""
+    return {"address1": str(data.get("street") or "").strip(), "address2": str(data.get("house") or "").strip(),
+            "city": str(data.get("emirate") or "").strip(), "state": str(data.get("area") or "").strip(),
+            "country_code": "AE"}
+
+
 def marker(request: Request) -> str:
     return f"PORTAL-{request.id}"
 

@@ -134,6 +134,24 @@ export function MultiSelectPicker({ spec, value, invalid, onChange }) {
   );
 }
 
+// A field typed freely, offering the suggestions that match what is typed (staff names, areas,
+// discount names) in the portal's own list rather than the browser's, which cannot be styled
+export function SuggestInput({ spec, value, invalid, onChange, onBlur }) {
+  const matches = useMemo(
+    () => (spec.suggestions || []).filter((text) => matchesQuery(value ?? '', text)).slice(0, 50),
+    [spec.suggestions, value],
+  );
+  return (
+    <Combobox
+      id={spec.name} value={value} invalid={invalid} icon={spec.type === 'staff' ? 'user' : 'chevron-down'}
+      // Nothing matching closes the list: what is typed is kept as it is
+      items={matches.length ? matches : null} itemKey={(text) => text} renderItem={(text) => <bdi>{text}</bdi>}
+      onInput={(text) => onChange(spec.name, text)} onPick={(text) => onChange(spec.name, text)}
+      onBlur={onBlur && (() => onBlur(spec.name, value ?? ''))}
+    />
+  );
+}
+
 // A whole number changed with − and + (or typed), kept between min and max
 export function Stepper({ id, label, min, max, value, onChange }) {
   const current = Math.min(max, Math.max(min, Math.round(Number(value)) || min));
@@ -177,18 +195,20 @@ export function Control({ spec, value, invalid, onChange, onBlur, onSearch }) {
       : <Choice name={spec.name} multiple options={spec.options} value={value} invalid={invalid} onChange={(v) => onChange(spec.name, v)} />;
   }
   if (spec.type === 'textarea') return <TextArea {...common} rows={3} />;
+  if (spec.suggestions && !onSearch) {
+    return <SuggestInput spec={spec} value={value} invalid={invalid} onChange={onChange} onBlur={onBlur} />;
+  }
   if (spec.type === 'date') return <TextInput {...common} type="date" />;
   const inputMode = { number: spec.integer ? 'numeric' : 'decimal', phone: 'tel' }[spec.type];
   // A field the client is looked up by: its keyboard says «بحث», and digits are what gets typed
   const searching = Boolean(onSearch);
-  const list = spec.type === 'staff' ? 'staff-list' : spec.suggestions ? `${spec.name}-suggestions` : undefined;
   const icon = spec.type === 'phone' || onSearch ? 'search' : undefined;
   return (
     <>
       {/* A phone keeps its number pad, and the client code is digits too; on both, the keyboard's own
           Enter key says «بحث» and runs the search */}
       <TextInput
-        {...common} icon={icon} type="text" list={list} autoComplete="off"
+        {...common} icon={icon} type="text" autoComplete="off"
         inputMode={inputMode ?? (searching ? 'numeric' : undefined)} enterKeyHint={searching ? 'search' : undefined}
         onIconClick={onSearch && (() => onSearch(spec.name, value ?? ''))} iconLabel={onSearch && `بحث عن العميل بـ${spec.label}`}
         onKeyDown={onSearch && ((e) => {
@@ -199,7 +219,6 @@ export function Control({ spec, value, invalid, onChange, onBlur, onSearch }) {
           e.target.blur();
         })}
       />
-      {spec.suggestions && <datalist id={list}>{spec.suggestions.map((text) => <option key={text} value={text} />)}</datalist>}
     </>
   );
 }

@@ -122,7 +122,7 @@ def sync_balance_payment(request: Request, db: Session, reviewer: User) -> dict:
     if request.daftra_payment_id is None and not payment_of(request, invoice) and paid > unpaid + TOTAL_TOLERANCE:
         raise SyncError(f"المبلغ المدفوع {paid} أكبر من المتبقي على الفاتورة {request.daftra_invoice_no} ({unpaid}). "
                         "أعد الطلب للموظف ليصحح المبلغ.")
-    return finish(request, invoice, paid, method, reviewer, db, invoice_pdf_after_payment=True)
+    return finish(request, invoice, paid, method, reviewer, db)
 
 
 SYNCS = {"new_sale": sync_new_sale, "contract_renewal": sync_contract_renewal, "balance_payment": sync_balance_payment,

@@ -9,6 +9,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor
 
@@ -120,6 +121,55 @@ def update_unconfirmed(resource: str, body: dict):
 def read_v2(entity: str, record_id: int) -> dict:
     """One record from the read API v2, with its related data (e.g. a work order's custom_data)."""
     return _call("GET", f"/v2/api/entity/{entity}/{record_id}/3")
+
+
+def _file_body(filename: str, content_type: str, content: bytes) -> tuple[str, bytes]:
+    """The multipart body Daftra's upload takes: one part, named "file"."""
+    boundary = "----portal" + uuid.uuid4().hex
+    # A quote or newline in the name would break the part's own header
+    name = re.sub(r'["\r\n]', "", filename or "") or "file"
+    head = (f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="{name}"\r\n'
+            f'Content-Type: {content_type or "application/octet-stream"}\r\n\r\n').encode("utf-8")
+    return boundary, head + content + f"\r\n--{boundary}--\r\n".encode("utf-8")
+
+
+def upload_file(content: bytes, filename: str, content_type: str,
+                entity: str = "invoice", field: str = "invoices.documents") -> int:
+    """Puts a file in the account's file store and returns its id.
+
+    That id is what both an invoice's attachment and a work order's صورة المنتج take: product
+    images, work-order uploads and invoice documents share one table in Daftra. Not in Daftra's
+    docs — the account's own UI uses this address, and it accepts our API key.
+    """
+    if not settings.daftra_subdomain or not settings.daftra_api_key:
+        raise DaftraError("Daftra is not configured")
+    boundary, body = _file_body(filename, content_type, content)
+    url = f"https://{settings.daftra_subdomain}.daftra.com/v2/api/entity/upload_file/{entity}/{field}"
+    request = urllib.request.Request(url, data=body, method="POST", headers={
+        "Accept": "application/json", "apikey": settings.daftra_api_key,
+        "Content-Type": f"multipart/form-data; boundary={boundary}",
+        "X-Requested-With": "XMLHttpRequest",  # as the account's own UI sends it
+    })
+    try:
+        with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS * 3) as response:
+            result = json.load(response)
+    except urllib.error.HTTPError as error:
+        raise DaftraError(f"HTTP {error.code}: {_error_message(error.read())}") from error
+    except (urllib.error.URLError, TimeoutError, ValueError) as error:
+        raise DaftraError(str(error)) from error
+    if not result.get("id"):
+        raise DaftraError(f"Daftra did not return a file id: {json.dumps(result, ensure_ascii=False)[:300]}")
+    return int(result["id"])
+
+
+def attach_invoice_document(invoice_id: int, file_id: int):
+    """Shows an uploaded file on the invoice in Daftra, as one of its attachments.
+
+    document_id, not file_id: Daftra accepts file_id and then stores 0. Sending it with the
+    invoice's own edit instead does nothing — api2 answers "successful" and saves none of it,
+    while still replacing every invoice field left out — so it goes through API v2's entity.
+    """
+    _call("POST", "/v2/api/entity/invoice_document", None, {"invoice_id": invoice_id, "document_id": file_id})
 
 
 def invoice_pdf(invoice_id: int, pdf_url: str) -> bytes:

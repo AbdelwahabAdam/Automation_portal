@@ -136,7 +136,7 @@ export function SearchInput({ value, onChange, placeholder, label, ...rest }) {
 // The list opens on focus and typing; ↑ ↓ move through it, Enter picks, Escape closes.
 // closeOnPick=false keeps it open after a pick (e.g. adding several products in a row).
 export function Combobox({
-  id, value, onInput, items, itemKey, renderItem, onPick, placeholder, invalid, emptyText, closeOnPick = true, icon = 'search',
+  id, value, onInput, items, itemKey, renderItem, onPick, placeholder, invalid, emptyText, closeOnPick = true, icon = 'search', onBlur,
 }) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
@@ -175,7 +175,7 @@ export function Combobox({
         role="combobox" aria-expanded={shown} aria-autocomplete="list" aria-controls={listId}
         aria-activedescendant={shown && active >= 0 ? `${listId}-${active}` : undefined}
         onChange={(e) => { onInput(e.target.value); setOpen(true); }}
-        onFocus={() => setOpen(true)} onBlur={() => setOpen(false)} onKeyDown={onKeyDown}
+        onFocus={() => setOpen(true)} onBlur={(e) => { setOpen(false); onBlur?.(e); }} onKeyDown={onKeyDown}
       />
       {shown && (
         <div className="fl-suggest__list" role="listbox" id={listId}>

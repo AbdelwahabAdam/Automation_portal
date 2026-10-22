@@ -5,6 +5,7 @@ These pin the exact payloads sent to Daftra, since they were tuned against the l
 
 from datetime import datetime, timedelta, timezone
 
+from app import daftra
 from app.daftra_sync.invoice import WARRANTY_TERMS_HTML
 from app.models import Attachment, Request
 
@@ -52,6 +53,9 @@ def test_approving_a_new_sale_creates_everything_in_daftra(client, db, fake_daft
         "client_id": client_id, "date": TODAY, "draft": 0, "is_offline": 1, "currency_code": "AED", "store_id": 1,
         "branch_id": 1, "sales_person_id": 71, "order_source_id": 16, "po_number": f"PORTAL-{request_id}",
         "adjustment_label": "مبادرة لك ان تشارك", "adjustment_value": -200.0, "html_notes": WARRANTY_TERMS_HTML,
+        # The address of this request, so it is the one printed on the invoice
+        "client_address1": "شارع 1", "client_address2": "فيلا 2", "client_city": "أبوظبي",
+        "client_state": "منطقة العين", "client_country_code": "AE",
     }
     assert invoice["InvoiceItem"] == [
         {"product_id": 501, "item": "WATER COOLER BLACK 3 T", "unit_price": 2000.0, "quantity": 2, "tax1": 3, "store_id": 1},
@@ -97,6 +101,11 @@ def test_approving_a_new_sale_creates_everything_in_daftra(client, db, fake_daft
     assert request.daftra_error is None
     fields_attached = {a.field for a in db.query(Attachment).filter_by(request_id=request_id)}
     assert {"daftra_invoice", "daftra_receipt", "daftra_work_order"} <= fields_attached
+    # إثبات الدفع goes into Daftra's file store, and its id onto the invoice (as document_id)
+    assert fake_daftra.uploads == [{"id": fake_daftra.uploads[0]["id"], "filename": "proof.jpg",
+                                    "content_type": "image/jpeg", "size": 11,
+                                    "entity": "invoice", "field": "invoices.documents"}]
+    assert fake_daftra.invoices[invoice_id]["documents"] == [fake_daftra.uploads[0]["id"]]
     # The new client is kept in our own list too
     found = client.get("/api/clients/lookup", params={"phone": "0501234567"}, headers=auth(sales)).json()["matches"]
     assert [m["daftra_id"] for m in found] == [client_id]
@@ -119,6 +128,19 @@ def test_a_failed_step_is_resumed_without_duplicates(client, db, fake_daftra, sa
     assert fake_daftra.posted("/api2/work_orders.json") == []
     db.refresh(request)
     assert request.status == "approved" and request.daftra_error is None
+
+
+def test_a_payment_proof_daftra_refuses_does_not_stop_the_approval(client, db, fake_daftra, sales, manager):
+    """The invoice and receipt are already made, so an attachment Daftra will not take is let go."""
+    seed.catalog(db)
+    request_id = submitted_sale(client, db, sales, create_work_order="لا", installation_days="")
+    fake_daftra.fail_once = "/v2/api/entity/invoice_document"
+    assert approve(client, manager, request_id).status_code == 200
+    request = db.get(Request, request_id)
+    db.refresh(request)
+    assert request.status == "approved" and request.daftra_error is None
+    assert [path for _, path, _, _ in fake_daftra.failed] == ["/v2/api/entity/invoice_document"]
+    assert fake_daftra.invoices[request.daftra_invoice_id]["documents"] == []
 
 
 def test_a_lost_invoice_id_is_found_again_by_its_marker(client, db, fake_daftra, sales, manager):
@@ -406,3 +428,22 @@ def test_a_request_without_coordinates_says_so_instead_of_failing_in_daftra(clie
     db.commit()
     response = approve(client, manager, request_id)
     assert response.status_code == 409 and "الإحداثيات" in response.json()["detail"]
+
+
+def test_the_invoice_pdf_is_taken_after_the_payment(client, db, fake_daftra, sales, manager, monkeypatch):
+    """Daftra draws the PDF from the invoice as it stands. Taken before the payment, «مدفوع» on it
+    reads 0 and «الرصيد المستحق» the whole total, whatever the client has just paid."""
+    seed.catalog(db)
+    when = {}
+
+    def capture(invoice_id, url):
+        row = fake_daftra.get_invoice(str(invoice_id), {}, None)["data"]["Invoice"]
+        when["unpaid"] = float(row["summary_unpaid"])
+        when["total"] = float(row["summary_total"])
+        return b"%PDF-1.4 fake invoice"
+
+    monkeypatch.setattr(daftra, "invoice_pdf", capture)
+    request_id = submitted_sale(client, db, sales, create_work_order="لا", installation_days="")
+    assert approve(client, manager, request_id).status_code == 200
+    # The 1,000 paid is already off the invoice the PDF is drawn from
+    assert when["unpaid"] == when["total"] - 1000

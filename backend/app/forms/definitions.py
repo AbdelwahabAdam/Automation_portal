@@ -55,7 +55,7 @@ FORM_TYPES = {
             NOTES,
             section(
                 "التركيب وأمر الشغل",
-                yes_no("create_work_order", "إنشاء أمر الشغل في دفترة", default="نعم"),
+                yes_no("create_work_order", "إنشاء أمر الشغل في دفترة"),
                 f("installation_days", "مدة التركيب (بالأيام)", "select", options=INSTALLATION_DAYS, required_if=WANTS_WORK_ORDER),
                 note="عند الاعتماد يُنشأ أمر الشغل في دفترة والمدير المعتمِد مسؤولًا عنه، يبدأ يوم الاعتماد وينتهي بعد مدة التركيب، ويُربط بالفاتورة.",
             ),

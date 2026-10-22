@@ -64,9 +64,12 @@ button, input, select, textarea { font-family: inherit; }
 .fl-field__label { font-size: var(--fl-type-label-size); line-height: var(--fl-type-label-line); font-weight: var(--fl-font-weight-semibold); color: var(--fl-color-text-primary); }
 .fl-field__required { color: var(--fl-color-text-error); }
 .fl-field__aside { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fl-type-caption-size); color: var(--fl-color-text-secondary); }
-.fl-field__hint { font-size: var(--fl-type-caption-size); line-height: var(--fl-type-caption-line); color: var(--fl-color-text-secondary); text-wrap: pretty; }
+/* Set in from the edge by as much as a control pads its own text (.fl-input), so what is said about
+   a field does not run into its border. In a plain field that puts it under the typed text; in one
+   with a leading icon the text starts further in, and the hints stay lined up with each other. */
+.fl-field__hint { padding-inline-start: var(--fl-space-4); font-size: var(--fl-type-caption-size); line-height: var(--fl-type-caption-line); color: var(--fl-color-text-secondary); text-wrap: pretty; }
 .fl-field__hint--ok { color: var(--fl-color-status-success-text); }
-.fl-field__error { display: flex; align-items: flex-start; gap: 6px; font-size: var(--fl-type-body-sm-size); line-height: 1.5; color: var(--fl-color-text-error); font-weight: var(--fl-font-weight-medium); }
+.fl-field__error { display: flex; align-items: flex-start; gap: 6px; padding-inline-start: var(--fl-space-4); font-size: var(--fl-type-body-sm-size); line-height: 1.5; color: var(--fl-color-text-error); font-weight: var(--fl-font-weight-medium); }
 .fl-field__error .fl-icon { margin-block-start: 2px; }
 .fl-field--invalid .fl-field__label { color: var(--fl-color-text-error); }
 

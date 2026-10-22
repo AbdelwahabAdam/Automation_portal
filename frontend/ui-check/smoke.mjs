@@ -193,6 +193,31 @@ async function keyboardRoom(page, prefix) {
   await page.evaluate(() => document.body.classList.remove('fl-keyboard'));
 }
 
+// Staff names (who approved the discount, who collected the cash) are offered in the portal's own
+// list, not the browser's unstyled one, and a pick fills the field
+async function staffPickers(page, prefix) {
+  await page.goto(`${BASE}/sales/new_request`);
+  await page.getByText('طلب بيع لعميل جديد').first().click();
+  await expectText(page, 'تفاصيل الطلب', 'new sale form');
+  await page.getByRole('button', { name: 'فتح كل الأقسام' }).click();
+  if (await page.locator('datalist').count()) problems.push("[staff] the form still uses the browser's own suggestion list");
+  for (const name of ['discount_approved_by', 'collector_name']) {
+    const box = page.locator(`#${name}`);
+    await box.scrollIntoViewIfNeeded();
+    await box.click();
+    await page.waitForTimeout(400);
+    const items = page.locator(`#field-${name} .fl-suggest__item`);
+    const found = await items.count();
+    if (!found) { problems.push(`[staff] ${name}: no themed list of staff names opened`); continue; }
+    const first = (await items.first().innerText()).trim();
+    await items.first().click();
+    const value = await box.inputValue();
+    if (value !== first) problems.push(`[staff] ${name}: picked «${first}» but the field holds «${value}»`);
+    log(`${prefix} ${name}: ${found} staff name(s) offered, picked «${first}»`);
+  }
+  await shot(page, `${prefix}-staff`, false);
+}
+
 // نوع الجهاز is picked the same way products are: search, add, and a row per pick
 async function devicePicker(page, prefix) {
   await page.goto(`${BASE}/sales/new_request`);
@@ -272,6 +297,7 @@ try {
     const page = await newPage(browser, viewport);
     await salesForm(page, prefix);
     await devicePicker(page, prefix);
+    await staffPickers(page, prefix);
     await everyField(page, prefix);
     await pages(page, prefix);
     await page.context().close();

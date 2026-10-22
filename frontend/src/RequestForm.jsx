@@ -440,6 +440,10 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
       const suggestions = (values.emirate && spec.areas_by_emirate?.[values.emirate]) || spec.suggestions;
       return { control: <Control spec={{ ...spec, suggestions }} value={values.area} invalid={invalid} onChange={(_, v) => chooseArea(v)} /> };
     }
+    if (spec.type === 'staff') {
+      // Daftra's staff names are offered, and a name typed by hand is kept
+      return { control: <Control spec={{ ...spec, suggestions: catalog.staff }} value={values[spec.name]} invalid={invalid} onChange={change} /> };
+    }
     const searchable = SEARCH_FIELDS.includes(spec.name);
     return {
       hint: searchable ? 'يُبحث عن العميل بعد الكتابة، أو اضغط أيقونة البحث.' : null,
@@ -472,7 +476,6 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
   return (
     <div className="fl-formlayout">
       <form className="fl-formlayout__main fl-stack" onSubmit={(e) => e.preventDefault()} noValidate>
-      <datalist id="staff-list">{catalog.staff.map((name) => <option key={name} value={name} />)}</datalist>
       <Button className="fl-back" variant="tertiary" icon="arrow-start" onClick={back}>رجوع</Button>
       <PageHeader title={formType.label}>
         <div className="fl-row fl-small fl-muted">

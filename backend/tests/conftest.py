@@ -58,6 +58,7 @@ def fake_daftra(monkeypatch):
     monkeypatch.setattr(settings, "daftra_api_key", "fake-key")
     monkeypatch.setattr(daftra, "_call", fake)
     monkeypatch.setattr(daftra, "invoice_pdf", lambda invoice_id, url: b"%PDF-1.4 fake invoice")
+    monkeypatch.setattr(daftra, "upload_file", fake.upload_file)
     monkeypatch.setattr(daftra, "_cache", {})
     # Work order custom fields are read back after a pause; no need to wait in a test
     monkeypatch.setattr("time.sleep", lambda seconds: None)
