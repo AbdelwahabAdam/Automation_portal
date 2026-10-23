@@ -522,3 +522,27 @@ def test_a_request_does_not_take_over_another_portals_invoice(client, db, fake_d
     assert fake_daftra.invoices[other]["summary_total"] == "999.0"
     [created] = [i for i in fake_daftra.invoices.values() if i.get("po_number") == f"FUTURE-{request_id}"]
     assert str(request.daftra_invoice_id) == created["id"]
+
+
+def test_an_invoice_left_by_another_portal_is_let_go_of(client, db, fake_daftra, sales, manager, monkeypatch):
+    """A failed approval saved the id of another portal's invoice, found by a mark that was not
+    unique. Approving again must not keep trying to invoice against it."""
+    seed.catalog(db)
+    seed.existing_client(db)
+    fake_daftra.add_client(4053, "0509999999", category_id=5, address=RENEWAL_ADDRESS,
+                           custom={"test": "N + F", "coordinates_text": "24.1, 55.6"})
+    request_id = renewal_request(client, db, sales)
+    theirs = fake_daftra.add_invoice(client_id=4053, total=999.0)
+    fake_daftra.invoices[theirs]["po_number"] = f"OTHER-{request_id}"
+    # What the earlier failure left behind on this request
+    request = db.get(Request, request_id)
+    request.daftra_invoice_id = theirs
+    request.daftra_invoice_no = fake_daftra.invoices[theirs]["no"]
+    db.commit()
+
+    assert approve(client, manager, request_id).status_code == 200
+    db.refresh(request)
+    assert request.daftra_invoice_id != theirs
+    # Theirs is untouched: not re-totalled, and not paid against
+    assert fake_daftra.invoices[theirs]["summary_total"] == "999.0"
+    assert fake_daftra.invoices[theirs]["payments"] == []

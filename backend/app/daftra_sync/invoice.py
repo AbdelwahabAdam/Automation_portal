@@ -110,6 +110,12 @@ def ensure_invoice(request: Request, items: list[dict], staff_id: int, notes: st
     if request.daftra_invoice_id is not None:
         try:
             invoice = get_invoice(request.daftra_invoice_id)
+            # An invoice another portal made can be written here by a failed approval, from back
+            # when one mark could belong to two portals. It carries their mark, not this request's,
+            # and it is not ours to invoice against or to pay: let go of it and make our own.
+            if (invoice.get("po_number") or "") != marker(request):
+                invoice = None
+                raise NotFound("not this request's invoice")
         except NotFound:
             # Deleted in Daftra since (e.g. because its total was wrong), so it is made again
             request.daftra_invoice_id = request.daftra_invoice_no = None
