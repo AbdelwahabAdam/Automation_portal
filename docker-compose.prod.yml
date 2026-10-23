@@ -43,6 +43,8 @@ services:
       DAFTRA_SUBDOMAIN: ${DAFTRA_SUBDOMAIN:-}
       DAFTRA_API_KEY: ${DAFTRA_API_KEY:-}
       DAFTRA_SEND_PAYMENT_PROOF: ${DAFTRA_SEND_PAYMENT_PROOF:-false}
+      # The server is the portal: a test portal on the same Daftra account uses another prefix
+      DAFTRA_MARKER_PREFIX: ${DAFTRA_MARKER_PREFIX:-PORTAL}
     volumes:
       - backend_uploads:/app/uploads
       # Files the import commands read (deploy/ansible/import.yml copies them here)

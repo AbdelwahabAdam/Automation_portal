@@ -6,8 +6,9 @@ These pin the exact payloads sent to Daftra, since they were tuned against the l
 from datetime import datetime, timedelta, timezone
 
 from app import daftra
-from app.config import settings
+from app.config import UPLOAD_DIR, settings
 from app.daftra_sync.invoice import WARRANTY_TERMS_HTML
+from app.redraw_work_orders import redraw
 from app.models import Attachment, Request
 
 from . import seed
@@ -160,6 +161,39 @@ def test_the_payment_proof_is_not_sent_to_daftra_unless_it_is_turned_on(client, 
     assert fake_daftra.uploads == []
     invoice_id = db.get(Request, request_id).daftra_invoice_id
     assert fake_daftra.invoices[invoice_id]["documents"] == []
+
+
+def test_the_work_order_pdf_is_drawn_again_from_the_template_it_has_now(client, db, fake_daftra, sales, manager):
+    """app.redraw_work_orders, for the requests approved before «نموذج أمر تشغيل» was redesigned."""
+    seed.catalog(db)
+    request_id = submitted_sale(client, db, sales)
+    assert approve(client, manager, request_id).status_code == 200
+    request = db.get(Request, request_id)
+    db.refresh(request)
+    pdf = next(a for a in request.attachments if a.field == "daftra_work_order")
+    path = UPLOAD_DIR / str(request_id) / pdf.stored_name
+    # As a file drawn by an older template sits there: the redraw replaces it where it is
+    path.write_bytes(b"%PDF-1.4 an older design")
+    pdf.size = path.stat().st_size
+    db.commit()
+
+    assert redraw(request, db, dry_run=True).startswith("would redraw")
+    assert path.read_bytes() == b"%PDF-1.4 an older design"
+
+    assert redraw(request, db).startswith("redrawn")
+    drawn = path.read_bytes()
+    assert drawn.startswith(b"%PDF") and len(drawn) > 1000
+    assert pdf.size == len(drawn)
+    assert pdf.stored_name == path.name and pdf.filename.startswith("أمر شغل")
+
+
+def test_redrawing_says_why_when_there_is_no_work_order_pdf(client, db, fake_daftra, sales, manager):
+    seed.catalog(db)
+    request_id = submitted_sale(client, db, sales, create_work_order="لا", installation_days="")
+    assert approve(client, manager, request_id).status_code == 200
+    request = db.get(Request, request_id)
+    db.refresh(request)
+    assert redraw(request, db) == "no work order PDF on it"
 
 
 def test_a_lost_invoice_id_is_found_again_by_its_marker(client, db, fake_daftra, sales, manager):
@@ -466,3 +500,25 @@ def test_the_invoice_pdf_is_taken_after_the_payment(client, db, fake_daftra, sal
     assert approve(client, manager, request_id).status_code == 200
     # The 1,000 paid is already off the invoice the PDF is drawn from
     assert when["unpaid"] == when["total"] - 1000
+
+
+def test_a_request_does_not_take_over_another_portals_invoice(client, db, fake_daftra, sales, manager, monkeypatch):
+    """A test portal on the same Daftra account numbers its requests from 1 too. Its «PORTAL-12» is
+    not this portal's, and approving must not find it, refuse the totals, or pay against it."""
+    seed.catalog(db)
+    seed.existing_client(db)
+    # Both portals are testing against the same client, which is how the two met in the first place
+    fake_daftra.add_client(4053, "0509999999", category_id=5, address=RENEWAL_ADDRESS,
+                           custom={"test": "N + F", "coordinates_text": "24.1, 55.6"})
+    request_id = renewal_request(client, db, sales)
+    # What the other portal left on this account: the same number, another request, another total
+    other = fake_daftra.add_invoice(client_id=4053, total=999.0)
+    fake_daftra.invoices[other]["po_number"] = f"PORTAL-{request_id}"
+
+    monkeypatch.setattr(settings, "daftra_marker_prefix", "FUTURE")
+    assert approve(client, manager, request_id).status_code == 200
+    request = db.get(Request, request_id)
+    assert request.daftra_invoice_id != other
+    assert fake_daftra.invoices[other]["summary_total"] == "999.0"
+    [created] = [i for i in fake_daftra.invoices.values() if i.get("po_number") == f"FUTURE-{request_id}"]
+    assert str(request.daftra_invoice_id) == created["id"]

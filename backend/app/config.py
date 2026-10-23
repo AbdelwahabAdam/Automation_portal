@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     # Ids in our Daftra account used on every invoice an approved new sale creates
     daftra_store_id: int = 1
     daftra_branch_id: int = 1
+    # Marks the invoice, payment and work order a request made, so a retry finds them instead of
+    # making them twice. It must differ between portals sharing one Daftra account: a test portal
+    # numbers its requests from 1 too, and its «PORTAL-12» would otherwise be taken for this one's.
+    daftra_marker_prefix: str = "PORTAL"
     # "VAT Included" (5%): our prices already include VAT
     daftra_tax_id: int = 3
     # The "service" product an inscription is invoiced as, with its text as the line's description

@@ -35,6 +35,8 @@ services:
       DAFTRA_SUBDOMAIN: ${DAFTRA_SUBDOMAIN:-}
       DAFTRA_API_KEY: ${DAFTRA_API_KEY:-}
       DAFTRA_SEND_PAYMENT_PROOF: ${DAFTRA_SEND_PAYMENT_PROOF:-false}
+      # This portal is not the one on the server: its marks in Daftra must not look like theirs
+      DAFTRA_MARKER_PREFIX: ${DAFTRA_MARKER_PREFIX:-DEV}
     ports:
       - "8001:8001"
     volumes:

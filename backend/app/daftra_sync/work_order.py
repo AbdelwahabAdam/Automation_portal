@@ -229,28 +229,37 @@ def ensure_work_order(request: Request, invoice: dict, reviewer: User, db: Sessi
     return save_work_order_pdf(request, row, invoice, reviewer, db), fields_saved
 
 
-def save_work_order_pdf(request: Request, row: dict, invoice: dict, reviewer: User, db: Session) -> bool:
-    """Attaches the work order PDF once, drawn to match «نموذج أمر تشغيل ومتابعة عقد» as Daftra
-    prints it: Daftra's own file is behind a staff login, which an API key cannot open.
-    row: the work order as Daftra returns it, for its number, title and dates."""
-    if any(a.field == WORK_ORDER_ATTACHMENT_FIELD for a in request.attachments):
-        return True
+def draw_work_order(request: Request, row: dict, invoice: dict, reviewer: User, db: Session) -> bytes:
+    """The work order PDF, drawn to match «نموذج أمر تشغيل ومتابعة عقد» as Daftra prints it:
+    Daftra's own file is behind a staff login, which an API key cannot open.
+    row: the work order as Daftra returns it, for its number, title and dates.
+
+    Kept apart from saving it so app.redraw_work_orders can draw an old one again after the
+    template changes, from the one template both of them use.
+    """
     data = request.data
     start, delivery = str(row.get("start_date") or ""), str(row.get("delivery_date") or "")
     address = "، ".join(str(data[key]) for key in ("emirate", "area", "street", "house") if data.get(key))
+    return printouts.work_order(
+        number=request.daftra_work_order_no or "", title=row.get("title") or work_order_title(data, invoice),
+        start=day_month_year(start), delivery=day_month_year(delivery),
+        rows=work_order_rows(request, reviewer), values=work_order_values(request, db),
+        client_name=squash(data.get("customer_name")), client_code=str(data.get("client_code") or ""),
+        phone=str(data.get("phone") or ""), address=address,
+        location_url=str(data.get("location_url") or ""), coordinates=str(data.get("coordinates") or ""),
+        # Daftra holds the picture by a file id and gives no address for it, so the line is
+        # left to fill in, as صورة المعاينة is on its own form
+        product_image="", invoice_no=request.daftra_invoice_no or "",
+        responsible=display_name(reviewer), sales_person=display_name(request.created_by),
+    )
+
+
+def save_work_order_pdf(request: Request, row: dict, invoice: dict, reviewer: User, db: Session) -> bool:
+    """Attaches the work order PDF once. A PDF that cannot be drawn does not stop the approval."""
+    if any(a.field == WORK_ORDER_ATTACHMENT_FIELD for a in request.attachments):
+        return True
     try:
-        content = printouts.work_order(
-            number=request.daftra_work_order_no or "", title=row.get("title") or work_order_title(data, invoice),
-            start=day_month_year(start), delivery=day_month_year(delivery),
-            rows=work_order_rows(request, reviewer), values=work_order_values(request, db),
-            client_name=squash(data.get("customer_name")), client_code=str(data.get("client_code") or ""),
-            phone=str(data.get("phone") or ""), address=address,
-            location_url=str(data.get("location_url") or ""), coordinates=str(data.get("coordinates") or ""),
-            # Daftra holds the picture by a file id and gives no address for it, so the line is
-            # left to fill in, as صورة المعاينة is on its own form
-            product_image="", invoice_no=request.daftra_invoice_no or "",
-            responsible=display_name(reviewer), sales_person=display_name(request.created_by),
-        )
+        content = draw_work_order(request, row, invoice, reviewer, db)
     except printouts.PrintoutError:
         return False
     attach_pdf(request, WORK_ORDER_ATTACHMENT_FIELD, "أمر شغل", invoice, content, db)

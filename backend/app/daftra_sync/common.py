@@ -7,7 +7,7 @@ from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
-from ..config import UPLOAD_DIR
+from ..config import UPLOAD_DIR, settings
 from ..daftra import PAYMENT_METHOD_KEYS, DaftraError
 from ..models import Attachment, Request
 from ..text import squash
@@ -59,7 +59,14 @@ def address_fields(data: dict) -> dict:
 
 
 def marker(request: Request) -> str:
-    return f"PORTAL-{request.id}"
+    """What finds this request's invoice, payment and work order in Daftra again on a retry.
+
+    The prefix says which portal wrote it. Another portal on the same Daftra account — a test one
+    on someone's machine — numbers its own requests from 1 as well, and its «PORTAL-12» is not this
+    one's: without the prefix, approving request 12 here finds the other's invoice, sees a total
+    that does not match, and refuses. Give each portal its own (DAFTRA_MARKER_PREFIX).
+    """
+    return f"{settings.daftra_marker_prefix}-{request.id}"
 
 
 def sales_person(request: Request) -> int:
