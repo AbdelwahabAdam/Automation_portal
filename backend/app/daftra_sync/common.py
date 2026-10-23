@@ -3,6 +3,7 @@ document again, and saving a PDF on the request."""
 
 import functools
 import uuid
+from datetime import datetime, timedelta
 from decimal import Decimal
 
 from sqlalchemy.orm import Session
@@ -10,7 +11,7 @@ from sqlalchemy.orm import Session
 from ..config import UPLOAD_DIR, settings
 from ..daftra import PAYMENT_METHOD_KEYS, DaftraError
 from ..models import Attachment, Request
-from ..text import squash
+from ..text import UAE, squash
 
 # The fields the PDFs approving a request saves are attached under (not fields of any form)
 INVOICE_ATTACHMENT_FIELD = "daftra_invoice"
@@ -67,6 +68,21 @@ def marker(request: Request) -> str:
     that does not match, and refuses. Give each portal its own (DAFTRA_MARKER_PREFIX).
     """
     return f"{settings.daftra_marker_prefix}-{request.id}"
+
+
+def made_before_the_request(request: Request, created: str | None) -> bool:
+    """Whether Daftra made this before the request existed, which means it is not the request's own.
+
+    A request's invoice and work order are made when it is approved, so they are always younger
+    than it. Anything older carries its mark by accident — another portal's request numbered the
+    same, or a request this one was copied from. Daftra stamps its records in the account's own
+    time, which is the UAE's. A few minutes are allowed for the two clocks disagreeing.
+    """
+    try:
+        made = datetime.strptime(str(created or "")[:19], "%Y-%m-%d %H:%M:%S").replace(tzinfo=UAE)
+    except ValueError:
+        return False  # No date to go by: leave it be rather than make a second one
+    return made < request.created_at.astimezone(UAE) - timedelta(minutes=5)
 
 
 def sales_person(request: Request) -> int:

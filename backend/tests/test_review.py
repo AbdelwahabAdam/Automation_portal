@@ -546,3 +546,27 @@ def test_an_invoice_left_by_another_portal_is_let_go_of(client, db, fake_daftra,
     # Theirs is untouched: not re-totalled, and not paid against
     assert fake_daftra.invoices[theirs]["summary_total"] == "999.0"
     assert fake_daftra.invoices[theirs]["payments"] == []
+
+
+def test_an_invoice_older_than_the_request_is_not_taken_for_its_own(client, db, fake_daftra, sales, manager):
+    """What request 12 on the server met: a test portal sharing the «PORTAL» mark had already made
+    its own PORTAL-12 a day earlier. Same mark, same client, another request — and an invoice made
+    before this request existed cannot be this request's."""
+    seed.catalog(db)
+    seed.existing_client(db)
+    fake_daftra.add_client(4053, "0509999999", category_id=5, address=RENEWAL_ADDRESS,
+                           custom={"test": "N + F", "coordinates_text": "24.1, 55.6"})
+    request_id = renewal_request(client, db, sales)
+    theirs = fake_daftra.add_invoice(client_id=4053, total=4600.0)
+    # Their mark is this request's mark, to the letter, and their invoice is a day older
+    fake_daftra.invoices[theirs]["po_number"] = f"PORTAL-{request_id}"
+    fake_daftra.invoices[theirs]["created"] = (datetime.now(UAE) - timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S")
+    request = db.get(Request, request_id)
+    request.daftra_invoice_id = theirs
+    db.commit()
+
+    assert approve(client, manager, request_id).status_code == 200
+    db.refresh(request)
+    assert request.daftra_invoice_id != theirs
+    assert fake_daftra.invoices[theirs]["summary_total"] == "4600.0"
+    assert fake_daftra.invoices[theirs]["payments"] == []

@@ -4,9 +4,11 @@ Every call is recorded in `calls` as (method, path, params, body), so a test can
 what the portal would have sent. Nothing here ever reaches the network.
 """
 
+from datetime import datetime
 import re
 
 from app.daftra import DaftraError, NotFound
+from app.text import UAE
 
 
 class FakeDaftra:
@@ -53,6 +55,8 @@ class FakeDaftra:
         self.invoices[invoice_id] = {
             "id": str(invoice_id), "client_id": str(client_id), "no": no or f"0{invoice_id}", "draft": draft,
             "date": "2026-10-18", "po_number": "", "summary_total": str(total), "items": [], "payments": [],
+            # Daftra stamps every record in the account's own time, which is the UAE's
+            "created": datetime.now(UAE).strftime("%Y-%m-%d %H:%M:%S"),
             "documents": [], "initial_paid": paid,
         }
         return invoice_id
@@ -169,6 +173,7 @@ class FakeDaftra:
         total = sum(item["unit_price"] * item["quantity"] for item in items) + fields.get("adjustment_value", 0)
         self.invoices[invoice_id] = {**fields, "id": str(invoice_id), "no": f"0{invoice_id}", "draft": "0",
                                      "summary_total": str(round(total, 2)), "items": items, "payments": [],
+                                     "created": datetime.now(UAE).strftime("%Y-%m-%d %H:%M:%S"),
                                      "documents": [], "initial_paid": 0.0}
         return {"id": invoice_id}
 

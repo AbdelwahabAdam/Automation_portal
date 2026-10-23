@@ -12,7 +12,7 @@ from ..forms import NO_INSCRIPTION, package_quantity
 from ..models import Product, Request, User
 from ..text import day_month_year, display_name, squash
 from .common import (INVOICE_ATTACHMENT_FIELD, RECEIPT_ATTACHMENT_FIELD, TOTAL_TOLERANCE, SyncError, address_fields,
-                     attach_pdf, marker, money)
+                     attach_pdf, made_before_the_request, marker, money)
 
 
 # Printed on every invoice's last page (Daftra's "html_notes" field, not "notes" or "terms" — those
@@ -100,8 +100,12 @@ def get_invoice(invoice_id: int) -> dict:
 
 
 def find_invoice(request: Request) -> int | None:
+    """The invoice this request already made, if the last approval got that far. An older invoice
+    wearing the same mark belongs to someone else's request, and is not taken for this one's."""
     rows = daftra.get("invoices.json", {"client_id": request.daftra_client_id, "limit": 100}).get("data", [])
-    return next((int(row["Invoice"]["id"]) for row in rows if row["Invoice"].get("po_number") == marker(request)), None)
+    return next((int(row["Invoice"]["id"]) for row in rows
+                 if row["Invoice"].get("po_number") == marker(request)
+                 and not made_before_the_request(request, row["Invoice"].get("created"))), None)
 
 
 def ensure_invoice(request: Request, items: list[dict], staff_id: int, notes: str = "") -> dict:
@@ -111,9 +115,11 @@ def ensure_invoice(request: Request, items: list[dict], staff_id: int, notes: st
         try:
             invoice = get_invoice(request.daftra_invoice_id)
             # An invoice another portal made can be written here by a failed approval, from back
-            # when one mark could belong to two portals. It carries their mark, not this request's,
-            # and it is not ours to invoice against or to pay: let go of it and make our own.
-            if (invoice.get("po_number") or "") != marker(request):
+            # when one mark could belong to two portals. It is not ours to invoice against or to
+            # pay — it carries their mark, or it is older than this request — so let it go and
+            # make our own. Both are needed: a portal that shared our prefix wrote our very mark.
+            if ((invoice.get("po_number") or "") != marker(request)
+                    or made_before_the_request(request, invoice.get("created"))):
                 invoice = None
                 raise NotFound("not this request's invoice")
         except NotFound:
