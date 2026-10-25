@@ -69,7 +69,11 @@ def address(title="عنوان الخدمة", required=True):
         f("emirate", "الإمارة", "select", required, options=EMIRATES),
         f("street", "الشارع"),
         f("house", "رقم البيت / اسم الموقع"),
-        f("location_url", "رابط اللوكيشن", max_length=600),
+        # A real link, because Daftra keeps it on the client and refuses anything that is not one.
+        # 255 is as long as its own field: the share link («maps.app.goo.gl/…») fits, the whole
+        # address bar of a map does not. The الإحداثيات below are for coordinates; this is not.
+        f("location_url", "رابط اللوكيشن", max_length=255, pattern=r"^https?://\S+$",
+          pattern_message="أدخل رابطًا يبدأ بـ http أو https (الإحداثيات مكانها الحقل التالي)"),
         f("coordinates", "الإحداثيات (مثل 24.1787, 55.6045)" if required else "الإحداثيات، إن توفرت (مثل 24.1787, 55.6045)",
           required=required, max_length=100, coordinates_from="location_url"),
     )

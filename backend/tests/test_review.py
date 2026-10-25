@@ -570,3 +570,23 @@ def test_an_invoice_older_than_the_request_is_not_taken_for_its_own(client, db, 
     assert request.daftra_invoice_id != theirs
     assert fake_daftra.invoices[theirs]["summary_total"] == "4600.0"
     assert fake_daftra.invoices[theirs]["payments"] == []
+
+
+def test_a_location_that_is_not_a_link_does_not_stop_the_approval(client, db, fake_daftra, sales, manager):
+    """Daftra keeps the رابط اللوكيشن on the client and refuses anything that is not a link. A
+    request from before the form checked that may hold coordinates typed into the wrong box: the
+    الإحداثيات still go, the approval still goes through, and Daftra is not sent the bad link."""
+    seed.catalog(db)
+    seed.existing_client(db)
+    fake_daftra.add_client(4053, "0509999999", category_id=5, address=RENEWAL_ADDRESS,
+                           custom={"test": "N + F", "coordinates_text": "24.1, 55.6"})
+    request_id = renewal_request(client, db, sales, coordinates="24.1787, 55.6045")
+    # Stored before the form checked the link, which is how request 18 on the server holds it
+    request = db.get(Request, request_id)
+    request.data = {**request.data, "location_url": "24.1787, 55.6045"}
+    db.commit()
+
+    assert approve(client, manager, request_id).status_code == 200
+    saved = fake_daftra.clients[4053]
+    assert "link" not in saved or saved["link"] == ""
+    assert saved["custom"]["coordinates_text"] == "24.1787, 55.6045"

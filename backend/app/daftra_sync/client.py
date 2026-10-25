@@ -1,5 +1,7 @@
 """The Daftra client a request is for: found by client code or phone, or created."""
 
+import re
+
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
@@ -68,6 +70,16 @@ def custom_fields(data: dict, held: dict | None = None) -> dict:
     }
 
 
+def usable_link(data: dict) -> str:
+    """The request's رابط اللوكيشن, if Daftra will have it: it keeps the link on the client and
+    checks it is one, in 255 characters. A request from before the form asked for a real link may
+    hold anything — coordinates typed into the wrong box — and that is no reason to refuse the
+    whole approval: the الإحداثيات go to Daftra either way, and the link stays in the portal.
+    """
+    link = str(data.get("location_url") or "").strip()
+    return link if re.match(r"^https?://\S+$", link) and len(link) <= 255 else ""
+
+
 def address_change(saved: dict, address: dict) -> dict:
     """What to send so the client in Daftra carries this address, or nothing when it already does.
 
@@ -131,7 +143,7 @@ def save_address(daftra_id: int, data: dict):
     resource = f"clients/{daftra_id}.json"
     saved = daftra.get(resource).get("data", {}).get("Client", {})
     wanted = address_change(saved, address_fields(data))
-    link = str(data.get("location_url") or "").strip()
+    link = usable_link(data)
     if link and str(saved.get("link") or "").strip() != link:
         wanted["link"] = link
     if not wanted:
@@ -158,7 +170,7 @@ def update_client(request: Request):
     if data.get("category") and str(saved.get("category_id") or "") != str(data["category"]):
         wanted["category_id"] = data["category"]
         wanted["category"] = data.get("category_name") or ""
-    link = str(data.get("location_url") or "").strip()
+    link = usable_link(data)
     if link and str(saved.get("link") or "").strip() != link:
         wanted["link"] = link
     wanted.update(address_change(saved, address_fields(data)))
