@@ -181,6 +181,8 @@ def work_order_rows(request: Request, reviewer: User) -> list[str]:
             rows.append(f"الكتابة: {text}{place}")
         if details.get("manufacturing_notes"):
             rows.append(f"ملاحظات التصنيع: {details['manufacturing_notes']}")
+    if data.get("installation_days"):
+        rows.append(f"مدة التركيب: {data['installation_days']} يومًا")
     address = "، ".join(str(data[k]) for k in ("emirate", "area", "street", "house") if data.get(k))
     rows += [
         f"العميل: {data.get('customer_name') or ''} — {data.get('phone') or ''}",

@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from . import daftra_sync, mail
@@ -42,11 +42,12 @@ def add_event(db: Session, request: Request, user: User, kind: str, note: str | 
 
 
 def can_view(request: Request, user: User) -> bool:
-    """The owner sees their own request; a reviewer sees every request that has been sent."""
+    """The owner sees their own request; a reviewer sees every request, an employee's drafts
+    included. Only the owner can change a draft (requests_api.own_draft): a reviewer only reads it."""
     pages = set(user.pages)
     if request.created_by_id == user.id and pages & {"sales.new_request", "sales.my_requests"}:
         return True
-    return request.status != "draft" and REVIEW_PAGE in pages
+    return REVIEW_PAGE in pages
 
 
 def viewable_request(request_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> Request:
@@ -71,11 +72,12 @@ def review_out(request: Request) -> dict:
 
 @router.get("/review/requests")
 def review_queue(user: User = Depends(reviewer), db: Session = Depends(get_db)):
-    """Every request that has been sent, newest first. Drafts stay private to their owner."""
+    """Every request, newest first: those sent, and the employees' drafts (the «المسودات» tab, with a
+    count per employee), a draft by when it was last saved."""
     requests = db.scalars(
-        select(Request).where(Request.status != "draft")
+        select(Request)
         .options(selectinload(Request.created_by), selectinload(Request.reviewed_by))
-        .order_by(Request.submitted_at.desc()).limit(1000)
+        .order_by(func.coalesce(Request.submitted_at, Request.updated_at).desc()).limit(1000)
     ).all()
     return [review_out(request) for request in requests]
 

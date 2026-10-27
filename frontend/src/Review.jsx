@@ -12,10 +12,19 @@ const TABS = [
   { value: 'submitted', label: 'قيد المراجعة' },
   { value: 'returned', label: 'تحتاج تعديل' },
   { value: 'approved', label: 'المعتمدة' },
+  // The employees' forms not sent yet, for the manager to follow; they can only be read
+  { value: 'draft', label: 'المسودات' },
+  // Everything sent; drafts have their own tab
   { value: 'all', label: 'الكل' },
 ];
 
-// For sales managers: every request that has been sent, to approve or return with a reason
+// For sales managers: every request that has been sent, to approve or return with a reason, and
+// the employees' drafts with a count per employee
+const REFRESH_MS = 60 * 1000;
+const inTab = (r, tab) => (tab === 'all' ? r.status !== 'draft' : r.status === tab);
+// A draft has not been sent: it goes by when it was last saved
+const dateOf = (r) => (r.status === 'draft' ? r.updated_at : r.submitted_at);
+
 export default function Review({ user, sales }) {
   const [requests, setRequests] = useState(null);
   const [error, setError] = useState('');
@@ -34,12 +43,18 @@ export default function Review({ user, sales }) {
 
   const load = () => api('/review/requests').then(setRequests).catch((err) => setError(err.message));
   useEffect(() => { load(); }, []);
+  // Drafts are saved, sent and deleted all day; the counts follow without reloading the page
+  useEffect(() => {
+    if (viewing) return undefined;
+    const timer = setInterval(load, REFRESH_MS);
+    return () => clearInterval(timer);
+  }, [viewing]);
   useEffect(() => setPage(1), [tab, query, employee, formType, from, to, pageSize]);
 
   const filtered = useMemo(() => (requests || []).filter((r) => {
     // The day it was sent as the manager sees it, not the UTC one
-    const day = localDay(r.submitted_at);
-    return (tab === 'all' || r.status === tab)
+    const day = localDay(dateOf(r));
+    return inTab(r, tab)
       && (!employee || String(r.created_by_id) === employee)
       && (!formType || r.form_type === formType)
       && (!from || day >= from) && (!to || day <= to)
@@ -65,22 +80,32 @@ export default function Review({ user, sales }) {
   const labels = Object.fromEntries(sales.formTypes.map((type) => [type.key, type.label]));
   const employees = [...new Map(requests.map((r) => [r.created_by_id, r.created_by_name])).entries()];
   const shown = filtered.slice((page - 1) * pageSize, page * pageSize);
-  const action = (r) => (r.status === 'submitted'
-    ? <Button size="sm" variant="primary" icon="eye" onClick={() => setViewing(r)}>مراجعة الطلب</Button>
-    : <Button size="sm" icon="eye" onClick={() => setViewing(r)}>عرض الطلب</Button>);
+  const action = (r) => {
+    if (r.status === 'submitted') return <Button size="sm" variant="primary" icon="eye" onClick={() => setViewing(r)}>مراجعة الطلب</Button>;
+    return <Button size="sm" icon="eye" onClick={() => setViewing(r)}>{r.status === 'draft' ? 'عرض المسودة' : 'عرض الطلب'}</Button>;
+  };
+  // Each employee with drafts, and how many, most first
+  const draftCounts = [...requests.filter((r) => r.status === 'draft').reduce((counts, r) => {
+    const [name, count] = counts.get(r.created_by_id) || [r.created_by_name, 0];
+    return counts.set(r.created_by_id, [name, count + 1]);
+  }, new Map()).entries()].sort((a, b) => b[1][1] - a[1][1] || a[1][0].localeCompare(b[1][0]));
 
   let list;
   if (!filtered.length) {
     list = (
-      <EmptyState icon={tab === 'submitted' ? 'check-circle' : 'search'} title={tab === 'submitted' && !query ? 'لا توجد طلبات بانتظار المراجعة' : 'لا توجد طلبات مطابقة'}>
-        {tab === 'submitted' && !query ? 'كل الطلبات المرسلة تمت مراجعتها.' : 'غيّر البحث أو الفلاتر أو التبويب.'}
-      </EmptyState>
+      tab === 'draft' && !draftCounts.length ? (
+        <EmptyState icon="check-circle" title="لا توجد مسودات">لا يوجد عند الموظفين نماذج محفوظة لم تُرسل بعد.</EmptyState>
+      ) : (
+        <EmptyState icon={tab === 'submitted' ? 'check-circle' : 'search'} title={tab === 'submitted' && !query ? 'لا توجد طلبات بانتظار المراجعة' : 'لا توجد طلبات مطابقة'}>
+          {tab === 'submitted' && !query ? 'كل الطلبات المرسلة تمت مراجعتها.' : 'غيّر البحث أو الفلاتر أو التبويب.'}
+        </EmptyState>
+      )
     );
   } else {
     list = (
       <RequestList
         rows={shown} total={filtered.length} wide={areaWidth >= TABLE_MIN_WIDTH} labels={labels} actions={action}
-        columns={['id', 'type', 'client', 'employee', 'date', 'status']} dateLabel="تاريخ الإرسال" dateOf={(r) => r.submitted_at}
+        columns={['id', 'type', 'client', 'employee', 'date', 'status']} dateLabel={tab === 'draft' ? 'آخر حفظ' : 'تاريخ الإرسال'} dateOf={dateOf}
         page={page} pageSize={pageSize} onPage={setPage} onPageSize={setPageSize}
       />
     );
@@ -92,8 +117,23 @@ export default function Review({ user, sales }) {
       <Tabs
         label="حالة الطلب" value={tab}
         onChange={(value) => setParams(value === 'submitted' ? {} : { tab: value }, { replace: true })}
-        tabs={TABS.map((t) => ({ value: t.value, label: t.label, count: t.value === 'all' ? requests.length : requests.filter((r) => r.status === t.value).length }))}
+        tabs={TABS.map((t) => ({ value: t.value, label: t.label, count: requests.filter((r) => inTab(r, t.value)).length }))}
       />
+      {tab === 'draft' && draftCounts.length > 0 && (
+        <section className="fl-draftcounts" aria-label="عدد المسودات لكل موظف">
+          <span className="fl-small fl-muted">المسودات لكل موظف — اختر موظفًا لعرض مسوداته:</span>
+          <div className="fl-row">
+            {draftCounts.map(([id, [name, count]]) => (
+              <Button
+                key={id} size="sm" variant={employee === String(id) ? 'primary' : 'secondary'} aria-pressed={employee === String(id)}
+                onClick={() => setEmployee(employee === String(id) ? '' : String(id))}
+              >
+                <bdi>{name}</bdi> <span data-fl-num>({count})</span>
+              </Button>
+            ))}
+          </div>
+        </section>
+      )}
       <Filters
         active={[employee, formType, from, to].filter(Boolean).length}
         search={(
@@ -116,14 +156,14 @@ export default function Review({ user, sales }) {
               .map((type) => <option key={type.key} value={type.key}>{type.label}</option>)}
           </Select>
         </Field>
-        <Field label="تاريخ الإرسال من" htmlFor="review_from">
+        <Field label={tab === 'draft' ? 'آخر حفظ من' : 'تاريخ الإرسال من'} htmlFor="review_from">
           <TextInput id="review_from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
         </Field>
-        <Field label="تاريخ الإرسال إلى" htmlFor="review_to">
+        <Field label={tab === 'draft' ? 'آخر حفظ إلى' : 'تاريخ الإرسال إلى'} htmlFor="review_to">
           <TextInput id="review_to" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
         </Field>
       </Filters>
-      <p className="fl-results">النتائج: {filtered.length} من {tab === 'all' ? requests.length : requests.filter((r) => r.status === tab).length}</p>
+      <p className="fl-results">النتائج: {filtered.length} من {requests.filter((r) => inTab(r, tab)).length}</p>
       {list}
     </div>
   );

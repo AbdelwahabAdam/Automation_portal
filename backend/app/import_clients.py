@@ -19,7 +19,8 @@ import json
 
 from sqlalchemy import select
 
-from .daftra import address_from_daftra, local_phone
+from .daftra import address_from_daftra
+from .text import local_phone
 from .database import SessionLocal, run_migrations
 from .models import Address, Client
 

@@ -1,10 +1,28 @@
 // Mirrors backend/app/forms/validation.py so the user sees errors before submitting.
 // The backend validates again and stays the source of truth.
 
-const PHONE_RE = /^(?:\+?971|0)\d{8,9}$/;
+// A UAE number in the local form the portal keeps them in (0501234567): a mobile on 05 and one of
+// the operators' own digits, or a landline on its emirate's code — 2 أبوظبي, 3 العين, 4 دبي,
+// 6 الشارقة وعجمان وأم القيوين, 7 رأس الخيمة, 9 الفجيرة. Mirrors PHONE_RE in forms/validation.py.
+const PHONE_RE = /^0(?:5[024568]\d{7}|[234679]\d{7})$/;
+
+// Any way a number was written, as the portal keeps it: +971 50…, 00971 50…, 50… and ٠٥٠… all
+// become 0501234567. This is the form the client list and Daftra are searched by.
+export function localPhone(raw) {
+  const number = toLatinDigits(String(raw ?? '')).replace(/\D/g, '');
+  const national = number.startsWith('00971') ? number.slice(5)
+    : number.startsWith('971') ? number.slice(3) : number;
+  return !national || national.startsWith('0') ? national : `0${national}`;
+}
 const ARABIC_DIGITS = '٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹';
 // Field types 'product' and 'staff' hold a name picked from a Daftra list
 const DEFAULT_MAX_LENGTH = { text: 300, product: 300, staff: 300, textarea: 3000 };
+// Mirrors EMAIL_RE in forms/validation.py
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+// A field marked new_client (نوع العميل, الجنس, البريد) belongs on the form only while the phone search
+// has found no client (values.new_client, set by form/ClientLookup.jsx); the server decides the same way
+export const fieldApplies = (spec, values) => !spec.new_client || values.new_client === true;
 // Field types holding the id of a row in a Daftra list (see DAFTRA_LIST_TYPES in backend/app/forms/validation.py)
 export const DAFTRA_LIST_TYPES = ['daftra_order_source', 'daftra_treasury', 'daftra_client_category', 'daftra_client_invoice'];
 
@@ -15,7 +33,7 @@ export const isInput = (spec) => !['files', 'auto_user'].includes(spec.type) && 
 
 // Returns the phone as digits when it is a valid UAE number, otherwise null
 export function normalizePhone(raw) {
-  const value = toLatinDigits(String(raw ?? '')).replace(/[\s\-()]/g, '');
+  const value = localPhone(raw);
   return PHONE_RE.test(value) ? value : null;
 }
 
@@ -48,7 +66,7 @@ function cleanValue(spec, raw) {
     return [Math.round(number * 100) / 100, null];
   }
   if (spec.type === 'phone') {
-    value = toLatinDigits(value).replace(/[\s\-()]/g, '');
+    value = localPhone(value);
     return PHONE_RE.test(value) ? [value, null] : [null, 'أدخل رقم هاتف إماراتي صحيح'];
   }
   if (spec.type === 'date') {
@@ -58,6 +76,10 @@ function cleanValue(spec, raw) {
   }
   if (spec.type === 'select') return spec.options.includes(value) ? [value, null] : [null, 'اختر من القائمة'];
   if (DAFTRA_LIST_TYPES.includes(spec.type)) return /^\d+$/.test(value) ? [Number(value), null] : [null, 'اختر من القائمة'];
+  if (spec.type === 'email') {
+    return value.length <= 200 && EMAIL_RE.test(value)
+      ? [value.toLowerCase(), null] : [null, 'أدخل بريدًا إلكترونيًا صحيحًا، مثل name@example.com'];
+  }
 
   const maxLength = spec.max_length ?? DEFAULT_MAX_LENGTH[spec.type];
   if (value.length > maxLength) return [null, `الحد الأقصى ${maxLength} حرفًا`];
@@ -124,7 +146,7 @@ function conditionMet(condition, clean) {
 // catalog gives the live price of each product, for a field an order_lines field feeds (its "subtotal_field").
 // Returns { clean, errors, required } where required is the set of field names needed right now.
 export function evaluateForm(formType, values, fileCounts = {}, catalog = {}) {
-  const fields = allFields(formType);
+  const fields = allFields(formType).filter((spec) => fieldApplies(spec, values));
   const clean = {};
   const errors = {};
 

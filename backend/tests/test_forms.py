@@ -33,8 +33,9 @@ def package_lines(quantity=2, **details):
 def new_sale(**overrides):
     data = {
         "request_date": TODAY, "order_source": "16", "phone": "0501234567", "customer_name": "عميل تجريبي",
+        "customer_type": "فرد", "gender": "ذكر",
         "category": "5", "area": "منطقة العين", "emirate": "أبوظبي", "street": "شارع 1", "house": "فيلا 2",
-        "location_url": "https://maps.google.com/?q=24.17870,55.60451", "coordinates": "24.1787, 55.6045",
+        "location_url": "https://www.google.com/maps?q=24.178700,55.604510", "coordinates": "24.178700, 55.604510",
         "order_lines": package_lines(), "discount_amount": "200", "discount_approved_by": "Manager One",
         "discount_label": "مبادرة لك ان تشارك", "paid_amount": "1000", "remaining_due_date": TODAY,
         "payment_method": "تحويل بنكي", "treasury": "13", "payment_date": TODAY, "payment_reference": "TRX-1",
@@ -141,7 +142,8 @@ def test_unknown_products_are_dropped_and_an_empty_order_refused():
 def test_maintenance_only_takes_maintenance_items_and_must_be_paid_in_full():
     data = {
         "request_date": TODAY, "order_source": "16", "phone": "0501234567", "customer_name": "عميل",
-        "category": "5", "area": "منطقة العين", "emirate": "أبوظبي", "coordinates": "24.1, 55.6",
+        "category": "5", "area": "منطقة العين", "emirate": "أبوظبي",
+        "location_url": "https://www.google.com/maps?q=24.100000,55.600000", "coordinates": "24.100000, 55.600000",
         "devices": ["فلتر RO VIB", "not a device"], "service": "تبديل فلاتر", "visit_date": TODAY,
         "order_lines": [
             {"product_id": "3", "name": "RO .PP 10", "quantity": 2, "details": {}},
@@ -189,7 +191,8 @@ def test_balance_payment_requires_the_invoice_and_a_positive_amount():
 
 def test_contract_renewal_total_follows_the_typed_price():
     data = {"request_date": TODAY, "order_source": "16", "phone": "0501234567", "customer_name": "x", "category": "5",
-            "area": "منطقة العين", "emirate": "أبوظبي", "coordinates": "1.1, 2.2", "cooler_type": "سقيا",
+            "area": "منطقة العين", "emirate": "أبوظبي", "cooler_type": "سقيا",
+            "location_url": "https://www.google.com/maps?q=1.100000,2.200000", "coordinates": "1.100000, 2.200000",
             "subtotal_amount": "1680", "discount_amount": "80", "discount_approved_by": "M", "discount_label": "خصم",
             "paid_amount": "1600", "payment_method": "تحويل بنكي", "treasury": "13", "payment_date": TODAY,
             "payment_reference": "T"}
@@ -282,3 +285,104 @@ def test_the_area_keeps_the_neighbourhood_daftra_holds():
     clean, errors = validate("new_sale", new_sale(area="الخوانيج 2"), FILES)
     assert "area" not in errors
     assert clean["area"] == "الخوانيج 2"
+
+
+def test_the_coordinates_are_the_point_in_the_location_whatever_is_sent():
+    """الإحداثيات are the pin's own position. The field is read-only in the form, which stops a
+    person typing in it but not a browser, so the server takes them from the location itself."""
+    data = new_sale(location_url="https://www.google.com/maps?q=25.200000,55.270000",
+                    coordinates="1.000000, 2.000000")
+    clean, errors = validate("new_sale", data, FILES)
+    assert errors == {}
+    assert clean["coordinates"] == "25.200000, 55.270000"
+
+
+def test_a_request_needs_a_location():
+    _, errors = validate("new_sale", new_sale(location_url="", coordinates=""), FILES)
+    assert errors["location_url"] == "مطلوب"
+
+
+def test_a_location_that_is_not_a_map_link_is_refused():
+    _, errors = validate("new_sale", new_sale(location_url="24.1787, 55.6045"), FILES)
+    assert errors["location_url"] == "اختر الموقع على الخريطة"
+
+
+def test_coordinates_typed_by_hand_are_kept_when_the_location_has_no_point():
+    """A link shared from a phone's own position holds the place's name and not where it is, so
+    الإحداثيات are filled in by hand instead — and still required."""
+    gps = "https://maps.app.goo.gl/GQHpiS558z2DLsuG7?g_st=ic"
+    clean, errors = validate("new_sale", new_sale(location_url=gps, coordinates="24.500000, 55.900000"), FILES)
+    assert errors == {}
+    assert clean["coordinates"] == "24.500000, 55.900000"
+
+
+def test_a_location_with_no_point_still_needs_coordinates():
+    gps = "https://maps.app.goo.gl/GQHpiS558z2DLsuG7?g_st=ic"
+    _, errors = validate("new_sale", new_sale(location_url=gps, coordinates=""), FILES)
+    assert errors["coordinates"] == "مطلوب"
+
+
+def test_a_phone_is_kept_in_the_one_form_the_client_list_uses():
+    """However it was written, it is stored as 0501234567 — what clients and Daftra are searched by."""
+    for written in ["+971 50 123 4567", "00971501234567", "971501234567", "050 123 4567", "٠٥٠١٢٣٤٥٦٧"]:
+        clean, errors = validate("new_sale", new_sale(phone=written), FILES)
+        assert errors == {}, written
+        assert clean["phone"] == "0501234567", written
+
+
+def test_only_a_real_uae_number_is_accepted():
+    # 59 is no operator's, 01 no emirate's, and the length has to be right
+    for no in ["0591234567", "0101234567", "05012345", "05012345678", "+44 20 7946 0000", "12345"]:
+        _, errors = validate("new_sale", new_sale(phone=no), FILES)
+        assert errors.get("phone") == "أدخل رقم هاتف إماراتي صحيح", no
+
+
+def test_a_landline_is_a_number_too():
+    for written in ["04 123 4567", "+971 3 765 4321"]:
+        clean, errors = validate("new_sale", new_sale(phone=written), FILES)
+        assert errors == {}, written
+
+
+def new_client(data, **overrides):
+    return validate_submission("new_sale", {**data, **overrides}, FILES, "Sales One", PRODUCTS, PACKAGE_PRICES, LISTS,
+                               new_client=True)
+
+
+def test_a_new_client_needs_a_type_and_gender_and_may_give_an_email():
+    spec = {s["name"]: s for s in form_fields("new_sale")}
+    assert spec["customer_type"]["options"] == ["شركة", "فرد"]
+    assert spec["gender"]["options"] == ["ذكر", "أنثى"]
+    _, errors = new_client(new_sale(), customer_type="", gender="")
+    assert errors["customer_type"] == "مطلوب" and errors["gender"] == "مطلوب"
+    # Email is optional; one that is given must look like an email
+    clean, errors = new_client(new_sale(), email="")
+    assert not errors and "email" not in clean
+    for bad in ("name@", "name example.com", "name@example", "@example.com"):
+        _, errors = new_client(new_sale(), email=bad)
+        assert errors["email"].startswith("أدخل بريدًا إلكترونيًا صحيحًا"), bad
+    clean, errors = new_client(new_sale(), customer_type="شركة", gender="أنثى", email=" Office@Example.COM ")
+    assert not errors and (clean["customer_type"], clean["gender"], clean["email"]) == ("شركة", "أنثى", "office@example.com")
+    _, errors = new_client(new_sale(), customer_type="Business")
+    assert errors["customer_type"] == "اختر من القائمة"
+
+
+def test_an_existing_client_is_not_asked_for_type_gender_or_email():
+    # Daftra already has them; anything sent is left out rather than written over theirs
+    clean, errors = validate("new_sale", new_sale(customer_type="", gender="", email="not-an-email"), FILES)
+    assert not any(name in errors or name in clean for name in ("customer_type", "gender", "email"))
+
+
+def test_only_forms_that_create_a_daftra_client_ask_for_type_gender_and_email():
+    # Only the forms whose approval creates a client in Daftra ask; a renewal is for a client Daftra has
+    asking = {key for key in FORM_TYPES if {"customer_type", "gender", "email"} <= {s["name"] for s in form_fields(key)}}
+    assert asking == {"new_sale", "maintenance"}
+
+
+def test_installation_days_is_any_whole_number_of_days():
+    for typed, kept in (("15", 15), ("17", 17), ("١٢", 12), ("365", 365)):
+        clean, errors = validate("new_sale", new_sale(installation_days=typed), FILES)
+        assert "installation_days" not in errors and clean["installation_days"] == kept, typed
+    for typed, message in (("0", "الحد الأدنى 1"), ("366", "الحد الأقصى 365"), ("2.5", "أدخل عددًا بدون كسور"),
+                           ("abc", "أدخل رقمًا صحيحًا")):
+        _, errors = validate("new_sale", new_sale(installation_days=typed), FILES)
+        assert errors["installation_days"] == message, typed

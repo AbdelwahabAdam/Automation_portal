@@ -2,6 +2,7 @@ import AuditLog from './admin/AuditLog.jsx';
 import Catalog from './admin/Catalog.jsx';
 import DaftraSync from './admin/DaftraSync.jsx';
 import MailTest from './admin/MailTest.jsx';
+import OrderSources from './admin/OrderSources.jsx';
 import Permissions from './admin/Permissions.jsx';
 import Users from './admin/Users.jsx';
 import { MyRequestsPage, NewRequestPage } from './Sales.jsx';
@@ -18,6 +19,7 @@ export const PAGE_COMPONENTS = {
   'admin.audit': AuditLog,
   'admin.catalog': Catalog,
   'admin.daftra_sync': DaftraSync,
+  'admin.order_sources': OrderSources,
   'admin.mail': MailTest,
 };
 
@@ -34,5 +36,6 @@ export const PAGE_ICONS = {
   'admin.audit': 'history',
   'admin.catalog': 'package',
   'admin.daftra_sync': 'refresh',
+  'admin.order_sources': 'link',
   'admin.mail': 'mail',
 };

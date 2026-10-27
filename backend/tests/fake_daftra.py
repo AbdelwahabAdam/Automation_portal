@@ -42,13 +42,14 @@ class FakeDaftra:
         return self.next_id
 
     def add_client(self, client_id, phone, name="Existing", category_id=None, client_number=None, custom=None,
-                   address=None):
+                   address=None, link=""):
         # custom: the required custom fields, as a client added through the portal has them
         # address: the client's own address block (city holds the emirate, state the area)
+        # link: the رابط اللوكيشن, which Daftra keeps one of per client
         self.clients[client_id] = {"id": str(client_id), "business_name": name, "phone1": phone, "phone2": "",
                                    "client_number": client_number or f"{client_id:06d}",
                                    "category_id": str(category_id) if category_id else "", "category": "",
-                                   "custom": custom, **(address or {})}
+                                   "custom": custom, "link": link, **(address or {})}
 
     def add_invoice(self, client_id, total, paid=0.0, no=None, draft="0"):
         invoice_id = self._new_id()
@@ -81,6 +82,9 @@ class FakeDaftra:
             (r"GET /api2/products\.json", lambda **kw: self._page([{"Product": p} for p in self.products])),
             (r"GET /api2/treasuries\.json", lambda **kw: self._page([{"Treasury": t} for t in self.treasuries])),
             (r"GET /v2/api/entity/order_source/list/1", lambda **kw: {"data": self.order_sources}),
+            (r"POST /v2/api/entity/order_source", self.create_order_source),
+            (r"GET /v2/api/entity/order_source/(\d+)/1", self.get_order_source),
+            (r"PUT /v2/api/entity/order_source/(\d+)", self.update_order_source),
             (r"GET /api2/clients\.json", self.search_clients),
             (r"POST /api2/clients\.json", self.create_client),
             (r"GET /api2/clients/(\d+)\.json", self.get_client),
@@ -103,6 +107,22 @@ class FakeDaftra:
     @staticmethod
     def _page(rows):
         return {"pagination": {"page_count": 1}, "data": rows}
+
+    def create_order_source(self, params, body):
+        source_id = max(s["id"] for s in self.order_sources) + 1
+        self.order_sources.append({**body, "id": source_id})
+        return {"message": "تم إضافة مصادر الطلب بنجاح", "id": source_id}
+
+    def get_order_source(self, source_id, params, body):
+        return next(s for s in self.order_sources if s["id"] == int(source_id))
+
+    def update_order_source(self, source_id, params, body):
+        # As Daftra does: without the id in the body, the "edit" adds a copy
+        if "id" not in body:
+            return self.create_order_source(params, body)
+        source = self.get_order_source(source_id, params, None)
+        source.update({key: value for key, value in body.items() if key != "id"})
+        return {"message": "تم تحديث مصادر الطلب بنجاح", "id": source["id"]}
 
     # ---------- clients ----------
 

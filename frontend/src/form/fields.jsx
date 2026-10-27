@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { FileRow } from '../attachments.jsx';
 import { Button, Choice, Combobox, Icon, Select, TextArea, TextInput } from '../ds/index.jsx';
 import { matchesQuery } from '../ds/match.js';
+import { localPhone } from '../validation.js';
 
 const ACCEPT = '.jpg,.jpeg,.png,.webp,.heic,.pdf,.mp4,.mov,.doc,.docx';
 // Selects with this many options or fewer show as option cards, as in the design
@@ -168,6 +169,40 @@ export function Stepper({ id, label, min, max, value, onChange }) {
   );
 }
 
+// A UAE phone number. The country code is fixed and shown rather than typed, so the number beside
+// it is only ever the national part — and what the form keeps is the local form the client list and
+// Daftra are searched by (0501234567), whichever way it was pasted in.
+function PhoneInput({ spec, value, invalid, onChange, onSearch }) {
+  const national = localPhone(value).replace(/^0/, '');
+  // No more than a UAE number has: nine digits after the code for a mobile (5X XXXXXXX), eight for
+  // a landline. Anything beyond that is a typo, and the field stops taking it.
+  //
+  // The cap is here and not maxLength on the input: that counts the characters as typed, so a
+  // pasted «+971 55 183 1536» would be cut to its first nine — country code and all — leaving a
+  // number nobody entered. These are the digits left once the code has been taken off.
+  const change = (typed) => {
+    const kept = localPhone(typed).replace(/^0/, '').slice(0, 9);
+    onChange(spec.name, kept ? `0${kept}` : '');
+  };
+  return (
+    <TextInput
+      id={spec.name} value={national} invalid={invalid} type="text" inputMode="tel" autoComplete="off"
+      start={<span className="fl-box__code" id={`${spec.name}-code`}>+971</span>}
+      aria-describedby={`${spec.name}-code`}
+      icon="search" iconLabel={onSearch ? `بحث عن العميل بـ${spec.label}` : undefined}
+      onIconClick={onSearch && (() => onSearch(spec.name, value ?? ''))}
+      enterKeyHint={onSearch ? 'search' : undefined}
+      onChange={(e) => change(e.target.value)}
+      onKeyDown={onSearch && ((e) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        onSearch(spec.name, localPhone(e.target.value));
+        e.target.blur();
+      })}
+    />
+  );
+}
+
 // The control for one plain field. onSearch: the field looks the client up; both its magnifier and
 // the keyboard's own search key run the search
 export function Control({ spec, value, invalid, onChange, onBlur, onSearch }) {
@@ -175,6 +210,9 @@ export function Control({ spec, value, invalid, onChange, onBlur, onSearch }) {
     id: spec.name,
     value: value ?? '',
     invalid,
+    // Filled in by something else and not typed into: الإحداثيات come from the map's pin
+    readOnly: spec.readonly || undefined,
+    placeholder: spec.placeholder,
     onChange: (e) => onChange(spec.name, e.target.value),
     onBlur: onBlur && ((e) => onBlur(spec.name, e.target.value)),
   };
@@ -199,6 +237,8 @@ export function Control({ spec, value, invalid, onChange, onBlur, onSearch }) {
     return <SuggestInput spec={spec} value={value} invalid={invalid} onChange={onChange} onBlur={onBlur} />;
   }
   if (spec.type === 'date') return <TextInput {...common} type="date" />;
+  if (spec.type === 'phone') return <PhoneInput spec={spec} value={value} invalid={invalid} onChange={onChange} onSearch={onSearch} />;
+  if (spec.type === 'email') return <TextInput {...common} type="email" dir="ltr" inputMode="email" autoComplete="off" />;
   const inputMode = { number: spec.integer ? 'numeric' : 'decimal', phone: 'tel' }[spec.type];
   // A field the client is looked up by: its keyboard says «بحث», and digits are what gets typed
   const searching = Boolean(onSearch);

@@ -32,17 +32,25 @@ export function useClientLookup(form) {
   // arrive after the user has already asked for a new address — does not fill it back in
   const typingNewAddress = useRef(false);
 
-  async function loadClientInfo(daftraId) {
+  async function loadClientInfo(daftraId, theirLink = "") {
     setClientInfo({ status: 'loading' });
     try {
       const info = await api(`/daftra/clients/${daftraId}`);
       setClientInfo({ status: 'ready', ...info });
+      // Decided here, not inside the update: an update is run when React next renders, which is
+      // after this line, so anything read back out of one is read too early
+      const point = coordinatesFromLink(info.coordinates) || coordinatesFromLink(theirLink);
       form.setValues((current) => {
         const next = { ...current };
         // Their current التصنيف, unless one was already picked or a new address is being typed
         if (form.fieldNames.has('category') && info.category && !current.category && !typingNewAddress.current) {
           next.category = String(info.category.id);
           next.category_name = info.category.name;
+        }
+        // Where Daftra has them — but only if it really is a point: its «Coordinates» is free text,
+        // and some clients have a place's name sitting in it («فندق ومركز مؤتمرات لو ميريديان دبي…»)
+        if (form.fieldNames.has('coordinates') && point && !typingNewAddress.current) {
+          form.autoFill(current, next, 'coordinates', point);
         }
         // An invoice picked for a different client is dropped
         if (form.fieldNames.has('invoice') && current.invoice && !info.open_invoices.some((i) => String(i.id) === String(current.invoice))) {
@@ -51,6 +59,23 @@ export function useClientLookup(form) {
         }
         return next;
       });
+      // Nothing says where they are, but they have a link: the server follows it, as it does for a
+      // link pasted by hand. A client's link is usually a place, and a place does lead to a point.
+      if (!point && theirLink && form.fieldNames.has("coordinates") && !typingNewAddress.current) {
+        try {
+          const at = await api(`/location/from-link?url=${encodeURIComponent(theirLink)}`);
+          const found = `${at.lat.toFixed(6)}, ${at.lng.toFixed(6)}`;
+          form.setValues((current) => {
+            // Unless they have moved on: another client, or their own point typed in meanwhile
+            if ((current.location_url || '') !== theirLink) return current;
+            const next = { ...current };
+            form.autoFill(current, next, 'coordinates', found);
+            return next;
+          });
+        } catch {
+          // The link leads nowhere we can read; الإحداثيات stay for the salesperson to fill in
+        }
+      }
     } catch (err) {
       setClientInfo({ status: 'error', message: err.message });
     }
@@ -74,8 +99,10 @@ export function useClientLookup(form) {
     });
     form.setErrors((current) => Object.fromEntries(Object.entries(current).filter(([name]) => !CLIENT_FIELDS.includes(name))));
     setLookup({ field, status: 'found', client });
+    // A client we have: Daftra already holds their نوع العميل, الجنس and البريد
+    form.setValues((current) => ({ ...current, new_client: false }));
     typingNewAddress.current = false;
-    if (form.needsClientInfo) loadClientInfo(client.daftra_id);
+    if (form.needsClientInfo) loadClientInfo(client.daftra_id, client.location_url || "");
     const last = client.addresses?.[client.addresses.length - 1];
     setAddressChoice(last ? String(last.id) : null);
   }
@@ -134,6 +161,9 @@ export function useClientLookup(form) {
       if (lastLookup.current !== query) return;
       if (matches.length === 1) applyClient(matches[0], field);
       else setLookup({ field, status: matches.length ? 'many' : 'none', matches });
+      // Nobody with this number or code: a new client, so the form asks what Daftra needs to create them
+      if (matches.length > 1) form.setValues((current) => ({ ...current, new_client: false }));
+      else if (!matches.length) form.setValues((current) => ({ ...current, new_client: true }));
     } catch (err) {
       lastLookup.current = '';
       setLookup({ field, status: 'error', message: err.message });
@@ -188,7 +218,7 @@ export function ClientLookupNote({ name, client: found, values }) {
     );
   }
   if (lookup.status === 'none') {
-    return <p className="fl-field__hint">{name === 'phone' ? 'لا يوجد عميل بهذا الرقم (عميل جديد).' : 'لا يوجد عميل بهذا الكود.'}</p>;
+    return <p className="fl-field__hint">{name === 'phone' ? 'لا يوجد عميل بهذا الرقم (عميل جديد): أكمل نوع العميل والجنس أدناه.' : 'لا يوجد عميل بهذا الكود (عميل جديد): أكمل نوع العميل والجنس أدناه.'}</p>;
   }
   if (lookup.status === 'error') return <Alert tone="warning">{lookup.message}</Alert>;
   return (

@@ -9,7 +9,7 @@ from app import daftra
 from app.config import UPLOAD_DIR, settings
 from app.daftra_sync.invoice import WARRANTY_TERMS_HTML
 from app.redraw_work_orders import redraw
-from app.models import Attachment, Request
+from app.models import Attachment, Client, Request
 
 from . import seed
 from .conftest import auth, make_user
@@ -28,14 +28,41 @@ def approve(client, user, request_id, revision=1):
     return client.post(f"/api/review/requests/{request_id}/approve", json={"revision": revision}, headers=auth(user))
 
 
-def test_review_queue_shows_sent_requests_only(client, db, sales, manager):
+def test_any_number_of_installation_days_sets_the_work_orders_due_date(client, db, fake_daftra, sales, manager):
     seed.catalog(db)
-    create(client, sales, {"customer_name": "draft only"})
+    request_id = submitted_sale(client, db, sales, installation_days="17")
+    assert db.get(Request, request_id).data["installation_days"] == 17
+    assert approve(client, manager, request_id).status_code == 200
+    [work_order] = fake_daftra.posted("/api2/work_orders.json")
+    start = datetime.now(UAE).date()
+    assert work_order["WorkOrder"]["delivery_date"] == (start + timedelta(days=17)).isoformat()
+    assert "■ مدة التركيب: 17 يومًا" in work_order["WorkOrder"]["description"]
+
+
+def test_review_queue_shows_sent_requests_and_the_employees_drafts(client, db, sales, manager):
+    seed.catalog(db)
     request_id = submitted_sale(client, db, sales)
+    draft_id = create(client, sales, {"customer_name": "draft only"}).json()["id"]
     queue = client.get("/api/review/requests", headers=auth(manager)).json()
-    assert [r["id"] for r in queue] == [request_id]
+    # The draft was saved last, so it comes first
+    assert [(r["id"], r["status"]) for r in queue] == [(draft_id, "draft"), (request_id, "submitted")]
     assert queue[0]["created_by_name"] == "Sales One"
     assert client.get("/api/review/requests", headers=auth(sales)).status_code == 403
+    # The manager opens the draft to read it, but cannot change, send or delete it
+    opened = client.get(f"/api/requests/{draft_id}", headers=auth(manager))
+    assert opened.status_code == 200 and opened.json()["data"]["customer_name"] == "draft only"
+    assert client.put(f"/api/requests/{draft_id}", json={"data": {}, "action": "draft"}, headers=auth(manager)).status_code in (403, 404)
+    assert client.delete(f"/api/requests/{draft_id}", headers=auth(manager)).status_code in (403, 404)
+    # Another salesperson still cannot see it
+    other = make_user(db, "sales2", pages=["sales.new_request", "sales.my_requests"])
+    assert client.get(f"/api/requests/{draft_id}", headers=auth(other)).status_code == 404
+    # Sending it takes it out of the drafts
+    for field in ("payment_proof", "design_image"):
+        assert upload(client, sales, draft_id, field).status_code == 201
+    sent = client.put(f"/api/requests/{draft_id}", json={"data": seed.sale_data(), "action": "submit"}, headers=auth(sales))
+    assert sent.status_code == 200, sent.json()
+    statuses = {r["id"]: r["status"] for r in client.get("/api/review/requests", headers=auth(manager)).json()}
+    assert statuses == {draft_id: "submitted", request_id: "submitted"}
 
 
 def test_approving_a_new_sale_creates_everything_in_daftra(client, db, fake_daftra, sales, manager, outbox,
@@ -50,10 +77,10 @@ def test_approving_a_new_sale_creates_everything_in_daftra(client, db, fake_daft
 
     [new_client] = fake_daftra.posted("/api2/clients.json")
     assert new_client == {
-        "Client": {"business_name": "عميل تجريبي", "type": 2, "phone1": "0501234567", "address1": "شارع 1",
+        "Client": {"business_name": "عميل تجريبي", "type": 2, "gender": 1, "phone1": "0501234567", "address1": "شارع 1",
                    "address2": "فيلا 2", "city": "أبوظبي", "state": "منطقة العين", "country_code": "AE",
                    "default_currency_code": "AED", "category_id": 5, "category": "العين العامره"},
-        "le_custom_data_client": {"test": "N + F", "coordinates_text": "24.1787, 55.6045"},
+        "le_custom_data_client": {"test": "N + F", "coordinates_text": "24.178700, 55.604510"},
     }
     client_id = int(next(iter(fake_daftra.clients)))
 
@@ -89,6 +116,7 @@ def test_approving_a_new_sale_creates_everything_in_daftra(client, db, fake_daft
     assert fields["title"].startswith("باقة برادة سقيا الخير - 3 صنابير - أسود أبوظبي منطقة العين")
     assert fields["description"].endswith(f"PORTAL-{request_id}")
     assert "■ المسؤول: Manager One" in fields["description"]
+    assert "■ مدة التركيب: 20 يومًا" in fields["description"]
     saved = next(iter(fake_daftra.work_orders.values()))
     # Every field goes, blank ones included: Daftra empties any field the body leaves out. The flag is
     # Daftra's own (its spelling), and صورة المنتج carries a file id — text in it makes the save 500.
@@ -96,7 +124,7 @@ def test_approving_a_new_sale_creates_everything_in_daftra(client, db, fake_daft
         "CONTAINE_CUSTOM_DATA": "1",
         # field_30 is the first line's product image (seed.catalog gives the cooler file_id 7809)
         "field_8": "", "field_30": "7809", "field_32": "سقيا الخير-  اللون الاسود مقاس طبيعي",
-        "field_33": "", "field_36": "", "field_37": "https://maps.google.com/?q=24.17870,55.60451",
+        "field_33": "", "field_36": "", "field_37": "https://www.google.com/maps?q=24.178700,55.604510",
         "field_38": "", "field_39": "Sales One", "field_44": "اللون الاسود", "field_45": "", "field_46": "",
         "field_47": "بسم الله", "field_49": "اللون الاسود مقاس طبيعي",
     }
@@ -319,8 +347,11 @@ def test_balance_payment(client, db, fake_daftra, sales, manager):
 
 def test_maintenance(client, db, fake_daftra, sales, manager):
     seed.catalog(db)
+    # A business, with an email: what a new client is created with in Daftra
     data = {"request_date": TODAY, "order_source": "12", "phone": "0502222222", "customer_name": "عميل صيانة",
-            "category": "5", "area": "منطقة العين", "emirate": "أبوظبي", "coordinates": "24.1, 55.6",
+            "customer_type": "شركة", "gender": "أنثى", "email": "Office@Example.COM",
+            "category": "5", "area": "منطقة العين", "emirate": "أبوظبي",
+            "location_url": "https://www.google.com/maps?q=24.100000,55.600000", "coordinates": "24.100000, 55.600000",
             "devices": ["فلتر RO VIB"], "service": "تبديل فلاتر", "visit_date": TODAY,
             "order_lines": [{"product_id": "3", "name": "RO .PP 10", "quantity": 2, "details": {}}],
             "paid_amount": "100", "payment_method": "تحويل بنكي", "treasury": "13", "payment_date": TODAY}
@@ -334,6 +365,10 @@ def test_maintenance(client, db, fake_daftra, sales, manager):
                                        "tax1": 3, "store_id": 1}]
     assert invoice["Invoice"]["notes"] == f"الأجهزة: فلتر RO VIB\nالخدمة: تبديل فلاتر\nتاريخ الزيارة: {'/'.join(reversed(TODAY.split('-')))}"
     assert invoice["Invoice"]["order_source_id"] == 12
+    [new_client] = fake_daftra.posted("/api2/clients.json")
+    assert (new_client["Client"]["type"], new_client["Client"]["gender"], new_client["Client"]["email"]) == (
+        3, 2, "office@example.com")
+    assert db.query(Client).filter_by(phone="0502222222").one().email == "office@example.com"
     assert invoice["Invoice"]["html_notes"] == WARRANTY_TERMS_HTML
 
 
@@ -393,10 +428,11 @@ def renewal_request(client, db, sales, **overrides):
 def test_the_client_is_left_alone_when_daftra_already_has_all_of_it(client, db, fake_daftra, sales, manager):
     seed.catalog(db)
     seed.existing_client(db)
-    # Daftra already has this client in the category the form picked, with the same address and coordinates
+    # Daftra already has this client in the category the form picked, with the same address,
+    # coordinates and location link
     fake_daftra.add_client(4053, "0509999999", category_id=5,
-                           custom={"test": "N + F", "coordinates_text": "24.1, 55.6"},
-                           address=RENEWAL_ADDRESS)
+                           custom={"test": "N + F", "coordinates_text": "24.100000, 55.600000"},
+                           address=RENEWAL_ADDRESS, link="https://www.google.com/maps?q=24.100000,55.600000")
     request_id = renewal_request(client, db, sales)
     assert approve(client, manager, request_id).status_code == 200
     assert client_updates(fake_daftra) == []
@@ -411,9 +447,10 @@ def test_a_client_whose_required_fields_are_empty_is_still_given_its_category(cl
     assert approve(client, manager, request_id).status_code == 200
     saves = client_updates(fake_daftra)
     assert len(saves) == 1
-    assert saves[0]["le_custom_data_client"] == {"test": "N + F", "coordinates_text": "24.1, 55.6"}
+    assert saves[0]["le_custom_data_client"] == {"test": "N + F", "coordinates_text": "24.100000, 55.600000"}
     # This client had no address of its own, so the request's goes there rather than in the spare block
     assert saves[0]["Client"] == {"category_id": 5, "category": "العين العامره", **RENEWAL_ADDRESS,
+                                  "link": "https://www.google.com/maps?q=24.100000,55.600000",
                                   "business_name": "Existing", "first_name": "", "last_name": ""}
     assert fake_daftra.clients[4053]["category_id"] == 5
 
@@ -423,7 +460,7 @@ def test_the_client_keeps_its_name_when_its_category_changes(client, db, fake_da
     seed.catalog(db)
     seed.existing_client(db)
     fake_daftra.add_client(4053, "0509999999", name="مؤسسة الواحة لتجارة المياه", category_id=1,
-                           custom={"test": "N + F", "coordinates_text": "24.1, 55.6"})
+                           custom={"test": "N + F", "coordinates_text": "24.100000, 55.600000"})
     request_id = renewal_request(client, db, sales)
     assert approve(client, manager, request_id).status_code == 200
     assert fake_daftra.clients[4053]["category_id"] == 5
@@ -438,7 +475,7 @@ def test_the_clients_own_device_is_kept_while_its_coordinates_follow_the_request
                            custom={"test": "جهاز العميل الحقيقي", "coordinates_text": "25.0000, 55.0000"})
     request_id = renewal_request(client, db, sales)
     assert approve(client, manager, request_id).status_code == 200
-    assert fake_daftra.clients[4053]["custom"] == {"test": "جهاز العميل الحقيقي", "coordinates_text": "24.1, 55.6"}
+    assert fake_daftra.clients[4053]["custom"] == {"test": "جهاز العميل الحقيقي", "coordinates_text": "24.100000, 55.600000"}
 
 
 def test_a_second_address_goes_into_the_spare_block_and_leaves_the_first_alone(client, db, fake_daftra, sales, manager):
@@ -447,7 +484,7 @@ def test_a_second_address_goes_into_the_spare_block_and_leaves_the_first_alone(c
     seed.existing_client(db)
     home = {"address1": "شارع الشيخ زايد", "address2": "12", "city": "دبي", "state": "الخوانيج", "country_code": "AE"}
     fake_daftra.add_client(4053, "0509999999", category_id=5, address=home,
-                           custom={"test": "N + F", "coordinates_text": "24.1, 55.6"})
+                           custom={"test": "N + F", "coordinates_text": "24.100000, 55.600000"})
     request_id = renewal_request(client, db, sales)
     assert approve(client, manager, request_id).status_code == 200
     saved = fake_daftra.clients[4053]
@@ -461,11 +498,13 @@ def test_the_location_link_of_the_request_is_put_on_the_client(client, db, fake_
     seed.catalog(db)
     seed.existing_client(db)
     fake_daftra.add_client(4053, "0509999999", category_id=5,
-                           custom={"test": "N + F", "coordinates_text": "24.1, 55.6"})
-    link = "https://maps.app.goo.gl/NEWLOCATION1"
-    request_id = renewal_request(client, db, sales, location_url=link, coordinates="24.1, 55.6")
+                           custom={"test": "N + F", "coordinates_text": "24.100000, 55.600000"})
+    # The link the map writes: it holds the pin's own point, so the two always agree
+    link = "https://www.google.com/maps?q=25.200000,55.270000"
+    request_id = renewal_request(client, db, sales, location_url=link)
     assert approve(client, manager, request_id).status_code == 200
     assert fake_daftra.clients[4053]["link"] == link
+    assert fake_daftra.clients[4053]["custom"]["coordinates_text"] == "25.200000, 55.270000"
     # The name is not lost to a save that is only about the link
     assert fake_daftra.clients[4053]["business_name"] == "Existing"
 
@@ -509,7 +548,7 @@ def test_a_request_does_not_take_over_another_portals_invoice(client, db, fake_d
     seed.existing_client(db)
     # Both portals are testing against the same client, which is how the two met in the first place
     fake_daftra.add_client(4053, "0509999999", category_id=5, address=RENEWAL_ADDRESS,
-                           custom={"test": "N + F", "coordinates_text": "24.1, 55.6"})
+                           custom={"test": "N + F", "coordinates_text": "24.100000, 55.600000"})
     request_id = renewal_request(client, db, sales)
     # What the other portal left on this account: the same number, another request, another total
     other = fake_daftra.add_invoice(client_id=4053, total=999.0)
@@ -530,7 +569,7 @@ def test_an_invoice_left_by_another_portal_is_let_go_of(client, db, fake_daftra,
     seed.catalog(db)
     seed.existing_client(db)
     fake_daftra.add_client(4053, "0509999999", category_id=5, address=RENEWAL_ADDRESS,
-                           custom={"test": "N + F", "coordinates_text": "24.1, 55.6"})
+                           custom={"test": "N + F", "coordinates_text": "24.100000, 55.600000"})
     request_id = renewal_request(client, db, sales)
     theirs = fake_daftra.add_invoice(client_id=4053, total=999.0)
     fake_daftra.invoices[theirs]["po_number"] = f"OTHER-{request_id}"
@@ -555,7 +594,7 @@ def test_an_invoice_older_than_the_request_is_not_taken_for_its_own(client, db, 
     seed.catalog(db)
     seed.existing_client(db)
     fake_daftra.add_client(4053, "0509999999", category_id=5, address=RENEWAL_ADDRESS,
-                           custom={"test": "N + F", "coordinates_text": "24.1, 55.6"})
+                           custom={"test": "N + F", "coordinates_text": "24.100000, 55.600000"})
     request_id = renewal_request(client, db, sales)
     theirs = fake_daftra.add_invoice(client_id=4053, total=4600.0)
     # Their mark is this request's mark, to the letter, and their invoice is a day older
@@ -579,7 +618,7 @@ def test_a_location_that_is_not_a_link_does_not_stop_the_approval(client, db, fa
     seed.catalog(db)
     seed.existing_client(db)
     fake_daftra.add_client(4053, "0509999999", category_id=5, address=RENEWAL_ADDRESS,
-                           custom={"test": "N + F", "coordinates_text": "24.1, 55.6"})
+                           custom={"test": "N + F", "coordinates_text": "24.100000, 55.600000"})
     request_id = renewal_request(client, db, sales, coordinates="24.1787, 55.6045")
     # Stored before the form checked the link, which is how request 18 on the server holds it
     request = db.get(Request, request_id)
@@ -589,4 +628,4 @@ def test_a_location_that_is_not_a_link_does_not_stop_the_approval(client, db, fa
     assert approve(client, manager, request_id).status_code == 200
     saved = fake_daftra.clients[4053]
     assert "link" not in saved or saved["link"] == ""
-    assert saved["custom"]["coordinates_text"] == "24.1787, 55.6045"
+    assert saved["custom"]["coordinates_text"] == "24.100000, 55.600000"

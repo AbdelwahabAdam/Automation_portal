@@ -9,6 +9,7 @@ import pytest
 
 from app import daftra
 from app.daftra import _call as real_call  # taken before the fake_daftra fixture replaces it
+from app.text import local_phone
 
 
 class Answers:
@@ -80,10 +81,10 @@ def test_the_request_carries_the_key_and_json(answers):
 
 
 def test_local_phone_and_invoice_label():
-    assert daftra.local_phone("+971 50 123 4567") == "0501234567"
-    assert daftra.local_phone("00971501234567") == "0501234567"
-    assert daftra.local_phone("501234567") == "0501234567"
-    assert daftra.local_phone(None) == ""
+    assert local_phone("+971 50 123 4567") == "0501234567"
+    assert local_phone("00971501234567") == "0501234567"
+    assert local_phone("501234567") == "0501234567"
+    assert local_phone(None) == ""
     label = daftra.invoice_label({"no": "06273", "date": "18/10/2026", "unpaid": 4650.0})
     assert label == "06273 — 18/10/2026 — المتبقي 4,650 درهم"
 

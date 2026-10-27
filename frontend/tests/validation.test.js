@@ -44,11 +44,18 @@ const lines = [
   { product_id: 3, quantity: 1, group_id: null, details: {} },
 ];
 
-test('normalizePhone accepts UAE numbers written any way', () => {
-  assert.equal(normalizePhone('050 123 4567'), '0501234567');
-  assert.equal(normalizePhone('٠٥٠١٢٣٤٥٦٧'), '0501234567');
-  assert.equal(normalizePhone('+971501234567'), '+971501234567');
-  assert.equal(normalizePhone('12345'), null);
+test('normalizePhone reduces a UAE number written any way to the one form we keep', () => {
+  for (const written of ['050 123 4567', '٠٥٠١٢٣٤٥٦٧', '+971 50 123 4567', '00971501234567', '971501234567']) {
+    assert.equal(normalizePhone(written), '0501234567', written);
+  }
+  // A landline is as good a number: 4 دبي, 3 العين, 2 أبوظبي…
+  assert.equal(normalizePhone('04 123 4567'), '041234567');
+});
+
+test('normalizePhone refuses what is not a UAE number', () => {
+  for (const no of ['12345', '0591234567', '0101234567', '05012345', '05012345678', '+44 20 7946 0000']) {
+    assert.equal(normalizePhone(no), null, no);
+  }
 });
 
 test('package helpers', () => {
@@ -136,4 +143,30 @@ test('coordinates are read out of a map link', () => {
   assert.equal(coordinatesFromLink('https://maps.app.goo.gl/T3hGmfZLFvtmhrdT9'), '');
   assert.equal(coordinatesFromLink(''), '');
   assert.equal(coordinatesFromLink(null), '');
+});
+
+test('a new client is asked for type and gender, and an email only has to look like one', () => {
+  const clientForm = {
+    key: 'client',
+    sections: [{
+      title: 'c',
+      fields: [
+        { name: 'customer_type', type: 'select', required: true, options: ['شركة', 'فرد'], new_client: true },
+        { name: 'gender', type: 'select', required: true, options: ['ذكر', 'أنثى'], new_client: true },
+        { name: 'email', type: 'email', required: false, new_client: true },
+      ],
+    }],
+  };
+  // Until the phone search finds nobody, the client is not known to be new: nothing is asked
+  assert.deepEqual(evaluateForm(clientForm, {}).errors, {});
+  assert.deepEqual(evaluateForm(clientForm, { new_client: false, email: 'nope' }).errors, {});
+  const asked = evaluateForm(clientForm, { new_client: true });
+  assert.deepEqual(asked.errors, { customer_type: 'مطلوب', gender: 'مطلوب' });
+  assert.ok(!asked.required.has('email'));
+  for (const bad of ['name@', 'name example.com', 'name@example', '@example.com']) {
+    assert.match(evaluateForm(clientForm, { new_client: true, email: bad }).errors.email, /بريدًا إلكترونيًا صحيحًا/, bad);
+  }
+  const done = evaluateForm(clientForm, { new_client: true, customer_type: 'شركة', gender: 'أنثى', email: ' Office@Example.COM ' });
+  assert.deepEqual(done.errors, {});
+  assert.equal(done.clean.email, 'office@example.com');
 });

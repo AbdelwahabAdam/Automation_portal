@@ -54,6 +54,10 @@ function Summary({ request }) {
     ['الهاتف', data.phone && <bdi dir="ltr">{data.phone}</bdi>],
     ['كود العميل', data.client_code && <bdi dir="ltr">{data.client_code}</bdi>],
     ['المنطقة', place],
+    // Asked only for a new client, and sent to Daftra when it is created
+    ['نوع العميل', data.customer_type],
+    ['الجنس', data.gender],
+    ['البريد الإلكتروني', data.email && <bdi dir="ltr">{data.email}</bdi>],
   ].filter(([, value]) => value);
   const money = SUMMARY_MONEY.filter(([name]) => typeof data[name] === 'number');
   const daftra = [
@@ -266,6 +270,8 @@ export default function RequestView({ requestId, formTypes, onBack, ownerName, r
     if (value == null || value === '') return null;
     // Amounts and dates are read the way the rest of the portal writes them
     if (spec.money && typeof value === 'number') return <bdi data-fl-num>{formatAmount(value)}</bdi>;
+    // A number with its unit, e.g. مدة التركيب: «20 يومًا»
+    if (spec.unit && typeof value === 'number') return `${value} ${spec.unit}`;
     if (spec.type === 'date') return <bdi data-fl-num>{formatDay(value) || String(value)}</bdi>;
     return <bdi>{Array.isArray(value) ? value.join('، ') : String(value)}</bdi>;
   }
@@ -284,6 +290,11 @@ export default function RequestView({ requestId, formTypes, onBack, ownerName, r
         </div>
       </PageHeader>
       <Summary request={request} />
+      {request.status === 'draft' && ownerName && (
+        <Alert tone="info" title="مسودة لم تُرسل بعد">
+          آخر حفظ <bdi dir="ltr">{formatDate(request.updated_at)}</bdi>. للعرض فقط؛ يكملها الموظف ويرسلها من «طلباتي».
+        </Alert>
+      )}
       {request.status === 'returned' && request.returned_reason && (
         <Alert tone="warning" title="أُعيد الطلب للتعديل">{request.returned_reason}</Alert>
       )}

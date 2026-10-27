@@ -1,7 +1,7 @@
 """Building blocks the form definitions are written with: one field, and the sections several forms share."""
 
-from .options import (AREAS, AREAS_BY_EMIRATE, CASH_PAYMENT, DISCOUNT_LABELS, DISCOUNTED, EMIRATES, NO_INSCRIPTION,
-    PAYMENT_METHODS, SOURCES, TREASURY_BY_METHOD, YES_NO)
+from .options import (AREAS, AREAS_BY_EMIRATE, CASH_PAYMENT, CUSTOMER_TYPES, DISCOUNT_LABELS, DISCOUNTED, EMIRATES,
+    GENDERS, NO_INSCRIPTION, PAYMENT_METHODS, SOURCES, TREASURY_BY_METHOD, YES_NO)
 
 
 def f(name, label, type="text", required=False, **extra):
@@ -43,13 +43,23 @@ def request_info(date_label="تاريخ الاتفاق مع العميل", invoi
     )
 
 
-def client(code_required, name_label="اسم العميل المطلوب على الفاتورة"):
+def client(code_required, name_label="اسم العميل المطلوب على الفاتورة", creates_client=False):
+    # creates_client: approving the form creates the client in Daftra when it is new, so the form also
+    # asks what Daftra keeps on a new client. new_client=True: the field is shown, checked and kept
+    # only when the phone search finds no client (validation.validate_submission's new_client);
+    # Daftra already has them for one it finds.
+    new_client = [] if not creates_client else [
+        f("customer_type", "نوع العميل", "select", True, options=list(CUSTOMER_TYPES), new_client=True),
+        f("gender", "الجنس", "select", True, options=list(GENDERS), new_client=True),
+        f("email", "البريد الإلكتروني، إن وجد", "email", new_client=True),
+    ]
     return section(
         "بيانات العميل",
         f("phone", "رقم الهاتف", "phone", True),
         f("client_code", "كود العميل" if code_required else "كود العميل، إن وجد", required=code_required,
           pattern=r"^\d{1,6}$", pattern_message="أرقام فقط، حتى 6 خانات"),
         f("customer_name", name_label, required=True, max_length=150),
+        *new_client,
     )
 
 
@@ -69,13 +79,16 @@ def address(title="عنوان الخدمة", required=True):
         f("emirate", "الإمارة", "select", required, options=EMIRATES),
         f("street", "الشارع"),
         f("house", "رقم البيت / اسم الموقع"),
-        # A real link, because Daftra keeps it on the client and refuses anything that is not one.
-        # 255 is as long as its own field: the share link («maps.app.goo.gl/…») fits, the whole
-        # address bar of a map does not. The الإحداثيات below are for coordinates; this is not.
-        f("location_url", "رابط اللوكيشن", max_length=255, pattern=r"^https?://\S+$",
-          pattern_message="أدخل رابطًا يبدأ بـ http أو https (الإحداثيات مكانها الحقل التالي)"),
-        f("coordinates", "الإحداثيات (مثل 24.1787, 55.6045)" if required else "الإحداثيات، إن توفرت (مثل 24.1787, 55.6045)",
-          required=required, max_length=100, coordinates_from="location_url"),
+        # The place itself, picked on a map. The link is written from the pin, so it always holds
+        # the same point as الإحداثيات below — a Google share link holds a place name and no
+        # coordinates at all, which is why they used to be typed in by hand and drift apart.
+        # 255 is as long as Daftra's own field, and the link the picker writes is far shorter.
+        f("location_url", "موقع العميل", "location", required, max_length=255,
+          pattern=r"^https?://\S+$", pattern_message="اختر الموقع على الخريطة"),
+        # Read-only: it is the pin's own position, written whenever the pin moves. Daftra demands
+        # it on every client, so it is still required — the map is what fills it.
+        f("coordinates", "الإحداثيات", required=required, max_length=100,
+          coordinates_from="location_url", readonly=True, locked="من الخريطة"),
     )
 
 
@@ -140,7 +153,8 @@ def payment(title="تفاصيل الدفعة", when=True, invoiced=False):
         f("payment_method", "طريقة الدفع", "select", options=PAYMENT_METHODS, **need(when)),
         *([f("treasury", "الخزينة / الحساب المستلم في دفترة", "daftra_treasury",
              default_from={"field": "payment_method", "values": TREASURY_BY_METHOD}, **need(when))] if invoiced else []),
-        f("payment_date", "تاريخ الدفع", "date", not_future=True, **need(when)),
+        # Today, because a payment is nearly always taken on the day the request is written
+        f("payment_date", "تاريخ الدفع", "date", default="today", not_future=True, **need(when)),
         f("payment_reference", "رقم التحويل / طلب تابي / السند الورقي", **need(when)),
         f("collector_name", "اسم المحصل، في حالة الدفع النقدي", "staff", required_if=CASH_PAYMENT),
     )

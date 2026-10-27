@@ -161,7 +161,7 @@ def apply_action(request: Request, data: dict, action: str, user: User, db: Sess
             lists["daftra_client_invoice"] = {invoice["id"]: daftra.invoice_label(invoice) for invoice in invoices}
     clean, errors = validate_submission(
         request.form_type, data, file_counts, user.full_name or user.username, active_products(db),
-        package_prices(db), lists,
+        package_prices(db), lists, new_client=not daftra_sync.known_client(data, db),
     )
     chosen = next((i for i in invoices or [] if i["id"] == clean.get("invoice")), None)
     if chosen and "paid_amount" not in errors and clean.get("paid_amount", 0) > chosen["unpaid"] + 0.005:

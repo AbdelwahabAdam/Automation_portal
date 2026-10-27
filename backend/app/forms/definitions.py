@@ -6,7 +6,7 @@ The forms follow the sales templates in forms.md.
 from .fields import (INSCRIPTION, NOTES, address, amounts, attachments, client, discount_fields, f, files, money,
     original_refs, payment, request_info, section, yes_no)
 from .options import (BASE_COLORS, CASH, CASH_PAYMENT, COLORS, COVER_BACKS, DESIGN_VERSIONS, FRONT_DESIGNS,
-    HAS_INSCRIPTION, INSTALLATION_DAYS, MAINTENANCE_DEVICES, MAINTENANCE_SERVICES, MAX_PACKAGE_QUANTITY,
+    HAS_INSCRIPTION, MAX_INSTALLATION_DAYS, MAINTENANCE_DEVICES, MAINTENANCE_SERVICES, MAX_PACKAGE_QUANTITY,
     PACKAGE_COLOR_FAMILIES, PAID, PAYMENT_METHODS, REFUND_METHODS, RENEWAL_PRICE, TREASURY_BY_METHOD, W_DIRECTIONS,
     WANTS_WORK_ORDER, WORK_STARTED, WORK_STATUS)
 
@@ -19,7 +19,7 @@ FORM_TYPES = {
         "daftra_note": "ويُنشأ في دفترة العميل (إن كان جديدًا) والفاتورة وسند القبض بالمبلغ المدفوع، وأمر الشغل إن طُلب.",
         "sections": [
             request_info(invoiced=True),
-            client(False),
+            client(False, creates_client=True),
             address(),
             section(
                 "تفاصيل الطلب",
@@ -56,7 +56,9 @@ FORM_TYPES = {
             section(
                 "التركيب وأمر الشغل",
                 yes_no("create_work_order", "إنشاء أمر الشغل في دفترة"),
-                f("installation_days", "مدة التركيب (بالأيام)", "select", options=INSTALLATION_DAYS, required_if=WANTS_WORK_ORDER),
+                # Any whole number of days (e.g. 15, 20, 17): the work order is due that many days after approval
+                f("installation_days", "مدة التركيب (بالأيام)", "number", integer=True, min=1, max=MAX_INSTALLATION_DAYS,
+                  placeholder="مثال: 15 أو 20", unit="يومًا", required_if=WANTS_WORK_ORDER),
                 note="عند الاعتماد يُنشأ أمر الشغل في دفترة والمدير المعتمِد مسؤولًا عنه، يبدأ يوم الاعتماد وينتهي بعد مدة التركيب، ويُربط بالفاتورة.",
             ),
         ],
@@ -90,7 +92,7 @@ FORM_TYPES = {
         "daftra_note": "ويُنشأ في دفترة العميل (إن كان جديدًا) وفاتورة البنود المختارة، وسند القبض إن وُجدت دفعة.",
         "sections": [
             request_info("تاريخ الطلب", invoiced=True),
-            client(False),
+            client(False, creates_client=True),
             address(),
             section(
                 "تفاصيل الطلب",
@@ -116,7 +118,7 @@ FORM_TYPES = {
                 f("payment_method", "طريقة الدفع", "select", options=PAYMENT_METHODS, required_if=PAID),
                 f("treasury", "الخزينة / الحساب المستلم في دفترة", "daftra_treasury",
                   default_from={"field": "payment_method", "values": TREASURY_BY_METHOD}, required_if=PAID),
-                f("payment_date", "تاريخ الدفع", "date", not_future=True, required_if=PAID),
+                f("payment_date", "تاريخ الدفع", "date", default="today", not_future=True, required_if=PAID),
                 f("collector_name", "اسم المحصل، في حالة الدفع النقدي", "staff", required_if=CASH_PAYMENT),
             ),
             attachments(
@@ -148,7 +150,7 @@ FORM_TYPES = {
                 f("treasury", "الخزينة / الحساب المستلم في دفترة", "daftra_treasury", True,
                   default_from={"field": "payment_method", "values": TREASURY_BY_METHOD}),
                 f("collector_name", "اسم المحصل", "staff", True),
-                f("payment_date", "تاريخ التحصيل", "date", True, not_future=True),
+                f("payment_date", "تاريخ التحصيل", "date", True, default="today", not_future=True),
                 f("payment_reference", "رقم التحويل / السند الورقي", required=True),
             ),
             attachments(files("payment_proof", "صورة التحويل / الإيصال", True)),
@@ -384,7 +386,7 @@ FORM_TYPES = {
             section(
                 "تفاصيل الدفعة",
                 f("payment_method", "طريقة الدفع", "select", True, options=[CASH], default=CASH),
-                f("payment_date", "تاريخ الدفع", "date", True, not_future=True),
+                f("payment_date", "تاريخ الدفع", "date", True, default="today", not_future=True),
                 f("paper_receipt_number", "رقم سند القبض الورقي", required=True),
                 f("technician_name", "اسم الفني المحصل", "staff", required=True),
             ),

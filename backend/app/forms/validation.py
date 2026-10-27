@@ -4,13 +4,22 @@ import math
 import re
 from datetime import date
 
-from ..text import ARABIC_DIGITS, uae_today
+from ..text import ARABIC_DIGITS, local_phone, uae_today
 from .definitions import form_fields
 from .options import package_colors, package_quantity
 
-PHONE_RE = re.compile(r"^(?:\+?971|0)\d{8,9}$")
+# An email address: something@somewhere.domain, no spaces
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+# A UAE number, in the local form the portal keeps them in (0501234567). Mobiles are 05 and one of
+# the operators' own digits; landlines are the emirate's code — 2 أبوظبي, 3 العين, 4 دبي, 6 الشارقة
+# وعجمان وأم القيوين, 7 رأس الخيمة, 9 الفجيرة — and seven digits after it.
+PHONE_RE = re.compile(r"^0(?:5[024568]\d{7}|[234679]\d{7})$")
+# The point inside a location link, which the map writes as «?q=24.178700,55.604500»
+COORDINATES_IN_LINK = re.compile(r"(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)")
 # Field type "product" holds a name picked from our catalog, "staff" one picked from Daftra's staff list
-DEFAULT_MAX_LENGTH = {"text": 300, "product": 300, "staff": 300, "textarea": 3000, "package_color": 300}
+DEFAULT_MAX_LENGTH = {"text": 300, "product": 300, "staff": 300, "textarea": 3000, "package_color": 300,
+                      # "location" holds the link the map writes for the pin
+                      "location": 255, "email": 200}
 # Field types holding the id of a row in a Daftra list; the form shows the list, the data keeps the
 # id in the field and the row's name in "<field>_name"
 DAFTRA_LIST_TYPES = ("daftra_order_source", "daftra_treasury", "daftra_client_category", "daftra_client_invoice")
@@ -75,7 +84,9 @@ def _clean_value(spec: dict, raw):
             return None, f"الحد الأقصى {spec['max']}"
         return (int(number) if spec.get("integer") else round(number, 2)), None
     if kind == "phone":
-        value = re.sub(r"[\s\-()]", "", value.translate(ARABIC_DIGITS))
+        # However it was written — +971, 00971, with spaces, in Arabic digits — it is kept the way
+        # our client list and Daftra hold them: 0501234567
+        value = local_phone(value.translate(ARABIC_DIGITS))
         return (value, None) if PHONE_RE.match(value) else (None, "أدخل رقم هاتف إماراتي صحيح")
     if kind == "date":
         try:
@@ -91,6 +102,10 @@ def _clean_value(spec: dict, raw):
     if kind in DAFTRA_LIST_TYPES:
         # Checked against Daftra's list in validate_submission, when the list could be loaded
         return (int(value), None) if value.isdigit() else (None, "اختر من القائمة")
+    if kind == "email":
+        if len(value) > DEFAULT_MAX_LENGTH["email"] or not EMAIL_RE.match(value):
+            return None, "أدخل بريدًا إلكترونيًا صحيحًا، مثل name@example.com"
+        return value.lower(), None
 
     if len(value) > spec.get("max_length", DEFAULT_MAX_LENGTH[kind]):
         return None, f"الحد الأقصى {spec.get('max_length', DEFAULT_MAX_LENGTH[kind])} حرفًا"
@@ -114,7 +129,7 @@ def _condition_met(condition: dict, clean: dict) -> bool:
 
 def validate_submission(form_type: str, data: dict, file_counts: dict, employee_name: str,
                         products: dict | None = None, package_prices: dict | None = None,
-                        daftra_lists: dict | None = None) -> tuple[dict, dict]:
+                        daftra_lists: dict | None = None, new_client: bool = False) -> tuple[dict, dict]:
     """Returns (clean_data, errors) where errors maps field name to message.
 
     products maps our catalog's product id to product; None means the list could not be loaded,
@@ -122,8 +137,10 @@ def validate_submission(form_type: str, data: dict, file_counts: dict, employee_
     package_prices maps (package id, product id) to the product's unit price inside that package.
     daftra_lists maps a DAFTRA_LIST_TYPES type to {id: name} of Daftra's list; a type missing from
     it could not be loaded, so its id is accepted as sent and Daftra checks it on approval.
+    new_client: no client in our list has this phone or client code. Otherwise the fields marked
+    new_client (نوع العميل, الجنس, البريد) are left out: Daftra already has them for that client.
     """
-    fields = form_fields(form_type)
+    fields = [spec for spec in form_fields(form_type) if new_client or not spec.get("new_client")]
     clean, errors = {}, {}
 
     for spec in filter(is_input, fields):
@@ -254,6 +271,20 @@ def validate_submission(form_type: str, data: dict, file_counts: dict, employee_
     for spec in fields:
         if spec.get("blank_value") and not clean.get(spec["name"]):
             clean[spec["name"]] = spec["blank_value"]
+
+    # الإحداثيات are the pin's own position, so they are taken from the link the map wrote and not
+    # from whatever reached us: the field is read-only in the form, which is no guarantee here.
+    for spec in fields:
+        source = spec.get("coordinates_from")
+        if not source or not spec.get("readonly"):
+            continue
+        found = COORDINATES_IN_LINK.search(str(clean.get(source) or ""))
+        if found:
+            clean[spec["name"]] = f"{found[1]}, {found[2]}"
+            errors.pop(spec["name"], None)
+        # A location with no point in it — a link shared from a phone's own position keeps the
+        # place's name and not where it is — leaves الإحداثيات to be filled in by hand, and the
+        # «required» check below still has its say
 
     # A field that must equal another (e.g. the amount paid must be the whole total)
     for spec in fields:

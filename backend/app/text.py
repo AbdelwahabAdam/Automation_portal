@@ -14,6 +14,19 @@ def digits(raw) -> str:
     return re.sub(r"\D", "", str(raw or "").translate(ARABIC_DIGITS))
 
 
+def local_phone(raw: str | None) -> str:
+    """Reduces any way a UAE number is written to digits in local form, e.g. 0501234567.
+
+    That is the form our client list and Daftra both hold, and what a number is looked up by.
+    """
+    number = digits(raw)
+    if number.startswith("00971"):
+        number = number[5:]
+    elif number.startswith("971"):
+        number = number[3:]
+    return number if number.startswith("0") or not number else "0" + number
+
+
 def squash(text) -> str:
     """The text with surrounding spaces removed and inner runs of whitespace made one space."""
     return " ".join(str(text or "").split())

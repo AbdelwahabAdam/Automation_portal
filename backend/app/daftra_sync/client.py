@@ -7,7 +7,9 @@ from sqlalchemy.orm import Session
 
 from .. import daftra
 from ..config import settings
-from ..daftra import DaftraError, local_phone
+from ..daftra import DaftraError
+from ..forms.options import CUSTOMER_TYPES, GENDERS
+from ..text import local_phone
 from ..models import Address, Client, Request
 from ..text import digits, squash
 from .common import SyncError, address_fields
@@ -17,6 +19,17 @@ def client_id(data: dict, db: Session) -> int:
     """The Daftra client this request is for: an existing one, else a new one."""
     found = existing_client_id(data, db)
     return found if found is not None else create_client(data, local_phone(data.get("phone")), db)
+
+
+def known_client(data: dict, db: Session) -> bool:
+    """Whether our client list has a client with the request's client code or phone: the same list
+    the form's phone search reads, so the form and the server agree on who is a new client."""
+    code = digits(data.get("client_code"))
+    if code.strip("0") and db.scalar(select(Client.id).where(Client.client_code == code.zfill(6)).limit(1)):
+        return True
+    phone = local_phone(data.get("phone"))
+    return len(phone) >= 9 and db.scalar(
+        select(Client.id).where(or_(Client.phone == phone, Client.phone2 == phone)).limit(1)) is not None
 
 
 def existing_client_id(data: dict, db: Session) -> int | None:
@@ -117,7 +130,12 @@ def create_client(data: dict, phone: str, db: Session) -> int:
     # Daftra keeps the city in "city" and the area in "state" (see daftra.address_from_daftra, which reads them back)
     body = {
         "Client": {
-            "business_name": name, "type": 2, "phone1": phone,
+            "business_name": name, "phone1": phone,
+            # نوع العميل and الجنس as Daftra's codes (forms.options); a request from before the form
+            # asked keeps what every client got then: an individual, gender not set
+            "type": CUSTOMER_TYPES.get(data.get("customer_type"), 2),
+            **({"gender": GENDERS[data["gender"]]} if data.get("gender") in GENDERS else {}),
+            **({"email": data["email"]} if data.get("email") else {}),
             "address1": data.get("street") or "", "address2": data.get("house") or "",
             "city": data.get("emirate") or "", "state": data.get("area") or "",
             "country_code": "AE", "default_currency_code": "AED",
@@ -130,6 +148,7 @@ def create_client(data: dict, phone: str, db: Session) -> int:
     row = daftra.get(f"clients/{new_id}.json").get("data", {}).get("Client", {})
     db.add(Client(
         daftra_id=new_id, client_code=str(row.get("client_number") or new_id)[:10], customer_name=name, phone=phone,
+        email=data.get("email") or "",
         addresses=[Address(emirate=data.get("emirate") or "", area=data.get("area") or "", street=data.get("street") or "",
                            house=data.get("house") or "", link=data.get("location_url") or "", is_default=True)],
     ))

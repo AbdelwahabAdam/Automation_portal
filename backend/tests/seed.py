@@ -45,7 +45,8 @@ def sale_data(**overrides) -> dict:
 def renewal_data(**overrides) -> dict:
     data = {"request_date": TODAY, "order_source": "16", "phone": "0509999999", "client_code": "4089",
             "customer_name": "عميل قديم", "category": "5", "area": "منطقة العين", "emirate": "أبوظبي",
-            "coordinates": "24.1, 55.6", "cooler_type": "سقيا", "subtotal_amount": "1680", "discount_amount": "",
+            "location_url": "https://www.google.com/maps?q=24.100000,55.600000", "coordinates": "24.100000, 55.600000",
+            "cooler_type": "سقيا", "subtotal_amount": "1680", "discount_amount": "",
             "paid_amount": "1680", "payment_method": "تحويل بنكي", "treasury": "13", "payment_date": TODAY,
             "payment_reference": "TRX-9"}
     data.update(overrides)

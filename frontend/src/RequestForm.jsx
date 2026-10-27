@@ -6,9 +6,10 @@ import {
 import { ClientLookupNote, SEARCH_FIELDS, useClientLookup } from './form/ClientLookup.jsx';
 import { Control, DaftraListSelect, FileField, ProductPicker, guessFromProductName, showsAsChoice } from './form/fields.jsx';
 import FormProgress, { Totals, formTotals } from './form/FormProgress.jsx';
+import LocationPicker from './form/LocationPicker.jsx';
 import OrderLines from './form/OrderLines.jsx';
 import { formatAmount } from './formsMeta.js';
-import { DAFTRA_LIST_TYPES, allFields, coordinatesFromLink, evaluateForm, initialValues } from './validation.js';
+import { DAFTRA_LIST_TYPES, allFields, coordinatesFromLink, evaluateForm, fieldApplies, initialValues } from './validation.js';
 
 // Sections open when a form starts; the rest are folded until needed
 const OPEN_AT_START = 4;
@@ -212,6 +213,20 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
     else clearError(name);
   }
 
+  // What the map last gave as الإحداثيات, which is what makes them read-only. Empty once a link
+  // could not be followed to a point, so they can be typed in instead.
+  const fromTheMap = useRef('');
+
+  // The map's pin: the link and the coordinates are one act, never two
+  function pickLocation(link, coordinates) {
+    setValues((current) => ({ ...current, location_url: link, coordinates }));
+    autoFilled.current.location_url = link;
+    autoFilled.current.coordinates = coordinates;
+    fromTheMap.current = coordinates;
+    setMessage(null);
+    clearError('location_url', 'coordinates');
+  }
+
   // الإمارة narrows the areas suggested for المنطقة, and a known area fills in its emirate.
   // Changing the emirate leaves المنطقة alone: it holds a neighbourhood, which no list knows.
   function chooseEmirate(value) {
@@ -359,7 +374,9 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
   const errorCount = Object.keys(errors).length;
 
   const isFilled = (spec) => (spec.type === 'files' ? fileCounts[spec.name] : hasValue(values[spec.name]));
-  const inputsOf = (section) => section.fields.filter((spec) => spec.type !== 'auto_user' && !spec.computed);
+  // A new-client field the server still asks about (e.g. the search was never run) is shown too
+  const shown = (spec) => fieldApplies(spec, values) || Boolean(errors[spec.name]);
+  const inputsOf = (section) => section.fields.filter((spec) => spec.type !== 'auto_user' && !spec.computed && shown(spec));
 
   function summary(section) {
     const inputs = inputsOf(section);
@@ -429,6 +446,30 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
           rows={perClient ? client.clientInfo?.open_invoices || [] : catalog.daftraLists?.[spec.type]}
           unavailable={perClient ? client.invoicesUnavailable() : null}
           onChange={(rowId, label) => chooseFromList(spec.name, rowId, label)} />,
+      };
+    }
+    // الإحداثيات are the pin's own position while the location holds one — which it does whenever
+    // the map wrote it, or a pasted link could be followed to a point. A link that holds none
+    // (shared from a phone's own position, where Google kept only the place's name) leaves them to
+    // be filled in by hand, and they are still required.
+    if (spec.coordinates_from) {
+      // They are the map's to give while the map gave them. A link that could not be followed to a
+      // point leaves them to be typed, and so does a client's own saved address, which may be wrong.
+      const fromLocation = Boolean(values[spec.name]) && values[spec.name] === fromTheMap.current;
+      const location = values[spec.coordinates_from];
+      return {
+        locked: fromLocation ? spec.locked : undefined,
+        hint: fromLocation || !location || coordinatesFromLink(location) ? null
+          : 'الرابط لا يحمل إحداثيات، اكتبها هنا أو اختر الموقع على الخريطة.',
+        control: <Control spec={{ ...spec, readonly: fromLocation }} value={values[spec.name]} invalid={invalid}
+          onChange={change} />,
+      };
+    }
+    if (spec.type === 'location') {
+      // The pin writes both fields at once, so الإحداثيات can never belong to another place
+      return {
+        control: <LocationPicker spec={spec} value={values[spec.name]} coordinates={values.coordinates}
+          invalid={invalid} onPick={pickLocation} />,
       };
     }
     if (spec.name === 'emirate') {
@@ -504,7 +545,7 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
             invalid={section.fields.some((spec) => errors[spec.name])}
           >
             {section.note && <Alert tone="info">{section.note}</Alert>}
-            <div className="fl-grid">{section.fields.map(fieldRow)}</div>
+            <div className="fl-grid">{section.fields.filter(shown).map(fieldRow)}</div>
             {next && (
               <div className="fl-section__next">
                 <Button variant="tertiary" size="sm" iconEnd="chevron-end" onClick={() => jumpTo(index + 1)}>

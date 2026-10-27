@@ -38,6 +38,23 @@ async function expectText(page, text, what) {
   }
 }
 
+// The location is picked on a map, and الإحداثيات follow the pin: they are never typed. Returns
+// what the pin wrote, so a later step can tell whether clearing the address really cleared them.
+async function pickOnTheMap(page, problems, prefix, where = [0.5, 0.45]) {
+  const map = page.locator('.fl-map__canvas').first();
+  if (!(await map.count())) { problems.push(`[${prefix}] the location map is not on the form`); return ''; }
+  await map.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(1200);  // the tiles, and Leaflet settling into its box
+  const box = await map.boundingBox();
+  await page.mouse.click(box.x + box.width * where[0], box.y + box.height * where[1]);
+  await page.waitForTimeout(700);
+  const field = page.locator('#coordinates');
+  const coordinates = await field.inputValue();
+  if (!/-?\d+\.\d+,\s*-?\d+\.\d+/.test(coordinates)) problems.push(`[map] picking a point left الإحداثيات «${coordinates}»`);
+  if (!(await field.evaluate((el) => el.readOnly))) problems.push('[map] الإحداثيات can still be typed into');
+  return coordinates;
+}
+
 async function salesForm(page, prefix) {
   await page.goto(`${BASE}/sales/new_request`);
   await expectText(page, 'طلب بيع لعميل جديد', 'forms catalog');
@@ -95,7 +112,8 @@ async function salesForm(page, prefix) {
   // Asking for a new address empties the whole service address, التصنيف and the coordinates included
   const addressPick = page.locator('.fl-lookup__actions .fl-pick').first();
   if (await addressPick.count()) {
-    await page.locator('#coordinates').fill('24.1787, 55.6045');
+    // الإحداثيات are not typed any more: they are the map pin's own position
+    await pickOnTheMap(page, problems, prefix);
     await addressPick.click();
     const newAddress = page.getByRole('option', { name: /عنوان جديد/ });
     if (!(await newAddress.count())) problems.push('[address] «عنوان جديد» is not offered');
@@ -161,6 +179,83 @@ async function salesForm(page, prefix) {
   await keyboardRoom(page, prefix);
 }
 
+// نوع العميل, الجنس and البريد appear once the phone search finds nobody, and go again for a known client
+async function newClient(page, prefix) {
+  await page.goto(`${BASE}/sales/new_request`);
+  await page.getByText('طلب بيع لعميل جديد').first().click();
+  await expectText(page, 'بيانات العميل', 'new sale form');
+  const fields = ['customer_type', 'gender', 'email'];
+  const visible = async () => (await Promise.all(fields.map((name) => page.locator(`#field-${name}`).isVisible()))).filter(Boolean).length;
+  if (await visible()) problems.push('[new client] its fields show before any search');
+  // A client code nobody has shows them as well
+  const code = page.locator('#client_code');
+  await code.fill('987654');
+  await code.press('Enter');
+  await expectText(page, 'لا يوجد عميل بهذا الكود', 'no client with that code');
+  await page.waitForTimeout(400);
+  const shownForCode = await visible();
+  if (shownForCode !== fields.length) problems.push(`[new client] ${shownForCode} of ${fields.length} fields shown after a code nobody has`);
+  await code.fill('');
+  const phone = page.locator('#phone');
+  // A valid number no client has
+  await phone.fill('0589990001');
+  await phone.press('Enter');
+  await expectText(page, 'لا يوجد عميل بهذا الرقم', 'no client with that number');
+  await page.waitForTimeout(400);
+  const shownForNew = await visible();
+  if (shownForNew !== fields.length) problems.push(`[new client] ${shownForNew} of ${fields.length} fields shown for a new client`);
+  await page.locator('#email').fill('not-an-email');
+  await shot(page, `${prefix}-new-client`, false);
+  await phone.fill(PHONE);
+  await phone.press('Enter');
+  await expectText(page, 'عميل مسجل', 'known client found');
+  await page.waitForTimeout(400);
+  const shownForKnown = await visible();
+  if (shownForKnown) problems.push(`[new client] ${shownForKnown} of its fields still shown for a known client`);
+  log(`${prefix} new client fields: ${shownForCode} shown for an unknown code, ${shownForNew} for a new number, ${shownForKnown} for a known client`);
+}
+
+// مدة التركيب takes any whole number of days, typed in, not picked from a short list
+async function installationDays(page, prefix) {
+  await page.goto(`${BASE}/sales/new_request`);
+  await page.getByText('طلب بيع لعميل جديد').first().click();
+  await page.getByRole('button', { name: 'فتح كل الأقسام' }).click();
+  const box = page.locator('#installation_days');
+  await box.scrollIntoViewIfNeeded();
+  const tag = await box.evaluate((el) => el.tagName.toLowerCase());
+  if (tag !== 'input') { problems.push(`[installation days] is a ${tag}, not a box to type the days into`); return; }
+  await box.fill('17');
+  if (await box.inputValue() !== '17') problems.push('[installation days] typing 17 did not stay');
+  log(`${prefix} installation days: typed 17, placeholder «${await box.getAttribute('placeholder')}»`);
+  await shot(page, `${prefix}-installation-days`, false);
+}
+
+// The manager's «المسودات» tab: a count per employee with drafts, filtering by one, and a draft opened read-only
+async function managerDrafts(page, prefix) {
+  await page.goto(`${BASE}/sales/review?tab=draft`);
+  await expectText(page, 'مراجعة الطلبات', 'review page');
+  await page.waitForTimeout(1200);
+  const chips = page.locator('.fl-draftcounts button');
+  const employees = await chips.count();
+  if (!employees) {
+    await expectText(page, 'لا توجد مسودات', 'no drafts message');
+    log(`${prefix} drafts: none`);
+    return;
+  }
+  const label = (await chips.first().innerText()).trim();
+  const count = Number((label.match(/\((\d+)\)/) || [])[1]);
+  await chips.first().click();
+  await page.waitForTimeout(400);
+  const results = await page.locator('.fl-results').innerText();
+  if (!results.includes(`النتائج: ${count} `)) problems.push(`[drafts] «${label}» but the list says «${results}»`);
+  await shot(page, `${prefix}-drafts`);
+  await page.getByRole('button', { name: 'عرض المسودة' }).first().click();
+  await expectText(page, 'مسودة لم تُرسل بعد', 'draft opened read-only');
+  if (await page.getByRole('button', { name: 'اعتماد الطلب' }).count()) problems.push('[drafts] a draft offers to be approved');
+  await shot(page, `${prefix}-draft-view`, false);
+  log(`${prefix} drafts: ${employees} employee(s) with drafts, first «${label}», ${results}`);
+}
+
 // Every field each visible form defines is on the screen
 async function everyField(page, prefix) {
   const types = await page.evaluate(async (token) => (await fetch('/api/form-types', { headers: { Authorization: `Bearer ${token}` } })).json(), TOKEN);
@@ -169,7 +264,8 @@ async function everyField(page, prefix) {
     await page.getByText(type.label).first().click();
     await page.getByRole('button', { name: 'فتح كل الأقسام' }).click();
     await page.waitForTimeout(500);
-    const expected = type.sections.flatMap((section) => section.fields.map((f) => f.name));
+    // A new client's fields (نوع العميل, الجنس, البريد) wait for a phone search that finds nobody: newClient()
+    const expected = type.sections.flatMap((section) => section.fields.filter((f) => !f.new_client).map((f) => f.name));
     const shown = await page.$$eval('[id^="field-"]', (els) => els.filter((el) => el.offsetParent !== null).map((el) => el.id.slice(6)));
     const missing = expected.filter((name) => !shown.includes(name));
     log(`${prefix} ${type.key}: ${shown.length} of ${expected.length} fields shown`);
@@ -256,6 +352,7 @@ async function pages(page, prefix) {
     ['/admin/audit', 'سجل النشاط', 'audit'],
     ['/admin/catalog', 'المنتجات والباقات', 'products'],
     ['/admin/daftra_sync', 'المزامنة مع دفترة', 'daftra-sync'],
+    ['/admin/order_sources', 'مصادر الطلب', 'order-sources'],
     ['/admin/mail', 'اختبار البريد', 'mail'],
     ['/account', 'حسابي', 'account'],
   ];
@@ -299,6 +396,9 @@ try {
     await salesForm(page, prefix);
     await devicePicker(page, prefix);
     await staffPickers(page, prefix);
+    await newClient(page, prefix);
+    await installationDays(page, prefix);
+    await managerDrafts(page, prefix);
     await everyField(page, prefix);
     await pages(page, prefix);
     await page.context().close();

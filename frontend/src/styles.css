@@ -11,3 +11,7 @@
 .fl-invite-link { margin-block-start: var(--fl-space-2); overflow-wrap: anywhere; }
 /* The client found by a search: their address choice and its buttons */
 .fl-lookup__actions { margin-block-start: var(--fl-space-2); }
+
+/* Review page: the employees with drafts, with their counts */
+.fl-draftcounts { display: flex; flex-direction: column; gap: 8px; }
+.fl-draftcounts .fl-row { flex-wrap: wrap; }

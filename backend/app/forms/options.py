@@ -23,6 +23,9 @@ SOURCES = ["ماركتنج", "عميل شركة", "عميل جديد", "عميل
 WORK_STATUS = ["مطلوب تنفيذها", "تم تنفيذها", "تم تنفيذ جزء منها"]
 WORK_STARTED = WORK_STATUS[1:]
 COLORS = ["أبيض", "أسود", "ذهبي", "أخرى"]
+# A new client's نوع العميل and الجنس, with what Daftra stores for each (Client.type, Client.gender)
+CUSTOMER_TYPES = {"شركة": 3, "فرد": 2}
+GENDERS = {"ذكر": 1, "أنثى": 2}
 
 # The renewal price a طلب تجديد عقد الصيانة السنوي starts from; the salesperson can change it
 RENEWAL_PRICE = 1680
@@ -121,4 +124,5 @@ COVER_BACKS = ["بدون ظهر", "باب W مفصلي"]
 DESIGN_VERSIONS = ["تصميم جديد", "تصميم قديم حرف L"]
 BASE_COLORS = ["أسود", "أبيض"]
 # How many days an installation takes, i.e. the work order's delivery date after its start
-INSTALLATION_DAYS = ["15", "20", "25"]
+# The longest مدة التركيب a work order can be given, in days
+MAX_INSTALLATION_DAYS = 365

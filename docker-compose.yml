@@ -38,7 +38,7 @@ services:
       # This portal is not the one on the server: its marks in Daftra must not look like theirs
       DAFTRA_MARKER_PREFIX: ${DAFTRA_MARKER_PREFIX:-DEV}
     ports:
-      - "8001:8001"
+      - "8002:8001"
     volumes:
       - backend_uploads:/app/uploads
     depends_on:

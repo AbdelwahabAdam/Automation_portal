@@ -21,15 +21,16 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from ..config import settings
-from ..daftra import NotFound, local_phone
+from ..daftra import NotFound
+from ..text import local_phone
 from ..models import Request, User
 from ..text import day_month_year
-from .client import client_id, existing_client_id, save_address, update_client
+from .client import client_id, existing_client_id, held_custom_fields, known_client, save_address, update_client
 from .common import TOTAL_TOLERANCE, SyncError, money, payment_inputs, reports_daftra_errors, sales_person
 from .invoice import ensure_invoice, finish, get_invoice, invoice_items, payment_of
 from .work_order import ensure_work_order
 
-__all__ = ["SyncError", "existing_client_id", "save_address", "sync"]
+__all__ = ["SyncError", "existing_client_id", "held_custom_fields", "known_client", "save_address", "sync"]
 
 # The description of the renewal invoice's one line, as staff write it by hand (e.g. invoice 06263)
 RENEWAL_DESCRIPTION = "تجديد عقد الصيانه لمده عام مع تبديل فلاتر كل ثلاث اشهر"

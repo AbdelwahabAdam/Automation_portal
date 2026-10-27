@@ -8,9 +8,10 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
-from . import catalog, daftra, daftra_sync
+from . import catalog, daftra, daftra_sync, location
 from .audit import Audit
-from .daftra import local_phone
+from .config import settings
+from .text import local_phone
 from .database import get_db
 from .models import Address, Client, ClientCategory, Package, PackageItem, Product, User
 from .security import sales_user
@@ -38,6 +39,17 @@ def client_match(client: Client) -> dict:
         "location_url": last.link if last else "",
         "addresses": [address_out(a) for a in addresses],
     }
+
+
+@router.get("/location/from-link")
+def point_of_link(url: str, user: User = Depends(sales_user)):
+    """Where a map link points, so pasting one moves the pin. The browser cannot follow a short
+    link itself — reading another site's redirect is not allowed — so it is followed here."""
+    try:
+        lat, lng = location.resolve(url)
+    except location.NotALocation as why:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(why)) from why
+    return {"lat": lat, "lng": lng}
 
 
 @router.get("/clients/lookup")
@@ -184,8 +196,12 @@ def daftra_client(daftra_id: int, user: User = Depends(sales_user)):
     the invoices that still have something to pay (newest first, labelled for the drop-down)."""
     def load():
         invoices = daftra.open_invoices(daftra_id)
+        # Where Daftra has this client: it keeps the point on them, which a map link of theirs
+        # often does not — a link shared from a phone holds the place's name and nothing else.
+        held = daftra_sync.held_custom_fields(daftra_id)
         return {
             "category": daftra.client_category(daftra_id),
+            "coordinates": str(held.get(settings.daftra_client_coordinates_field) or "").strip(),
             "open_invoices": [{**invoice, "name": daftra.invoice_label(invoice)} for invoice in invoices],
         }
     return from_daftra(load, "تعذر تحميل بيانات العميل من دفترة")

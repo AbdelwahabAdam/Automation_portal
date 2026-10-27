@@ -54,11 +54,13 @@ ACTIONS = {
     "package.update": "تعديل باقة",
     "package.delete": "حذف باقة",
     "daftra.sync": "مزامنة مع دفترة",
+    "order_source.create": "إضافة مصدر طلب في دفترة",
+    "order_source.update": "تفعيل أو إيقاف مصدر طلب في دفترة",
     "product.daftra_sync": "تحديث منتج من دفترة",
 }
 
 ENTITY_TYPES = {"user": "مستخدم", "role": "دور", "request": "طلب", "attachment": "مرفق", "product": "منتج",
-                "package": "باقة", "client": "عميل"}
+                "package": "باقة", "client": "عميل", "order_source": "مصدر طلب"}
 
 # Labels for the keys that appear in the before/after values of an entry
 FIELD_LABELS = {
@@ -84,6 +86,7 @@ FIELD_LABELS = {
     "reason": "السبب",
     "name": "الاسم",
     "kinds": "ما تمت مزامنته",
+    "active": "مفعّل",
     "pages": "الصفحات",
     "form_type": "نوع النموذج",
     "status": "الحالة",

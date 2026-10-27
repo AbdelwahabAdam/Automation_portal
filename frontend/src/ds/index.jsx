@@ -70,9 +70,11 @@ export function Field({ label, htmlFor, required, optional, locked, hint, error,
 
 // The bordered box around an input, with optional icon and trailing button
 // onIconClick makes the leading icon a button (e.g. a search field's magnifier that runs the search)
-export function InputBox({ icon, onIconClick, iconLabel, end, invalid, readOnly, disabled, children, className }) {
+// start: something fixed before what is typed, such as a phone's country code
+export function InputBox({ icon, onIconClick, iconLabel, start, end, invalid, readOnly, disabled, children, className }) {
   return (
     <div className={cx('fl-box', invalid && 'fl-box--invalid', readOnly && 'fl-box--readonly', disabled && 'fl-box--disabled', className)}>
+      {start}
       {icon && (onIconClick ? (
         <button type="button" className="fl-box__icon fl-box__icon--button" aria-label={iconLabel} title={iconLabel} disabled={disabled} onClick={onIconClick}>
           <Icon name={icon} size={18} />
@@ -84,9 +86,9 @@ export function InputBox({ icon, onIconClick, iconLabel, end, invalid, readOnly,
   );
 }
 
-export function TextInput({ icon, onIconClick, iconLabel, invalid, className, ...rest }) {
+export function TextInput({ icon, onIconClick, iconLabel, invalid, className, start, ...rest }) {
   return (
-    <InputBox icon={icon} onIconClick={onIconClick} iconLabel={iconLabel} invalid={invalid} readOnly={rest.readOnly} disabled={rest.disabled} className={className}>
+    <InputBox icon={icon} onIconClick={onIconClick} iconLabel={iconLabel} start={start} invalid={invalid} readOnly={rest.readOnly} disabled={rest.disabled} className={className}>
       <input className="fl-input" aria-invalid={invalid || undefined} {...rest} />
     </InputBox>
   );

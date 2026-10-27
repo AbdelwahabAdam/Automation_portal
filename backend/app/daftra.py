@@ -15,7 +15,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from .config import settings
 from .forms import PAYMENT_METHODS
-from .text import day_month_year, digits, squash
+from .text import day_month_year, squash
 
 TIMEOUT_SECONDS = 20
 CACHE_SECONDS = 15 * 60
@@ -192,14 +192,6 @@ def invoice_pdf(invoice_id: int, pdf_url: str) -> bytes:
     return content
 
 
-def local_phone(raw: str | None) -> str:
-    """Reduces any way a UAE number is written to digits in local form, e.g. 0501234567."""
-    number = digits(raw)
-    if number.startswith("00971"):
-        number = number[5:]
-    elif number.startswith("971"):
-        number = number[3:]
-    return number if number.startswith("0") or not number else "0" + number
 
 
 def _fold(text: str) -> str:
@@ -432,15 +424,59 @@ def invoice_label(invoice: dict) -> str:
     return f"{invoice['no']} — {invoice['date']} — المتبقي {invoice['unpaid']:,.2f}".removesuffix(".00") + " درهم"
 
 
+def all_order_sources() -> list[dict]:
+    """Every order source (an invoice's مصدر الطلب), active or not, in Daftra's display order.
+    Not cached: the admin page shows them as they are now. Only the read API v2 lists them."""
+    body = _call("GET", "/v2/api/entity/order_source/list/1", {"limit": 100})
+    rows = sorted(body.get("data", []), key=lambda row: (row.get("display_order") or 0, int(row["id"])))
+    return [{"id": int(row["id"]), "name": squash(row.get("name")), "active": row.get("status") == 1,
+             "display_order": row.get("display_order") or 0} for row in rows]
+
+
 def list_order_sources() -> list[dict]:
-    """Active order sources (an invoice's مصدر الطلب). Only the read API v2 lists them."""
+    """Active order sources, the ones the sales forms offer."""
     def load():
-        body = _call("GET", "/v2/api/entity/order_source/list/1", {"limit": 100})
-        rows = body.get("data", [])
-        return [
-            {"id": int(row["id"]), "name": squash(row.get("name"))}
-            for row in sorted(rows, key=lambda row: row.get("display_order") or 0)
-            if row.get("status") == 1
-        ]
+        return [{"id": row["id"], "name": row["name"]} for row in all_order_sources() if row["active"]]
 
     return _cached("order_sources", load)
+
+
+def create_order_source(name: str) -> int:
+    """Adds an active order source after the others, and returns its id. Not in Daftra's docs: a
+    POST to the v2 entity path, proven on our account (daftra-api.md 4b)."""
+    last = max((row["display_order"] for row in all_order_sources()), default=0)
+    result = _call("POST", "/v2/api/entity/order_source",
+                   body={"name": name, "status": 1, "display_order": last + 1, "branch_id": settings.daftra_branch_id})
+    if not result.get("id"):
+        raise DaftraError(f"Daftra did not return an id: {json.dumps(result, ensure_ascii=False)[:300]}")
+    # The forms offer it from now on, not after the cached list runs out
+    with _cache_lock:
+        _cache.pop("order_sources", None)
+    return int(result["id"])
+
+
+def set_order_source_active(source_id: int, active: bool) -> dict:
+    """Turns an order source on or off and returns it as Daftra then holds it.
+
+    The edit must carry the id in its body as well as its path: without it Daftra answers
+    "updated" but adds a copy instead (daftra-api.md 4b). Every field is sent, as read just before.
+    """
+    row = _call("GET", f"/v2/api/entity/order_source/{source_id}/1")
+    body = {"id": source_id, "name": row.get("name") or "", "status": 1 if active else 0,
+            "display_order": row.get("display_order") or 0, "branch_id": row.get("branch_id") or settings.daftra_branch_id}
+    result = _call("PUT", f"/v2/api/entity/order_source/{source_id}", body=body)
+    if str(result.get("id")) != str(source_id):
+        raise DaftraError(f"Daftra saved the change as another order source (id {result.get('id')}), not {source_id}")
+    saved = _call("GET", f"/v2/api/entity/order_source/{source_id}/1")
+    if (saved.get("status") == 1) != active:
+        raise DaftraError("Daftra answered that it saved the change, but the order source did not change")
+    with _cache_lock:
+        _cache.pop("order_sources", None)
+    return {"id": source_id, "name": squash(saved.get("name")), "active": active,
+            "display_order": saved.get("display_order") or 0}
+
+
+def same_name(name: str) -> str:
+    """Two names that differ only in spacing, punctuation, letter case or Arabic spelling are one
+    («Website - جديد» and «website-جديد»)."""
+    return re.sub(r"[\W_]+", "", _fold(name).lower())
