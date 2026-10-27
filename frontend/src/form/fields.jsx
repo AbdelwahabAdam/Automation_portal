@@ -135,6 +135,44 @@ export function MultiSelectPicker({ spec, value, invalid, onChange }) {
   );
 }
 
+// A field picked from a list, with «أخرى» at the end for anything the list has not got. What is
+// saved is the chosen text itself, so nothing downstream has to know a list was involved — and a
+// saved value the list does not offer is a custom one, which is how the box comes back on a draft.
+// The empty line saves nothing; the backend's blank_value then stands in for it («لا يوجد»).
+const OTHER = '__other__';
+
+export function ChoiceOrOther({ spec, value, invalid, onChange }) {
+  const chosen = String(value ?? '');
+  const known = spec.choices.some((choice) => choice.value === chosen);
+  // Kept so «أخرى» stays picked while the box is still empty, and while what is typed into it
+  // happens to match a line of the list word for word
+  const [other, setOther] = useState(Boolean(chosen) && !known);
+  const custom = other || (Boolean(chosen) && !known);
+  return (
+    <div className="fl-stack fl-stack--sm">
+      <Select
+        id={spec.name} value={custom ? OTHER : chosen} invalid={invalid}
+        onChange={(e) => {
+          const picked = e.target.value;
+          setOther(picked === OTHER);
+          onChange(spec.name, picked === OTHER ? '' : picked);
+        }}
+      >
+        <option value="">{spec.blank_value || 'بدون تحديد'}</option>
+        {spec.choices.map((choice) => <option key={choice.label} value={choice.value}>{choice.label}</option>)}
+        <option value={OTHER}>{spec.other_label}</option>
+      </Select>
+      {custom && (
+        <TextArea
+          id={`${spec.name}-other`} value={chosen} rows={2} invalid={invalid}
+          aria-label={spec.other_label} placeholder={`اكتب ${spec.label} حرفيًا`}
+          onChange={(e) => onChange(spec.name, e.target.value)}
+        />
+      )}
+    </div>
+  );
+}
+
 // A field typed freely, offering the suggestions that match what is typed (staff names, areas,
 // discount names) in the portal's own list rather than the browser's, which cannot be styled
 export function SuggestInput({ spec, value, invalid, onChange, onBlur }) {
@@ -216,6 +254,11 @@ export function Control({ spec, value, invalid, onChange, onBlur, onSearch }) {
     onChange: (e) => onChange(spec.name, e.target.value),
     onBlur: onBlur && ((e) => onBlur(spec.name, e.target.value)),
   };
+  // A list to pick from with «أخرى» at its end, whatever the field's own type is: what «أخرى»
+  // saves is plain text, which is checked and stored as it was before the list existed
+  if (spec.choices) {
+    return <ChoiceOrOther spec={spec} value={value} invalid={invalid} onChange={onChange} />;
+  }
   if (showsAsChoice(spec)) {
     return <Choice name={spec.name} options={spec.options} value={value ?? ''} invalid={invalid} onChange={(v) => onChange(spec.name, v)} />;
   }

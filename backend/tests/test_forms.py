@@ -4,6 +4,7 @@ from datetime import date, timedelta
 
 from app import forms
 from app.forms import FORM_TYPES, form_fields, package_colors, package_quantity, sanitize_draft, validate_submission
+from app.forms.inscriptions import INSCRIPTIONS
 from app.text import uae_today
 
 PACKAGE = "باقة برادة سقيا الخير - 3 صنابير - أسود"
@@ -126,6 +127,27 @@ def test_an_empty_inscription_on_a_form_that_asks_it_once_is_saved_the_same_way(
     clean, errors = validate("quotation", {"inscription": ""})
     assert "inscription" not in errors
     assert clean["inscription"] == "لا يوجد"
+
+
+def test_the_inscription_catalogue_is_offered_and_saves_the_wording_alone():
+    """The list is what the salesperson picks from; the plate carries the text, never the code."""
+    lines = next(spec for spec in form_fields("new_sale") if spec["type"] == "order_lines")
+    choices = next(d for d in lines["line_fields"] if d["name"] == "inscription")["choices"]
+    assert len(choices) == len(INSCRIPTIONS)
+    assert {"label": "104 - وجعلنا من الماء كل شيئ حي", "value": "وجعلنا من الماء كل شيئ حي"} in choices
+    picked = INSCRIPTIONS[0][1]
+    clean, errors = validate("new_sale", new_sale(order_lines=package_lines(inscription=picked)), FILES)
+    assert errors == {}
+    assert [line["details"]["inscription"] for line in clean["order_lines"]] == [picked, picked]
+
+
+def test_an_inscription_the_catalogue_has_not_got_is_still_accepted():
+    """«أخرى»: the wording is typed in, and saved as typed."""
+    clean, errors = validate("new_sale", new_sale(order_lines=package_lines(inscription="باسم جدي رحمه الله")), FILES)
+    assert errors == {}
+    assert clean["order_lines"][0]["details"]["inscription"] == "باسم جدي رحمه الله"
+    _, long_errors = validate("new_sale", new_sale(order_lines=package_lines(inscription="ا" * 501)), FILES)
+    assert long_errors["order_lines"]["lines"]["0"] == {"inscription": "الحد الأقصى 500 حرفًا"}
 
 
 def test_cover_colour_must_be_one_of_the_package_family():

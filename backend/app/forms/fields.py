@@ -1,5 +1,6 @@
 """Building blocks the form definitions are written with: one field, and the sections several forms share."""
 
+from .inscriptions import OTHER_LABEL, inscription_choices
 from .options import (AREAS, AREAS_BY_EMIRATE, CASH_PAYMENT, CUSTOMER_TYPES, DISCOUNT_LABELS, DISCOUNTED, EMIRATES,
     GENDERS, NO_INSCRIPTION, PAYMENT_METHODS, SOURCES, TREASURY_BY_METHOD, YES_NO)
 
@@ -166,8 +167,12 @@ def attachments(*fields):
 
 NOTES = section("ملاحظات", f("notes", "أي اتفاق خاص أو ملاحظات إضافية", "textarea"))
 INSCRIPTION = [
-    # blank_value: left empty it saves as «لا يوجد», so there is no inscription to write or charge for
-    f("inscription", "الكتابة المطلوبة (النص حرفيًا، واتركه فارغًا إن لم تكن مطلوبة)", "textarea",
-      blank_value=NO_INSCRIPTION[0]),
+    # Picked from the catalogue, whose codes the labels carry; what is saved and engraved is the
+    # wording alone, so everything downstream (the invoice's service line, the work order) reads
+    # it as it always did. «أخرى» is for anything the catalogue has not got, typed in by hand.
+    # blank_value: left alone it saves as «لا يوجد», which is what the empty line of the list says,
+    # so there is nothing to write and nothing to charge for.
+    f("inscription", "الكتابة المطلوبة", "text", max_length=500, choices=inscription_choices(),
+      other_label=OTHER_LABEL, blank_value=NO_INSCRIPTION[0]),
     f("inscription_place", "مكان الكتابة، إن وجدت"),
 ]

@@ -120,9 +120,24 @@ def package_quantity(line: dict) -> int:
 # Choices for a cooler's build, as staff already write them on Daftra work orders
 FRONT_DESIGNS = ["مائل", "مستقيم"]
 W_DIRECTIONS = ["عرضي", "طولي"]
-COVER_BACKS = ["بدون ظهر", "باب W مفصلي"]
-DESIGN_VERSIONS = ["تصميم جديد", "تصميم قديم حرف L"]
-BASE_COLORS = ["أسود", "أبيض"]
+COVER_BACKS = [
+    "بدون ظهر",
+    "باب W مفصلي",
+    "ظهر الكفر بدون ظهر",
+    "ظهر كلادينج ثابت",
+    "باب كلادينج مفصلي",
+    "باب W جرار",
+    "باب كلادينج جرار",
+    "ظهر الالمنيوم لوفر ثابت",
+    "باب الالمنيوم لوفر مفصلي",
+    "باب الالمنيوم لوفر جرار",
+]
+DESIGN_VERSIONS = [
+    "تصميم جديد",
+    "تصميم قديم حرف L",
+    "تصميم قديم مستطيل",
+]
+BASE_COLORS = ["أسود", "أبيض", "الرصاصي"]
 # How many days an installation takes, i.e. the work order's delivery date after its start
 # The longest مدة التركيب a work order can be given, in days
 MAX_INSTALLATION_DAYS = 365

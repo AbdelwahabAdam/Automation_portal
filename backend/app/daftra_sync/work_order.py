@@ -36,7 +36,8 @@ WORK_ORDER_FIELDS = {
 CONTAINS_CUSTOM_DATA = {"CONTAINE_CUSTOM_DATA": "1"}  # Daftra's own spelling; required on every save
 # Colours as staff write them in those fields
 COLOR_TEXT = {"أبيض": "اللون الابيض", "أسود": "اللون الاسود", "ذهبي": "اللون الدهبي"}
-BASE_TEXT = {"أسود": "لون القاعده ( الاسود)", "أبيض": "لون القاعده ( الابيض )"}
+BASE_TEXT = {"أسود": "لون القاعده ( الاسود)", "أبيض": "لون القاعده ( الابيض )",
+             "الرصاصي": "لون القاعده ( الرصاصي )"}
 
 
 def package_lines(data: dict) -> list[dict]:
