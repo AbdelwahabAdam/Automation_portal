@@ -15,9 +15,10 @@ if "portal_test" not in os.environ.get("DATABASE_URL", ""):
 from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy import text  # noqa: E402
 
-from app import daftra, mail  # noqa: E402
-from app.config import settings  # noqa: E402
-from app.database import Base, SessionLocal, engine, run_migrations  # noqa: E402
+from app import mail  # noqa: E402
+from app.integrations import daftra  # noqa: E402
+from app.core.config import settings  # noqa: E402
+from app.core.database import Base, SessionLocal, engine, run_migrations  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models import Role, User  # noqa: E402
 from app.security import create_token, hash_password  # noqa: E402
@@ -56,10 +57,16 @@ def fake_daftra(monkeypatch):
     fake = FakeDaftra()
     monkeypatch.setattr(settings, "daftra_subdomain", "fake")
     monkeypatch.setattr(settings, "daftra_api_key", "fake-key")
-    monkeypatch.setattr(daftra, "_call", fake)
-    monkeypatch.setattr(daftra, "invoice_pdf", lambda invoice_id, url: b"%PDF-1.4 fake invoice")
+    stub_pdf = lambda invoice_id, url: b"%PDF-1.4 fake invoice"  # noqa: E731
+    # Everything that reaches Daftra's network goes through these three in `client`; `resources`
+    # calls them from there, so patching them there catches every call.
+    monkeypatch.setattr(daftra.client, "call", fake)
+    monkeypatch.setattr(daftra.client, "invoice_pdf", stub_pdf)
+    monkeypatch.setattr(daftra.client, "upload_file", fake.upload_file)
+    # The package re-exports the same two, and callers reach them that way
+    monkeypatch.setattr(daftra, "invoice_pdf", stub_pdf)
     monkeypatch.setattr(daftra, "upload_file", fake.upload_file)
-    monkeypatch.setattr(daftra, "_cache", {})
+    monkeypatch.setattr(daftra.cache, "_cache", {})
     # Work order custom fields are read back after a pause; no need to wait in a test
     monkeypatch.setattr("time.sleep", lambda seconds: None)
     return fake

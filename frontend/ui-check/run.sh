@@ -9,7 +9,7 @@ HERE=$(cd "$(dirname "$0")" && (pwd -W 2>/dev/null || pwd))
 cd "$(dirname "$0")/../.."
 FRONTEND_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' portal-frontend-1)
 TOKEN=$(docker compose exec -T backend python -W ignore -c "
-from app.database import SessionLocal
+from app.core.database import SessionLocal
 from app.models import User
 from app.security import create_token
 with SessionLocal() as db:

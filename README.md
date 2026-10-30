@@ -203,16 +203,40 @@ the definitions say, and `validation.py` checks a submission against them.
 
 ## Code layout
 
+The backend is a modular monolith: one app, one database, one deploy, with the code in layers.
+A file imports from its own layer or a lower one, never a higher one, and reaches another module
+only through its `__init__.py`. `tests/test_architecture.py` reads every import and fails
+otherwise. The move is happening in phases (`final_plan.md`), so some files are still at the root
+of `app/`.
+
+```
+main.py · jobs/            entry points: may import anything
+      ↓
+forms/<key>/               the forms
+      ↓
+modules/<module>/          business areas: each other only through __init__.py, never in a circle
+      ↓
+integrations/daftra/       knows nothing about modules or forms
+      ↓
+core/                      knows nothing above it
+```
+
 Backend (`backend/app/`):
 
-- `main.py` starts the app and includes the routers: `auth.py` (login, two-step codes, password
-  links), `requests_api.py` (a salesperson's requests and attachments), `lookups.py` (clients,
-  catalog and Daftra lists for the forms), `review.py` (approve or return), `account.py`,
-  `admin.py` and `catalog.py` (the admin pages).
-- `forms/` — the form definitions and their validation; `daftra.py` — the Daftra API client and
-  its cached lists; `daftra_sync/` — what approving creates in Daftra (client, invoice and
-  receipt, work order); `printouts.py` — the PDFs the portal draws; `mail.py` and
-  `templates/email/` — the emails; `text.py` — small shared helpers (Arabic digits, UAE time).
+- `main.py` starts the app, includes the routers and turns a service's error into its HTTP status.
+- `core/` — shared by everything, with no business rules: `config.py` (settings), `database.py`
+  (engine, session, migrations), `security.py`, `errors.py` (what a service raises), `context.py`
+  (`Actor`: who is acting and from where), `permissions.py`, `text.py` (Arabic digits, UAE time).
+- `integrations/daftra/` — the Daftra client, and the only code that talks to Daftra:
+  `client.py` (the HTTP calls, retries, file upload, invoice PDF), `resources.py` (one function
+  per call the portal makes), `cache.py` (the lists kept for a while), `errors.py`.
+- `modules/` — the business areas. `clients/` is the portal's customers (our copy of Daftra's
+  clients, the city table, a client's open invoices); `invoicing/` is what approving creates in
+  Daftra. The other modules arrive with the later phases.
+- Still at the root, until their phase moves them: the routers (`auth.py`, `requests_api.py`,
+  `lookups.py`, `review.py`, `account.py`, `admin.py`, `catalog.py`), `forms/` (the form
+  definitions and their validation), `daftra_sync/` (what approving creates in Daftra),
+  `printouts.py`, `mail.py` and `templates/email/`.
 - `import_*.py`, `create_user.py` — command-line jobs (`python -m app.<name>`).
 
 Frontend (`frontend/src/`): `App.jsx` (layout and navigation), `pages.jsx` (which screen each

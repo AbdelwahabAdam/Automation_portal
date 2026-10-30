@@ -12,12 +12,16 @@ import logging
 import threading
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from sqlalchemy import func, select
 
-from . import account, admin, auth, catalog, daftra, daftra_refresh, import_client_categories, lookups, order_sources, requests_api, review
-from .config import settings
-from .database import SessionLocal, run_migrations
+from . import (account, admin, auth, catalog, daftra_refresh, import_client_categories, lookups, order_sources,
+               requests_api, review)
+from .integrations import daftra
+from .core.config import settings
+from .core.errors import DomainError
+from .core.database import SessionLocal, run_migrations
 from .models import ClientCategory
 
 log = logging.getLogger(__name__)
@@ -53,5 +57,13 @@ def warm_daftra_lists():
 
 
 app = FastAPI(title="FutureLife Portal", lifespan=lifespan)
+
+
+@app.exception_handler(DomainError)
+async def domain_error(request: Request, error: DomainError) -> JSONResponse:
+    """A service's error, answered exactly as the routes answered it before."""
+    return JSONResponse({"detail": error.body()}, status_code=error.status_code)
+
+
 for module in (auth, requests_api, lookups, review, account, admin, catalog, daftra_refresh, order_sources):
     app.include_router(module.router)
