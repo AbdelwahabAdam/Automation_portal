@@ -20,6 +20,47 @@ them there; `docker compose up` picks it up automatically. The backend reloads c
 every request only if restarted (`docker compose restart backend`); the frontend's Vite dev
 server hot-reloads on save like it does outside Docker.
 
+### The fake Daftra account
+
+Locally the portal does **not** talk to Daftra. A stand-in inside it answers instead, so the whole
+flow can be tried by hand — fill a form, approve it, open the invoice, receipt and work order, fail
+midway and approve again — without real numbered invoices on the live account. No Daftra key is
+needed, and a portal on your machine cannot write to the live account by accident.
+
+```
+DAFTRA_FAKE=true     # the stand-in (the default locally)
+DAFTRA_FAKE=false    # the live account, with DAFTRA_SUBDOMAIN and DAFTRA_API_KEY
+```
+
+Apply a change with `docker compose up -d backend` — `docker compose restart` keeps the old value.
+While it is on, the backend logs a warning and every page shows a strip, «دفترة تجريبية: لا يصل شيء
+إلى دفترة».
+
+It is filled from the local database on every start, adding what it has not seen: clients with their
+addresses, the products linked to Daftra, the categories, and the staff linked to users. Otherwise
+approving for an existing client would fail, because the stand-in had never seen its Daftra id. It
+keeps its data in `uploads/fake_daftra.json` (gitignored — it holds client data), so a restart does
+not forget invoices that requests still point at. Its ids start at 900000001, so a fake id that ever
+reached the live account would find nothing rather than a real record.
+
+Its commands, with the stack up:
+
+```
+docker compose exec backend python -m app.jobs fake_daftra calls                                  # the last 20 calls
+docker compose exec backend python -m app.jobs fake_daftra fail-once /api2/invoice_payments.json  # fail that call once
+docker compose exec backend python -m app.jobs fake_daftra seed                                   # add what the database gained
+docker compose exec backend python -m app.jobs fake_daftra reset                                  # forget everything
+```
+
+**It cannot run on the server.** `docker-compose.prod.yml` hard-codes it off, and the portal refuses
+to start with it on and a version other than `dev`, so a mistake stops the deploy instead of losing
+invoices.
+
+**What it does not prove.** A pass on the stand-in shows the portal sends what we expect, not that
+Daftra accepts it. Before merging anything that changes what is sent to Daftra, try it once with
+`DAFTRA_FAKE=false` on test records. When the live account shows a new quirk, add it to
+`backend/app/integrations/daftra/fake.py`, like the ones already there.
+
 ### Running without Docker
 
 Useful for a backend you want to `--reload` on every save. Database and mail catcher still need
@@ -47,18 +88,21 @@ npm run dev
 
 Open http://localhost:5174.
 
-## Users, roles and pages
+## Users, roles and permissions
 
 The first admin is created from the command line (from `backend/`):
 
 ```
-.venv\Scripts\python -m app.create_user <username> <password> --admin --name "Full Name" --email you@example.com
+.venv\Scripts\python -m app.jobs create_user <username> <password> --admin --name "Full Name" --email you@example.com
 ```
 
 Everything after that is done in the portal, under the الإدارة tab:
 
 - **المستخدمون** — add users, edit them, stop an account, send a link to set a new password.
-- **الأدوار والصلاحيات** — roles. A role is a list of pages; a user opens the pages of all their roles.
+- **الأدوار والصلاحيات** — roles. A role is a set of permissions; a user holds the permissions of
+  all their roles. Two tabs over the same data: **الأدوار** (one role at a time, a row per form
+  with three boxes, then the admin pages) and **النماذج** (one form at a time: which roles can
+  fill it, see it and review it).
 - **سجل النشاط** — every login, change and file download, with the values before and after.
 
 A new user gets an email with a link to set their own password (valid 72 hours, single use),
@@ -66,9 +110,36 @@ and then logs in with their email or username. "نسيت كلمة المرور؟
 "رابط كلمة المرور" in the users table send the same kind of link. If an email cannot be sent,
 the admin is shown the link to pass on by hand.
 
-A user can be made manager of one or more departments. A manager opens every page of the
-department, including its manager pages (marked `"manager": True` in `pages.py`, e.g. المراجعة
-in sales), which cannot be put in a role.
+### Access is per form
+
+Every form has three permissions, made from its key — nobody writes them by hand:
+
+| Permission | Lets the user |
+|---|---|
+| `form.<key>.submit` | see the form in النماذج, fill it, save drafts, submit, correct their own returned requests |
+| `form.<key>.view` | see everyone's requests of this form, with their files, without changing them |
+| `form.<key>.review` | see them in المراجعة and approve or return them |
+
+Each admin page has one of its own: `admin.audit`, `admin.catalog`, `admin.sync`,
+`admin.order_sources`, `admin.mail`. `admin.users` and `admin.roles` stay admin-only, because
+whoever held them could give themselves anything; the rest can be put in a role, so someone can
+keep the catalog without being an admin.
+
+The rules:
+
+- **A new form is closed.** Only admins see it until an admin grants `form.<key>.submit` to a
+  role. Its three keys show up in the roles screen by themselves.
+- A hidden form takes no new requests; view and review still work on its old ones.
+- Nobody decides on their own request, except an admin.
+- The owner can always open their own request, even after losing `submit`. They can change a
+  draft only while they still hold `submit` for that form.
+- The lookups the forms use (client search, products, Daftra's lists) are open to anyone holding
+  any form permission.
+- **The server checks every call**: opening a form, creating, saving, submitting, uploading,
+  viewing, deciding. Hiding a button is never the check.
+
+A reviewer of one form does not see another form's requests at all — not in المراجعة, not by URL,
+not by API.
 
 Every user has a حسابي page (their name in the header): name, password and two-step login.
 Two-step login is a 6-digit code emailed after the password (valid 10 minutes, single use).
@@ -79,11 +150,32 @@ admins in with the password alone until it is fixed.
 A user with no requests can be deleted; one with requests can only be stopped, because a request
 keeps its owner. Eight failed logins on one account block it for 15 minutes.
 
-An admin opens every page. The admin pages are for admins only and cannot be put in a role.
+An admin holds every permission.
 
-Pages are listed in `backend/app/pages.py`, grouped by department. To add one, add it
-there and map its key to a screen in `frontend/src/pages.jsx`; a page with no screen
-yet shows as a blank page with its label. Protect its API routes with `require_page("<key>")`.
+The menu comes from `/api/auth/me`, each entry with its own path, and is built from the
+permissions the user holds (`backend/app/core/permissions.py`, which also declares every
+permission). The «المبيعات» group is **«الطلبات»**: the forms are no longer sales-only, so a
+technician's النماذج would otherwise sit under المبيعات.
+
+To protect a route, give it `require("<key>")` — or `require_any_form("submit")` for a screen
+that opens when any one form does.
+
+### A URL for every screen, form and request
+
+| Path | Opens |
+|---|---|
+| `/forms` | النماذج: the forms this user may fill |
+| `/forms/<key>` | a new request of that form (no access: the no-access page) |
+| `/requests/mine` | طلباتي (tabs as `?tab=`) |
+| `/requests/<id>` | one request (its owner, or view or review on its form) |
+| `/requests/<id>/edit` | correcting a draft or a returned request |
+| `/review` · `/review/<id>` | المراجعة, and one request in it |
+| `/admin/users` · `/admin/roles` · `/admin/audit` · `/admin/catalog` · `/admin/sync` · `/admin/order-sources` · `/admin/mail` | the admin pages |
+
+Bookmarkable, the back button works, and a refresh keeps the user where they were. The approved
+and returned emails link straight to `/requests/<id>`. The paths the portal used before redirect
+for good, because emails already sent link to them (`frontend/src/app/routes.jsx` lists both the
+routes and the redirects).
 
 ## Requests and review
 
@@ -112,8 +204,8 @@ by name to carry its Daftra id (which the invoices need). From `backend/`, read 
 run first, then run it for real:
 
 ```
-.venv\Scripts\python -m app.import_packages_from_proposals --dry-run
-.venv\Scripts\python -m app.import_packages_from_proposals
+.venv\Scripts\python -m app.jobs import_catalog --dry-run
+.venv\Scripts\python -m app.jobs import_catalog
 ```
 
 This **replaces** the whole catalog: every product, package and product-to-package link is
@@ -128,9 +220,12 @@ any of them after the proposals import changes the catalog away from the quotati
 
 ## Daftra invoices on approval
 
-Approving one of these requests creates its documents in Daftra (`app/daftra_sync/`). The invoice PDF and
-the receipt PDF are attached to the request. The receipt and work order PDFs are drawn by the portal
-(`app/printouts.py`, templates in `app/templates/pdf/`), since Daftra's API has none:
+Approving one of these requests creates its documents in Daftra. What each form creates is in its
+own folder (`app/forms/<key>/hooks.py`), built from the steps in `app/modules/invoicing/`; the
+review code never names a form, it asks the form. The invoice PDF and the receipt PDF are attached
+to the request. The receipt and work order PDFs are drawn by the portal
+(`modules/invoicing/printouts.py`, templates in `modules/invoicing/templates/pdf/`), since
+Daftra's API has none:
 
 - **طلب بيع لعميل جديد**: the client when new, the invoice, and the receipt (سند قبض) for the amount paid.
   When «إنشاء أمر الشغل» is نعم, it also creates the installation work order, and attaches a PDF of it
@@ -152,7 +247,7 @@ the receipt PDF are attached to the request. The receipt and work order PDFs are
     was removed from the form still put it on the general «service» item.)
   - The items are the catalog products with a maintenance group, at their catalog price. Prices and groups
     are edited in الإدارة ← المنتجات والباقات. They came from `Maintenance_Invoice_Items.xlsx`:
-    `.venv\Scripts\python -m app.import_maintenance_items`.
+    `.venv\Scripts\python -m app.jobs import_maintenance_items`.
 
 The forms' «التصنيف» (Daftra's client categories, each with the المنطقة and الإمارة it fills in) is read from
 our own `client_categories` table, never from Daftra on a request. The portal fills the table once, the first
@@ -160,7 +255,7 @@ time it starts with it empty. To refresh it after categories change in Daftra, r
 `backend/` (it reads every client, so it takes a few minutes):
 
 ```
-.venv\Scripts\python -m app.import_client_categories
+.venv\Scripts\python -m app.jobs import_client_categories
 ```
 
 Other form types are not sent to Daftra yet. Before it works for a salesperson:
@@ -172,6 +267,24 @@ Other form types are not sent to Daftra yet. Before it works for a salesperson:
 If Daftra refuses or cannot be reached, the request is not approved and the manager sees why. Approving
 again continues from the step that failed. The invoice's `po_number` and the payment's notes carry
 `PORTAL-<request id>`, so neither is ever created twice.
+
+### What a request created, in Daftra
+
+Each document lives in `request_documents`, one row per request and kind — `client`, `invoice`,
+`payment`, `work_order`, and later a `credit_note` or an `estimate` without a migration. Every row
+carries Daftra's own id and the number people read (invoice 06273, the receipt's, the work
+order's).
+
+Each id is kept as soon as its step succeeds, so approving again after a failure carries on from
+the step that failed instead of creating anything twice. If an id was lost (the answer never
+arrived), the invoice is found again by its `po_number` and the payment by its notes, both
+`<DAFTRA_MARKER_PREFIX>-<request id>`. `daftra_error` and `daftra_synced_at` stay on the request
+itself: they are about the approval, not about one document.
+
+The seven `daftra_*_id` / `daftra_*_no` columns these replaced are still written, because a deploy
+that rolls the code back can put the old code back but not the database. **The next release stops
+writing them and drops them** — see `final_plan.md` §11 and the note in
+`alembic/versions/0021_request_documents.py`.
 
 ## Email
 
@@ -196,29 +309,112 @@ After changing `backend/app/models.py`, add a migration (from `backend/`):
 
 ## Forms
 
-Form types and their fields live in `backend/app/forms/definitions.py`, written with the
-building blocks in `fields.py` and the choices in `options.py`. The frontend renders whatever
-the definitions say, and `validation.py` checks a submission against them.
-`frontend/src/validation.js` repeats the same checks for instant feedback.
+Every form is a folder, `backend/app/forms/<key>/`:
+
+- `__init__.py` — its `FormSpec`: the key (stored on every request, so **never rename one**), its
+  label, icon and description, whether it is visible, and what approving it creates in Daftra.
+  Importing the folder registers the form.
+- `definition.py` — its sections and fields, written with the building blocks the form engine
+  offers, plus the choices only this form uses.
+- `hooks.py` — only where the form differs: `validate` for a check the field rules cannot express,
+  `on_approve` for what approving creates outside the portal.
+
+`backend/app/modules/form_engine/` is the engine: `spec.py` (what a form is), `registry.py` (where
+the forms put themselves), `fields.py` (the building blocks), `options.py` (the choices more than
+one form offers), `validation.py`, `inscriptions.py`. Everything a form needs comes from the
+engine's `__init__.py`, which is the only way in.
+
+The engine never names a form — a search for a form key outside `app/forms/` finds nothing. The
+frontend renders whatever the definitions say, and `validation.py` checks a submission against
+them; `frontend/src/validation.js` repeats the same checks for instant feedback.
+
+To add a form, see "Adding a form" in `final_plan.md` §14: a folder and one line in
+`app/forms/__init__.py`, with no router, table, migration or frontend change.
 
 ## Code layout
 
+The backend is a modular monolith: one app, one database, one deploy, with the code in layers.
+A file imports from its own layer or a lower one, never a higher one, and reaches another module
+only through its `__init__.py`. `tests/test_architecture.py` reads every import and fails
+otherwise. The move is happening in phases (`final_plan.md`), so some files are still at the root
+of `app/`.
+
+```
+main.py · jobs/            entry points: may import anything
+      ↓
+forms/<key>/               the forms
+      ↓
+modules/<module>/          business areas: each other only through __init__.py, never in a circle
+      ↓
+integrations/daftra/       knows nothing about modules or forms
+      ↓
+core/                      knows nothing above it
+```
+
 Backend (`backend/app/`):
 
-- `main.py` starts the app and includes the routers: `auth.py` (login, two-step codes, password
-  links), `requests_api.py` (a salesperson's requests and attachments), `lookups.py` (clients,
-  catalog and Daftra lists for the forms), `review.py` (approve or return), `account.py`,
-  `admin.py` and `catalog.py` (the admin pages).
-- `forms/` — the form definitions and their validation; `daftra.py` — the Daftra API client and
-  its cached lists; `daftra_sync/` — what approving creates in Daftra (client, invoice and
-  receipt, work order); `printouts.py` — the PDFs the portal draws; `mail.py` and
-  `templates/email/` — the emails; `text.py` — small shared helpers (Arabic digits, UAE time).
-- `import_*.py`, `create_user.py` — command-line jobs (`python -m app.<name>`).
+- `main.py` starts the app, includes the routers and turns a service's error into its HTTP status.
+- `core/` — shared by everything, with no business rules: `config.py` (settings), `database.py`
+  (engine, session, migrations), `security.py` (the token, hashing, the current user, what a route
+  needs), `errors.py` (what a service raises, and the status each becomes), `context.py` (`Actor`:
+  who is acting and from where), `permissions.py`, `text.py` (Arabic digits, UAE time).
+- `integrations/daftra/` — the Daftra client, and the only code that talks to Daftra:
+  `client.py` (the one switch: live or fake), `live.py` (the HTTP calls, retries, file upload,
+  invoice PDF), `fake.py` (the stand-in, see "The fake Daftra account"), `resources.py` (one
+  function per call the portal makes), `cache.py` (the lists kept for a while), `errors.py`.
+- `modules/` — the business areas, each owning its own tables and reached only through its
+  `__init__.py`:
+  - `identity/` — logging in and out, the two-step codes, the password links, the account page,
+    and the users and roles screens (`service/` and `router/`, split by topic).
+  - `requests/` — a request's draft, its files, its history and its review (`service/` and
+    `router/`, split by topic). It never imports `invoicing`: approving asks the form.
+  - `form_engine/` — what a form is and what forms are built from (see "Forms").
+  - `clients/` — the portal's customers: our copy of Daftra's clients, the city table, their
+    addresses here and in Daftra, the categories, a client's open invoices, map links.
+  - `catalog/` — the products and the packages built from them.
+  - `lookups/` — Daftra's staff, treasuries and order sources, and the «مصادر الطلب» page.
+  - `invoicing/` — what approving a request creates in Daftra.
+  - `audit/` — the activity log and its page. Every module writes to it, so it sits below them
+    all: a module with labels or lists of its own registers them (`add_value_labels`,
+    `set_user_lister`) rather than audit reaching up.
+  - `notifications/` — the emails, their templates, and the page that tests them.
+  - `system/` — which version is running.
+  - `models.py` — imports every module's models, for SQLAlchemy and Alembic.
+- `forms/` — one folder per form (see "Forms").
+- Only `main.py` and the old command aliases are left at the root of `app/` (see `jobs/`).
+- `jobs/` — everything the portal does outside a page: the nightly client sync, the
+  «المزامنة مع دفترة» page's buttons, and the command-line imports. One runner records every run
+  in `job_runs`, and a job holds no business rules of its own: it calls a module's service, so the
+  page, the cron and the command line all run the same code.
 
-Frontend (`frontend/src/`): `App.jsx` (layout and navigation), `pages.jsx` (which screen each
-page key opens), `Sales.jsx` + `RequestForm.jsx` + `form/` (the forms), `RequestList.jsx`,
-`RequestView.jsx`, `MyRequests.jsx`, `Review.jsx`, `admin/` (the admin pages), `ds/` (the design
-system's components, tokens and styles), `api.js` (calls to the backend).
+```
+python -m app.jobs --list                  what there is to run
+python -m app.jobs sync_clients            run one (recorded in job_runs)
+```
+
+  The old command names (`python -m app.import_clients`, …) still work as thin aliases, so a
+  server whose cron has not been re-provisioned keeps running. Delete `backend/app/import_*.py`,
+  `create_user.py` and `fake_daftra.py` once `ansible-playbook site.yml --tags sync` and
+  `import.yml` have run with the new commands.
+
+Frontend (`frontend/src/`), laid out like the backend:
+
+- `app/` — the shell: `App.jsx` (layout and navigation), `routes.jsx` (which screen each page key
+  opens), `nav.js` (each page's path and icon).
+- `api/` — the frontend's client of the backend, one file per backend module: `http.js` (fetch, the
+  token, `ApiError`) and `identity.js`, `requests.js`, `review.js`, `clients.js`, `catalog.js`,
+  `lookups.js`, `audit.js`, `notifications.js`, `jobs.js`, `system.js`. **Every API path lives
+  here and nowhere else** — a screen calls `requests.updateRequest(id, body)`, never
+  `api('/requests/…')`.
+- `modules/` — the screens, by business area: `identity/` (Login, SetPassword, Account, Users,
+  Roles), `requests/` (FormsCatalog, RequestForm and `form/`, MyRequests, RequestList,
+  RequestView, Review, attachments, validation.js, useFormData.js), `catalog/`, `lookups/`,
+  `audit/`, `notifications/`, `system/`.
+- `ds/` — the design system's components, tokens, styles and search matcher.
+- `lib/` — `format.js` (how dates and amounts are written), `hooks.js`, `brand.js`.
+
+A form's icon and description come with it from the API, so adding a form needs no frontend
+change at all.
 
 ## Tests
 
@@ -374,7 +570,7 @@ So, to see what is live: open any الإدارة page, or read the last `=== dep
 **On the server:** `ssh ubuntu@<ip>`, then `cd /opt/portal` and run any of:
 - `docker compose -f docker-compose.prod.yml logs -f backend` to follow the backend's log
 - `docker compose -f docker-compose.prod.yml ps` to see the containers
-- `docker compose -f docker-compose.prod.yml exec backend python -m app.<command>` for the other
+- `docker compose -f docker-compose.prod.yml exec backend python -m app.jobs <name>` for the other
   commands above
 - `tail -f /var/log/portal-deploy.log` to watch a deploy
 

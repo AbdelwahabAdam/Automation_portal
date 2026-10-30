@@ -1,0 +1,57 @@
+"""The fields of طلب تعديل على طلب قائم, as sections (form_engine has the building blocks)."""
+
+from ...modules.form_engine import (
+    NOTES,
+    PAID,
+    address,
+    attachments,
+    client,
+    discount_fields,
+    f,
+    files,
+    money,
+    original_refs,
+    payment,
+    request_info,
+    section,
+    yes_no,
+)
+
+SECTIONS = [
+    request_info(),
+    client(True),
+    address("عنوان الخدمة — إذا كان التعديل يخص العنوان", required=False),
+    section(
+        "تفاصيل الطلب",
+        *original_refs(),
+        f("product_name", "المنتج / الخدمة المرتبط بها التعديل", "product", True),
+        f("modified_items", "المطلوب تعديله", "multiselect", True,
+          options=["بيانات العميل", "العنوان", "المنتج", "الكمية", "اللون", "التصميم", "الكتابة", "السعر", "أخرى"]),
+        f("before_change", "البيانات أو المواصفات قبل التعديل", "textarea", True),
+        f("after_change", "البيانات أو المواصفات المطلوبة بعد التعديل", "textarea", True),
+        f("change_reason", "سبب التعديل", "textarea", True),
+        f("execution_status", "حالة تنفيذ الطلب", "select", True,
+          options=["لم يبدأ", "قيد التنفيذ", "تم التنفيذ", "غير معروف"]),
+        yes_no("customer_approved", "هل العميل وافق على التعديل وتكلفته؟"),
+        f("change_approved_by", "اسم المسؤول الذي اعتمد التعديل، إن تم اعتماده", "staff"),
+    ),
+    section(
+        "قيمة الطلب",
+        f("value_change", "هل التعديل يغيّر قيمة الطلب؟", "select", True,
+          options=["زيادة", "تخفيض", "بدون تغيير", "تحتاج مراجعة"]),
+        money("total_before", "قيمة الطلب النهائية قبل التعديل", True),
+        money("total_amount", "قيمة الطلب النهائية بعد التعديل، شامل الضريبة والإضافات", True),
+        *discount_fields("خصم إضافي مرتبط بالتعديل، إن وجد"),
+        money("paid_amount", "المبلغ المدفوع فعليًا الآن", True),
+        money("remaining_amount", "المبلغ المتبقي بعد التعديل", True),
+        f("remaining_due_date", "موعد سداد المتبقي، إن وجد", "date"),
+    ),
+    payment("تفاصيل الدفعة — إن وُجدت دفعة جديدة", when=PAID),
+    attachments(
+        files("invoice_image", "صورة الفاتورة / الطلب الأصلي، إن توفرت"),
+        files("design_image", "صورة التصميم أو المواصفات الجديدة، إن تنطبق"),
+        files("inscription_file", "صورة / ملف الكتابة الجديدة، إن وجدت"),
+        files("payment_proof", "إثبات الدفع، إن وُجدت دفعة جديدة", required_if=PAID),
+    ),
+    NOTES,
+]

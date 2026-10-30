@@ -38,25 +38,54 @@ async function expectText(page, text, what) {
   }
 }
 
-// The location is picked on a map, and الإحداثيات follow the pin: they are never typed. Returns
-// what the pin wrote, so a later step can tell whether clearing the address really cleared them.
-async function pickOnTheMap(page, problems, prefix, where = [0.5, 0.45]) {
-  const map = page.locator('.fl-map__canvas').first();
-  if (!(await map.count())) { problems.push(`[${prefix}] the location map is not on the form`); return ''; }
-  await map.scrollIntoViewIfNeeded();
-  await page.waitForTimeout(1200);  // the tiles, and Leaflet settling into its box
-  const box = await map.boundingBox();
-  await page.mouse.click(box.x + box.width * where[0], box.y + box.height * where[1]);
-  await page.waitForTimeout(700);
+// The location is a link pasted from خرائط جوجل, and الإحداثيات fill in from it when it carries a
+// point. Returns what was filled in, so a later step can tell whether clearing the address cleared it.
+async function pasteTheLocation(page, problems, prefix, link = 'https://www.google.com/maps?q=25.200000,55.270000') {
+  if (await page.locator('.fl-map__canvas').count()) problems.push(`[${prefix}] the removed map is still on the form`);
+  const box = page.locator('#location_url');
+  if (!(await box.count())) { problems.push(`[${prefix}] موقع العميل is not on the form`); return ''; }
+  await box.scrollIntoViewIfNeeded();
+  await box.fill(link);
+  await page.waitForTimeout(500);
   const field = page.locator('#coordinates');
   const coordinates = await field.inputValue();
-  if (!/-?\d+\.\d+,\s*-?\d+\.\d+/.test(coordinates)) problems.push(`[map] picking a point left الإحداثيات «${coordinates}»`);
-  if (!(await field.evaluate((el) => el.readOnly))) problems.push('[map] الإحداثيات can still be typed into');
+  if (!/-?\d+\.\d+,\s*-?\d+\.\d+/.test(coordinates)) problems.push(`[location] pasting a link left الإحداثيات «${coordinates}»`);
+  if (await field.evaluate((el) => el.readOnly)) problems.push('[location] الإحداثيات cannot be typed into');
+  log(`${prefix} location: pasted a link, الإحداثيات «${coordinates}»`);
+  await shot(page, `${prefix}-address`, false);
   return coordinates;
 }
 
+// Every path of §9 opens from a fresh tab, the old ones redirect, and a form the user may not
+// fill shows the no-access page rather than the form.
+async function urls(page, prefix) {
+  const REDIRECTS = [
+    ['/sales/new_request', '/forms'],
+    ['/sales/my_requests', '/requests/mine'],
+    ['/sales/review', '/review'],
+    ['/admin/permissions', '/admin/roles'],
+    ['/admin/daftra_sync', '/admin/sync'],
+    ['/admin/order_sources', '/admin/order-sources'],
+  ];
+  for (const [from, to] of REDIRECTS) {
+    await page.goto(`${BASE}${from}`);
+    await page.waitForTimeout(500);
+    const landed = new URL(page.url()).pathname;
+    if (landed !== to) problems.push(`[${prefix}] ${from} went to ${landed}, not ${to}`);
+  }
+  console.log(`${prefix} redirects: ${REDIRECTS.length} old paths still land on the new ones`);
+
+  // One form, straight from its own URL
+  await page.goto(`${BASE}/forms/new_sale`);
+  await expectText(page, 'بيانات العميل', 'a form opened by URL');
+  // A form that does not exist: the no-access page, not a broken screen
+  await page.goto(`${BASE}/forms/no_such_form`);
+  await expectText(page, 'غير متاح', 'the no-access page for an unknown form');
+  console.log(`${prefix} a form opens from its own URL, and an unknown one says so`);
+}
+
 async function salesForm(page, prefix) {
-  await page.goto(`${BASE}/sales/new_request`);
+  await page.goto(`${BASE}/forms`);
   await expectText(page, 'طلب بيع لعميل جديد', 'forms catalog');
   await shot(page, `${prefix}-catalog`);
   await page.getByText('طلب بيع لعميل جديد').first().click();
@@ -112,8 +141,8 @@ async function salesForm(page, prefix) {
   // Asking for a new address empties the whole service address, التصنيف and the coordinates included
   const addressPick = page.locator('.fl-lookup__actions .fl-pick').first();
   if (await addressPick.count()) {
-    // الإحداثيات are not typed any more: they are the map pin's own position
-    await pickOnTheMap(page, problems, prefix);
+    // الإحداثيات come from the pasted link
+    await pasteTheLocation(page, problems, prefix);
     await addressPick.click();
     const newAddress = page.getByRole('option', { name: /عنوان جديد/ });
     if (!(await newAddress.count())) problems.push('[address] «عنوان جديد» is not offered');
@@ -165,6 +194,11 @@ async function salesForm(page, prefix) {
   const amount = Number(String(subtotal).replace(/[^\d.]/g, ''));
   if (!(amount > 0) || !subtotal.includes('درهم')) problems.push(`[value] subtotal after picking a package: «${subtotal}»`);
   log(`${prefix} subtotal after package x2:`, subtotal);
+  // Files are added one way only: the phone's own picker offers its camera among the rest
+  if (await page.getByText('التقاط صورة').count()) problems.push(`[${prefix}] the removed camera button is still on the form`);
+  const dropzones = await page.locator('.fl-dropzone').count();
+  if (!dropzones) problems.push(`[${prefix}] no box to add a file to`);
+  log(`${prefix} attachments: ${dropzones} box(es) to add a file, no camera button`);
   await shot(page, `${prefix}-form-filled`);
   await page.locator('#order_lines').scrollIntoViewIfNeeded();
   await shot(page, `${prefix}-form-view`, false);
@@ -181,7 +215,7 @@ async function salesForm(page, prefix) {
 
 // نوع العميل, الجنس and البريد appear once the phone search finds nobody, and go again for a known client
 async function newClient(page, prefix) {
-  await page.goto(`${BASE}/sales/new_request`);
+  await page.goto(`${BASE}/forms`);
   await page.getByText('طلب بيع لعميل جديد').first().click();
   await expectText(page, 'بيانات العميل', 'new sale form');
   const fields = ['customer_type', 'gender', 'email'];
@@ -217,7 +251,7 @@ async function newClient(page, prefix) {
 
 // مدة التركيب takes any whole number of days, typed in, not picked from a short list
 async function installationDays(page, prefix) {
-  await page.goto(`${BASE}/sales/new_request`);
+  await page.goto(`${BASE}/forms`);
   await page.getByText('طلب بيع لعميل جديد').first().click();
   await page.getByRole('button', { name: 'فتح كل الأقسام' }).click();
   const box = page.locator('#installation_days');
@@ -232,7 +266,7 @@ async function installationDays(page, prefix) {
 
 // The manager's «المسودات» tab: a count per employee with drafts, filtering by one, and a draft opened read-only
 async function managerDrafts(page, prefix) {
-  await page.goto(`${BASE}/sales/review?tab=draft`);
+  await page.goto(`${BASE}/review?tab=draft`);
   await expectText(page, 'مراجعة الطلبات', 'review page');
   await page.waitForTimeout(1200);
   const chips = page.locator('.fl-draftcounts button');
@@ -256,11 +290,40 @@ async function managerDrafts(page, prefix) {
   log(`${prefix} drafts: ${employees} employee(s) with drafts, first «${label}», ${results}`);
 }
 
+// Picking an initiative in «اسم الخصم كما يظهر في الفاتورة» fills قيمة الخصم with its own amount,
+// over anything typed there, and the amount can still be changed afterwards
+async function discountInitiative(page, prefix) {
+  await page.goto(`${BASE}/forms`);
+  await page.getByText('طلب بيع لعميل جديد').first().click();
+  await page.getByRole('button', { name: 'فتح كل الأقسام' }).click();
+  const amount = page.locator('#discount_amount');
+  await amount.scrollIntoViewIfNeeded();
+  await amount.fill('300');
+  const box = page.locator('#discount_label');
+  await box.click();
+  await page.waitForTimeout(400);
+  const options = page.locator('.fl-suggest__item');
+  const names = await options.allInnerTexts();
+  if (!names.length) { problems.push('[discount] no names are offered for اسم الخصم'); return; }
+  const wanted = names.findIndex((name) => name.includes('سقيا الخير'));
+  if (wanted < 0) { problems.push(`[discount] «مبادرة دعم سقيا الخير» is not offered, only ${names.join(' / ')}`); return; }
+  await options.nth(wanted).click();
+  await page.waitForTimeout(300);
+  const filled = await amount.inputValue();
+  if (filled !== '1750') problems.push(`[discount] picking «${names[wanted].trim()}» left قيمة الخصم «${filled}», not 1750`);
+  // It is a starting point, not a locked value
+  if (await amount.evaluate((el) => el.readOnly)) problems.push('[discount] قيمة الخصم cannot be changed after picking');
+  await amount.fill('900');
+  if (await amount.inputValue() !== '900') problems.push('[discount] قيمة الخصم could not be changed after picking');
+  log(`${prefix} discount: ${names.length} name(s) offered, picking «${names[wanted].trim()}» filled ${filled}`);
+  await shot(page, `${prefix}-discount`, false);
+}
+
 // Every field each visible form defines is on the screen
 async function everyField(page, prefix) {
   const types = await page.evaluate(async (token) => (await fetch('/api/form-types', { headers: { Authorization: `Bearer ${token}` } })).json(), TOKEN);
   for (const type of types.filter((t) => !t.hidden)) {
-    await page.goto(`${BASE}/sales/new_request`);
+    await page.goto(`${BASE}/forms`);
     await page.getByText(type.label).first().click();
     await page.getByRole('button', { name: 'فتح كل الأقسام' }).click();
     await page.waitForTimeout(500);
@@ -292,7 +355,7 @@ async function keyboardRoom(page, prefix) {
 // Staff names (who approved the discount, who collected the cash) are offered in the portal's own
 // list, not the browser's unstyled one, and a pick fills the field
 async function staffPickers(page, prefix) {
-  await page.goto(`${BASE}/sales/new_request`);
+  await page.goto(`${BASE}/forms`);
   await page.getByText('طلب بيع لعميل جديد').first().click();
   await expectText(page, 'تفاصيل الطلب', 'new sale form');
   await page.getByRole('button', { name: 'فتح كل الأقسام' }).click();
@@ -316,7 +379,7 @@ async function staffPickers(page, prefix) {
 
 // نوع الجهاز is picked the same way products are: search, add, and a row per pick
 async function devicePicker(page, prefix) {
-  await page.goto(`${BASE}/sales/new_request`);
+  await page.goto(`${BASE}/forms`);
   await page.getByText('طلب صيانة وتبديل').first().click();
   await expectText(page, 'تفاصيل الطلب', 'maintenance form');
   const box = page.locator('#devices');
@@ -345,14 +408,14 @@ async function devicePicker(page, prefix) {
 
 async function pages(page, prefix) {
   const visits = [
-    ['/sales/my_requests', 'طلباتي', 'my-requests'],
-    ['/sales/review', 'مراجعة الطلبات', 'review'],
+    ['/requests/mine', 'طلباتي', 'my-requests'],
+    ['/review', 'مراجعة الطلبات', 'review'],
     ['/admin/users', 'المستخدمون', 'users'],
-    ['/admin/permissions', 'الأدوار والصلاحيات', 'roles'],
+    ['/admin/roles', 'الأدوار والصلاحيات', 'roles'],
     ['/admin/audit', 'سجل النشاط', 'audit'],
     ['/admin/catalog', 'المنتجات والباقات', 'products'],
-    ['/admin/daftra_sync', 'المزامنة مع دفترة', 'daftra-sync'],
-    ['/admin/order_sources', 'مصادر الطلب', 'order-sources'],
+    ['/admin/sync', 'المزامنة مع دفترة', 'daftra-sync'],
+    ['/admin/order-sources', 'مصادر الطلب', 'order-sources'],
     ['/admin/mail', 'اختبار البريد', 'mail'],
     ['/account', 'حسابي', 'account'],
   ];
@@ -363,7 +426,7 @@ async function pages(page, prefix) {
     await shot(page, `${prefix}-${name}`);
   }
   // A request opened from the review list
-  await page.goto(`${BASE}/sales/review?tab=all`);
+  await page.goto(`${BASE}/review?tab=all`);
   const open = page.getByRole('button', { name: /عرض الطلب|مراجعة الطلب/ }).first();
   await open.waitFor({ timeout: 15000 }).catch(() => {});
   if (await open.count().catch(() => 0)) {
@@ -378,6 +441,172 @@ async function pages(page, prefix) {
   await page.getByRole('button', { name: 'تعديل' }).first().click().catch(() => problems.push('[click] product edit'));
   await page.waitForTimeout(500);
   await shot(page, `${prefix}-product-drawer`);
+}
+
+// Each document approving a request made in Daftra can be handed to another app, WhatsApp among
+// them. Only an approved request has any, so the list is walked until one shows its دفترة card.
+async function daftraDocuments(page, prefix) {
+  const rows = page.getByRole('button', { name: /عرض الطلب|مراجعة الطلب/ });
+  let tried = 0;
+  for (let i = 0; i < 8; i += 1) {
+    await page.goto(`${BASE}/review?tab=all`);
+    await page.waitForTimeout(1000);
+    if (i >= await rows.count()) break;
+    tried += 1;
+    await rows.nth(i).click();
+    await expectText(page, 'سجل الطلب', 'request opened from the review list');
+    await page.waitForTimeout(600);
+    const docs = await page.locator('.fl-doc').count();
+    if (!docs) continue;
+    const shares = await page.getByRole('button', { name: /^مشاركة / }).count();
+    if (docs !== shares) problems.push(`[${prefix}] ${docs} Daftra document(s) but ${shares} share button(s)`);
+    // This browser cannot hand a file to another app (that needs HTTPS and a device with apps to
+    // share with), so the document is saved instead and the portal says so rather than doing nothing
+    await page.getByRole('button', { name: /^مشاركة / }).first().click();
+    await expectText(page, 'تم تنزيل الملف', 'what the share button says where sharing is impossible');
+    log(`${prefix} daftra documents: ${docs}, each with a share button`);
+    await shot(page, `${prefix}-daftra-documents`, false);
+    return;
+  }
+  problems.push(`[${prefix}] none of the ${tried} request(s) opened carries the دفترة documents to share`);
+}
+
+// تفاصيل الطلب offers packages or single products, never both at once: the toggle says which,
+// and it opens on باقات. Forms that offer products alone (صيانة وتبديل) have no toggle.
+async function packagesOrProducts(page, prefix) {
+  // The toggle appears once the products and packages are in: before that there is nothing to
+  // choose between, and the search box says it is still loading
+  const waitForCatalog = async () => {
+    const search = page.locator('#order_lines');
+    await search.waitFor({ timeout: 15000 });
+    await page.waitForFunction(
+      () => !(document.getElementById('order_lines')?.placeholder || '').includes('جارٍ تحميل'),
+      null, { timeout: 15000 },
+    );
+  };
+
+  const kindsListed = async () => {
+    const search = page.locator('#order_lines');
+    await search.scrollIntoViewIfNeeded();
+    await search.click();
+    await page.waitForTimeout(400);
+    const subs = await page.locator('.fl-suggest__item small').allInnerTexts();
+    return [...new Set(subs.map((text) => text.split('·')[0].trim()))];
+  };
+
+  for (const form of ['new_sale', 'quotation']) {
+    await page.goto(`${BASE}/forms/${form}`);
+    await expectText(page, 'تفاصيل الطلب', `${form} order details`);
+    await waitForCatalog();
+    const on = page.locator('.fl-choice__item--on', { hasText: 'باقات' });
+    if (!(await on.count())) { problems.push(`[${prefix}] ${form}: the picker does not open on باقات`); continue; }
+    const asPackages = await kindsListed();
+    if (asPackages.join() !== 'باقة') problems.push(`[${prefix}] ${form}: باقات lists ${asPackages.join(' + ') || 'nothing'}`);
+    await page.getByText('منتجات', { exact: true }).first().click();
+    const asProducts = await kindsListed();
+    if (asProducts.join() !== 'منتج') problems.push(`[${prefix}] ${form}: منتجات lists ${asProducts.join(' + ') || 'nothing'}`);
+    log(`${prefix} ${form} picker: باقات → ${asPackages.join(', ')}, منتجات → ${asProducts.join(', ')}`);
+    await shot(page, `${prefix}-${form}-products`, false);
+  }
+  // A form whose picker has one kind has nothing to choose between
+  await page.goto(`${BASE}/forms/maintenance`);
+  await expectText(page, 'تفاصيل الطلب', 'maintenance order details');
+  await waitForCatalog();
+  if (await page.locator('.fl-choice__item', { hasText: 'باقات' }).count()) {
+    problems.push(`[${prefix}] صيانة وتبديل offers a باقات toggle, though it has no packages`);
+  }
+  console.log(`${prefix} صيانة وتبديل: items only, no toggle`);
+}
+
+// صيانة وتبديل settles what each part costs per visit: the five fixed items start at their price,
+// everything else starts empty, and both سعر الوحدة and الكمية can be changed on every line.
+async function maintenancePrices(page, prefix) {
+  await page.goto(`${BASE}/forms/maintenance`);
+  await expectText(page, 'تفاصيل الطلب', 'maintenance order details');
+  const search = page.locator('#order_lines');
+  await search.waitFor({ timeout: 15000 });
+  const pick = async (text) => {
+    await search.scrollIntoViewIfNeeded();
+    await search.fill(text);
+    await page.waitForTimeout(600);
+    const first = page.locator('.fl-suggest__item').first();
+    if (!(await first.count())) { problems.push(`[${prefix}] صيانة وتبديل: nothing matches «${text}»`); return false; }
+    await first.click();
+    await page.waitForTimeout(400);
+    return true;
+  };
+  const prices = page.locator('.fl-order-lines__price');
+
+  // One of the five: it comes with its price, which is still a box to type in
+  if (!(await pick('GRAVEL SIZE 1-3'))) return;
+  const fixed = await prices.first().inputValue();
+  if (fixed !== '150') problems.push(`[${prefix}] GRAVEL SIZE 1-3 started at «${fixed}», not 150`);
+  // Anything else comes with none, for the salesperson to fill in
+  if (!(await pick('شمعة CTO مقاس 10'))) return;
+  const empty = await prices.nth(1).inputValue();
+  if (empty !== '') problems.push(`[${prefix}] a filter started at «${empty}» instead of empty`);
+
+  // Both boxes are the salesperson's: 200 x 2 + 60 x 1
+  await prices.first().fill('200');
+  await prices.nth(1).fill('60');
+  const quantity = page.locator('.fl-order-lines__qty').first();
+  await quantity.fill('2');
+  await page.waitForTimeout(500);
+  const subtotal = await page.locator('#subtotal_amount').inputValue();
+  if (!String(subtotal).replace(/[^\d]/g, '').startsWith('460')) {
+    problems.push(`[${prefix}] typed prices 200x2 + 60 came to «${subtotal}», not 460`);
+  }
+  log(`${prefix} maintenance prices: GRAVEL starts at ${fixed}, a filter at «${empty}», typed total ${subtotal}`);
+  await shot(page, `${prefix}-maintenance-prices`, false);
+}
+
+// ملحقات التركيب comes filled in from the package picked, and stays a box the salesperson can
+// change or empty. A package nothing is written for leaves it empty.
+async function installationWork(page, prefix) {
+  await page.goto(`${BASE}/forms/new_sale`);
+  await expectText(page, 'تفاصيل الطلب', 'new sale order details');
+  const search = page.locator('#order_lines');
+  await search.waitFor({ timeout: 15000 });
+  const pick = async (text) => {
+    await search.scrollIntoViewIfNeeded();
+    await search.fill(text);
+    await page.waitForTimeout(600);
+    const first = page.locator('.fl-suggest__item').first();
+    if (!(await first.count())) { problems.push(`[${prefix}] nothing matches «${text}»`); return false; }
+    await first.click();
+    await page.waitForTimeout(500);
+    return true;
+  };
+  const boxes = page.locator('textarea[id$="-installation_accessories"]');
+
+  // A water cooler, a food cooler (whose name carries «نبع المزن» too and must not take its text),
+  // a stainless one, and a package nothing is written for
+  const WANTED = [
+    ['نبع المزن - 3 صنابير', 'تمديد مياه وكهرباء كامل للبرادة'],
+    ['حفظ الطعام - غطاء نبع المزن', 'تمديد كهرباء كامل للبرادة'],
+    ['ستانلس ستيل - 2', 'فلتر 3 مراحل + عمل التمديدات'],
+    ['باب خلفي جرار', ''],
+  ];
+  const filled = [];
+  for (const [search, expected] of WANTED) {
+    if (!(await pick(search))) return;
+    const index = filled.length;
+    if (await boxes.count() <= index) { problems.push(`[${prefix}] ملحقات التركيب is not on the line`); return; }
+    const value = (await boxes.nth(index).inputValue()).trim();
+    filled.push(value);
+    if (expected ? !value.startsWith(expected) : value !== '') {
+      problems.push(`[${prefix}] «${search}» filled ملحقات التركيب with «${value.slice(0, 40)}»`);
+    }
+  }
+  // It is a starting point, not a locked value
+  const box = boxes.first();
+  if (await box.evaluate((el) => el.readOnly)) problems.push(`[${prefix}] ملحقات التركيب cannot be changed`);
+  await box.fill(`${filled[0]} + فحص الضغط`);
+  if (!(await box.inputValue()).endsWith('فحص الضغط')) {
+    problems.push(`[${prefix}] ملحقات التركيب did not keep what was added to it`);
+  }
+  log(`${prefix} installation work: ${filled.map((v) => `«${v.slice(0, 22)}»`).join(', ')}`);
+  await shot(page, `${prefix}-installation-work`, false);
 }
 
 const browser = await chromium.launch();
@@ -398,9 +627,15 @@ try {
     await staffPickers(page, prefix);
     await newClient(page, prefix);
     await installationDays(page, prefix);
+    await discountInitiative(page, prefix);
     await managerDrafts(page, prefix);
     await everyField(page, prefix);
     await pages(page, prefix);
+    await urls(page, prefix);
+    await daftraDocuments(page, prefix);
+    await packagesOrProducts(page, prefix);
+    await maintenancePrices(page, prefix);
+    await installationWork(page, prefix);
     await page.context().close();
   }
 } finally {

@@ -47,28 +47,28 @@
 
     - name: Catalog — packages and their products
       ansible.builtin.command:
-        cmd: "{{ compose }} python -m app.import_packages_from_proposals --proposals-dir /imports/Proposals --products-json /imports/products.json"
+        cmd: "{{ compose }} python -m app.jobs import_catalog --proposals-dir /imports/Proposals --products-json /imports/products.json"
         chdir: "{{ portal_dir }}"
       register: catalog
       changed_when: true
 
     - name: Catalog — maintenance items
       ansible.builtin.command:
-        cmd: "{{ compose }} python -m app.import_maintenance_items /imports/Maintenance_Invoice_Items.xlsx"
+        cmd: "{{ compose }} python -m app.jobs import_maintenance_items /imports/Maintenance_Invoice_Items.xlsx"
         chdir: "{{ portal_dir }}"
       register: maintenance
       changed_when: true
 
     - name: Clients
       ansible.builtin.command:
-        cmd: "{{ compose }} python -m app.import_clients /imports/clients.json"
+        cmd: "{{ compose }} python -m app.jobs sync_clients /imports/clients.json"
         chdir: "{{ portal_dir }}"
       register: clients
       changed_when: true
 
     - name: First admin user
       ansible.builtin.command:
-        argv: [docker, compose, -f, docker-compose.prod.yml, exec, -T, backend, python, -m, app.create_user,
+        argv: [docker, compose, -f, docker-compose.prod.yml, exec, -T, backend, python, -m, app.jobs, create_user,
                "{{ admin_username }}", "{{ admin_password }}", --admin, --name, "{{ admin_name }}", --email, "{{ admin_email }}"]
         chdir: "{{ portal_dir }}"
       no_log: true

@@ -5,5 +5,5 @@
     hour: "23"
     job: >-
       cd {{ portal_dir }} &&
-      docker compose -f docker-compose.prod.yml exec -T backend python -m app.import_clients
+      docker compose -f docker-compose.prod.yml exec -T backend python -m app.jobs sync_clients
       >> /var/log/portal-client-sync.log 2>&1

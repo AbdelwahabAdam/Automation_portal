@@ -1,11 +1,14 @@
-// node --test tests/  (npm test). The browser-side checks in src/validation.js and the search
-// helpers in src/formsMeta.js; the backend repeats the form checks (backend/tests/test_forms.py).
+// node --test tests/  (npm test). The browser-side checks in modules/requests/validation.js, the
+// formatting in lib/format.js and the search helpers in ds/match.js; the backend repeats the form
+// checks (backend/tests/modules/form_engine/test_forms.py).
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { formatAmount, formatDay, localDay, matchesQuery, normalize } from '../src/formsMeta.js';
+import { matchesQuery, normalize } from '../src/ds/match.js';
+import { formatAmount, formatDay, localDay } from '../src/lib/format.js';
 import {
-  coordinatesFromLink, evaluateForm, groupLines, initialValues, linePrice, normalizePhone, packageColors, packageQuantity, today,
-} from '../src/validation.js';
+  coordinatesFromLink, evaluateForm, groupLines, initialValues, linePrice, normalizePhone, packageColors,
+  packageDefault, packageQuantity, today,
+} from '../src/modules/requests/validation.js';
 
 const families = [
   { match: ['سقيا الخير مدمجة'], exclude: [], colors: ['الابيض', 'الاسود'] },
@@ -56,6 +59,26 @@ test('normalizePhone refuses what is not a UAE number', () => {
   for (const no of ['12345', '0591234567', '0101234567', '05012345', '05012345678', '+44 20 7946 0000']) {
     assert.equal(normalizePhone(no), null, no);
   }
+});
+
+// What installing a package involves, as the form's field carries it (INSTALLATION_WORK)
+const work = [
+  { match: ['حفظ الطعام'], exclude: [], text: 'كهرباء وقاعدة سيراميك' },
+  { match: ['ستانلس', '6 صنابير'], exclude: [], text: 'فلتر وتمديدات' },
+  { match: ['نبع المزن', 'سقيا الخير'], exclude: ['حفظ الطعام', 'ستانلس'], text: 'مياه وكهرباء كامل' },
+];
+
+test('the package picked fills in what installing it involves', () => {
+  const spec = { default_by_package: work };
+  assert.equal(packageDefault(spec, 'باقة برادة نبع المزن - 3 صنابير - أبيض'), 'مياه وكهرباء كامل');
+  assert.equal(packageDefault(spec, 'باقة سقيا الخير مدمجة - برادتا مياه 3 صنابير وبرادة طعام - أسود'), 'مياه وكهرباء كامل');
+  // حفظ الطعام and ستانلس carry سقيا الخير / نبع المزن in their names and must not take their text
+  assert.equal(packageDefault(spec, 'باقة برادة حفظ الطعام - غطاء نبع المزن'), 'كهرباء وقاعدة سيراميك');
+  assert.equal(packageDefault(spec, 'باقة برادة سقيا الخير ستانلس ستيل - 2 صنبور'), 'فلتر وتمديدات');
+  assert.equal(packageDefault(spec, 'باقة برادة مياه - 6 صنابير - أبيض'), 'فلتر وتمديدات');
+  // Nothing is written for the rest, and a field without the rules is left alone
+  assert.equal(packageDefault(spec, 'باب خلفي جرار لبرادة مدمجة'), '');
+  assert.equal(packageDefault({}, 'باقة برادة نبع المزن - 3 صنابير - أبيض'), '');
 });
 
 test('package helpers', () => {

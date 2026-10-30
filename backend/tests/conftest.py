@@ -15,14 +15,15 @@ if "portal_test" not in os.environ.get("DATABASE_URL", ""):
 from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy import text  # noqa: E402
 
-from app import daftra, mail  # noqa: E402
-from app.config import settings  # noqa: E402
-from app.database import Base, SessionLocal, engine, run_migrations  # noqa: E402
+from app.modules import notifications as mail  # noqa: E402
+from app.integrations import daftra  # noqa: E402
+from app.core.config import settings  # noqa: E402
+from app.core.database import Base, SessionLocal, engine, run_migrations  # noqa: E402
 from app.main import app  # noqa: E402
-from app.models import Role, User  # noqa: E402
-from app.security import create_token, hash_password  # noqa: E402
+from app.modules.models import Role, User  # noqa: E402
+from app.core.security import create_token, hash_password  # noqa: E402
 
-from .fake_daftra import FakeDaftra  # noqa: E402
+from app.integrations.daftra.fake import FakeDaftra  # noqa: E402
 
 PASSWORD = "secret-pass-1"
 
@@ -53,16 +54,21 @@ def no_network(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def fake_daftra(monkeypatch):
+    """A Daftra account of its own per test, in memory, reached through the real switch.
+
+    Nothing is patched over the client: `DAFTRA_FAKE` is turned on and this account put in
+    place, so a test goes through the same `client.py` a local portal does.
+    """
     fake = FakeDaftra()
+    monkeypatch.setattr(settings, "daftra_fake", True)
     monkeypatch.setattr(settings, "daftra_subdomain", "fake")
     monkeypatch.setattr(settings, "daftra_api_key", "fake-key")
-    monkeypatch.setattr(daftra, "_call", fake)
-    monkeypatch.setattr(daftra, "invoice_pdf", lambda invoice_id, url: b"%PDF-1.4 fake invoice")
-    monkeypatch.setattr(daftra, "upload_file", fake.upload_file)
-    monkeypatch.setattr(daftra, "_cache", {})
+    monkeypatch.setattr(daftra.cache, "_cache", {})
+    daftra.fake.use(fake)
     # Work order custom fields are read back after a pause; no need to wait in a test
     monkeypatch.setattr("time.sleep", lambda seconds: None)
-    return fake
+    yield fake
+    daftra.fake.use(None)
 
 
 @pytest.fixture(autouse=True)
@@ -70,7 +76,11 @@ def outbox(monkeypatch):
     sent = []
     monkeypatch.setattr(settings, "smtp_host", "smtp.test")
     monkeypatch.setattr(settings, "mail_from", "Portal <portal@test>")
-    monkeypatch.setattr(mail, "send", lambda to, subject, text, html: sent.append({"to": to, "subject": subject, "text": text}))
+    catch = lambda to, subject, text, html: sent.append({"to": to, "subject": subject, "text": text})  # noqa: E731
+    # The senders inside the module call `service.send`; callers outside reach the same function
+    # through the package, which bound it at import, so both names are caught.
+    monkeypatch.setattr(mail.service, "send", catch)
+    monkeypatch.setattr(mail, "send", catch)
     return sent
 
 
@@ -91,16 +101,30 @@ def db():
         yield session
 
 
-def make_user(db, username, *, admin=False, pages=(), manages=(), email=None, daftra_staff_id=None,
+def make_user(db, username, *, admin=False, permissions=(), email=None, daftra_staff_id=None,
               full_name=None, password=PASSWORD):
+    """A user holding exactly these permissions, through one role of their own."""
     user = User(username=username, email=email or f"{username}@test.local", full_name=full_name or username.title(),
                 password_hash=hash_password(password) if password else None, is_admin=admin,
-                manages=list(manages), daftra_staff_id=daftra_staff_id)
-    if pages:
-        user.roles = [Role(name=f"role-{username}", pages=list(pages))]
+                daftra_staff_id=daftra_staff_id)
+    if permissions:
+        user.roles = [Role(name=f"role-{username}", permissions=list(permissions), pages=[])]
     db.add(user)
     db.commit()
     return user
+
+
+def may_fill(*form_keys) -> list[str]:
+    return [f"form.{key}.submit" for key in form_keys]
+
+
+def may_review(*form_keys) -> list[str]:
+    return [f"form.{key}.review" for key in form_keys]
+
+
+# The forms a request can be made from, which is what the old «النماذج» page opened
+VISIBLE_FORMS = ("new_sale", "contract_renewal", "maintenance", "balance_payment", "quotation",
+                 "tech_extra_works")
 
 
 def auth(user) -> dict:
@@ -109,13 +133,22 @@ def auth(user) -> dict:
 
 @pytest.fixture
 def sales(db):
-    return make_user(db, "sales1", pages=["sales.new_request", "sales.my_requests"], daftra_staff_id=71,
+    """A salesperson: may fill in every visible form, and nothing else."""
+    return make_user(db, "sales1", permissions=may_fill(*VISIBLE_FORMS), daftra_staff_id=71,
                      full_name="Sales One")
 
 
 @pytest.fixture
 def manager(db):
-    return make_user(db, "manager1", manages=["sales"], daftra_staff_id=40, full_name="Manager One")
+    """A manager: may review every form, and fill in the visible ones — what managing «sales» meant."""
+    return make_user(db, "manager1", permissions=may_review(*registry_keys()) + may_fill(*VISIBLE_FORMS),
+                     daftra_staff_id=40, full_name="Manager One")
+
+
+def registry_keys():
+    from app.modules.form_engine import keys
+
+    return keys()
 
 
 @pytest.fixture

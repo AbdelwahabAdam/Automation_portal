@@ -1,0 +1,196 @@
+"""Building blocks the form definitions are written with: one field, and the sections several forms share."""
+
+from .inscriptions import OTHER_LABEL, inscription_choices
+from .options import (AREAS, AREAS_BY_EMIRATE, CASH_PAYMENT, CUSTOMER_TYPES, DISCOUNT_AMOUNTS, DISCOUNT_LABELS,
+    DISCOUNTED, EMIRATES,
+    GENDERS, NO_INSCRIPTION, PAYMENT_METHODS, SOURCES, TREASURY_BY_METHOD, YES_NO)
+
+
+def f(name, label, type="text", required=False, **extra):
+    return {"name": name, "label": label, "type": type, "required": required, **extra}
+
+
+def money(name, label, required=False, **extra):
+    # money=True: an amount in dirhams, which the form and the request's page print with its unit
+    return f(name, label, "number", required, min=0, money=True, **extra)
+
+
+def yes_no(name, label, required=True, **extra):
+    return f(name, label, "select", required, options=YES_NO, **extra)
+
+
+def files(name, label, required=False, **extra):
+    return f(name, label, "files", required, **extra)
+
+
+def section(title, *fields, note=None):
+    return {"title": title, "note": note, "fields": list(fields)}
+
+
+def need(condition):
+    """required=True, or required only when the condition holds."""
+    return {"required": True} if condition is True else {"required_if": condition}
+
+
+def request_info(date_label="تاريخ الاتفاق مع العميل", invoiced=False, source=True, source_required=True):
+    # invoiced: approving the request creates a Daftra invoice, so the order source is Daftra's own list
+    # source=False: no order source at all (e.g. a payment on an invoice that already has one)
+    # source_required=False: it may be left empty, and the invoice is then made without one
+    source_field = (f("order_source", "مصدر الطلب في دفترة", "daftra_order_source", source_required) if invoiced
+                    else f("source", "مصدر الطلب", "select", source_required, options=SOURCES))
+    return section(
+        "بيانات الطلب",
+        f("request_date", date_label, "date", True, default="today", not_future=True),
+        f("employee_name", "اسم الموظف", "auto_user"),
+        *([source_field] if source else []),
+    )
+
+
+def client(code_required, name_label="اسم العميل المطلوب على الفاتورة", creates_client=False):
+    # creates_client: approving the form creates the client in Daftra when it is new, so the form also
+    # asks what Daftra keeps on a new client. new_client=True: the field is shown, checked and kept
+    # only when the phone search finds no client (validation.validate_submission's new_client);
+    # Daftra already has them for one it finds.
+    new_client = [] if not creates_client else [
+        f("customer_type", "نوع العميل", "select", True, options=list(CUSTOMER_TYPES), new_client=True),
+        f("gender", "الجنس", "select", True, options=list(GENDERS), new_client=True),
+        f("email", "البريد الإلكتروني، إن وجد", "email", new_client=True),
+    ]
+    return section(
+        "بيانات العميل",
+        f("phone", "رقم الهاتف", "phone", True),
+        f("client_code", "كود العميل" if code_required else "كود العميل، إن وجد", required=code_required,
+          pattern=r"^\d{1,6}$", pattern_message="أرقام فقط، حتى 6 خانات"),
+        f("customer_name", name_label, required=True, max_length=150),
+        *new_client,
+    )
+
+
+def address(title="عنوان الخدمة", required=True):
+    # Every form asks for the same address as طلب بيع لعميل جديد, where the coordinates are the
+    # Coordinates a client created in Daftra needs; they fill in from a location link that has them.
+    # التصنيف is the client's category in Daftra (set on the client when a Daftra form is approved);
+    # picking it fills in المنطقة and الإمارة, and picking the area fills in its emirate (RequestForm.jsx)
+    return section(
+        title,
+        f("category", "التصنيف", "daftra_client_category", required),
+        # Not a list to pick from: Daftra holds a neighbourhood here («الخوانيج 2»), which is what
+        # the installation team needs on the work order, and only 28 of our 3,931 client addresses
+        # hold one of the regions below. They are offered as suggestions instead.
+        f("area", "المنطقة", "text", required, max_length=100, suggestions=AREAS,
+          areas_by_emirate=AREAS_BY_EMIRATE),
+        f("emirate", "الإمارة", "select", required, options=EMIRATES),
+        f("street", "الشارع"),
+        f("house", "رقم البيت / اسم الموقع"),
+        # A link to the place, as خرائط جوجل shares it. 255 is as long as Daftra's own field.
+        f("location_url", "موقع العميل", "text", required, max_length=255,
+          pattern=r"^https?://\S+$", pattern_message="الصق رابط الموقع من خرائط جوجل",
+          placeholder="https://maps.app.goo.gl/…"),
+        # Daftra demands them on every client. A link carrying a point fills them in; one that does
+        # not — a link shared from a phone keeps the place's name, not where it is — leaves them to type.
+        f("coordinates", "الإحداثيات", required=required, max_length=100, ltr=True,
+          coordinates_from="location_url", placeholder="مثال: 24.178700, 55.604510"),
+    )
+
+
+def original_refs():
+    return [
+        f("original_order", "رقم الطلب الأصلي، إن توفر"),
+        f("original_invoice", "رقم الفاتورة الأصلية، إن توفر"),
+        f("work_order", "رقم أمر الشغل، إن توفر"),
+    ]
+
+
+def discount_fields(label="قيمة الخصم، إن وجد"):
+    return [
+        money("discount_amount", label),
+        f("discount_approved_by", "اسم الشخص الذي اعتمد الخصم", "staff", required_if=DISCOUNTED),
+    ]
+
+
+def amounts(total_label="قيمة الطلب النهائية بعد الخصم، شامل الضريبة والإضافات",
+            discount_label="قيمة الخصم، إن وجد", paid_label="المبلغ المدفوع فعليًا الآن",
+            remaining_label="المبلغ المتبقي", must_pay=False, auto_total=False, invoiced=False,
+            price_label=None, price_default=None, discounts=True, paid=True):
+    # paid=False: nothing is paid against this form, so what was paid, what is left and when it
+    # falls due are all left out (عرض السعر: an offer, which Daftra records no payment against)
+    # discounts=False: no discount is given on this form at all, so the three fields it takes
+    # (the amount, who approved it and its name on the invoice) are left out and the total is the subtotal
+    # auto_total: the order lines' catalog prices work out the total, instead of the salesperson typing it
+    # price_label: the salesperson types the price before discount (starting at price_default) and the total follows
+    # invoiced: the discount is printed on the Daftra invoice under a name, e.g. «مبادرة دعم نبع المزن»
+    computed_total = auto_total or price_label
+    if auto_total and not discounts:
+        # Nothing is taken off, so the lines' own total is the total: order_lines fills it in
+        # (its subtotal_field names this field), and there is no second amount to show beside it.
+        total_field = f("total_amount", total_label, "number", money=True, computed=[])
+    elif computed_total:
+        total_field = f("total_amount", total_label, "number", money=True,
+                        computed=["subtotal_amount", "discount_amount"],
+                        negative_message="قيمة الخصم أكبر من قيمة الطلب قبل الخصم")
+    else:
+        total_field = money("total_amount", total_label, True)
+    if auto_total and not discounts:
+        subtotal = []
+    elif auto_total:
+        subtotal = [f("subtotal_amount", "قيمة الطلب النهائية قبل الخصم، شامل الضريبة والإضافات", "number",
+                      money=True, computed=[])]
+    elif price_label:
+        subtotal = [money("subtotal_amount", price_label, True, positive=True,
+                          **({"default": str(price_default)} if price_default else {}))]
+    else:
+        subtotal = []
+    return section(
+        "قيمة الطلب",
+        *subtotal,
+        total_field,
+        *(discount_fields(discount_label) if discounts else []),
+        # Before the discount's name, so the two share a line with the amount paid on the right
+        *([money("paid_amount", paid_label, True, positive=must_pay)] if paid else []),
+        # Picking an initiative's name fills قيمة الخصم with what that initiative takes off
+        *([f("discount_label", "اسم الخصم كما يظهر في الفاتورة", required_if=DISCOUNTED, max_length=100,
+             suggestions=DISCOUNT_LABELS, fills="discount_amount", fills_by_choice=DISCOUNT_AMOUNTS)]
+          if invoiced and discounts else []),
+        *([] if not paid else [
+            f("remaining_amount", remaining_label, "number", money=True, computed=["total_amount", "paid_amount"],
+              negative_message="المبلغ المدفوع أكبر من قيمة الطلب"),
+            # invoiced: what is left becomes a one-installment agreement in Daftra, due on this date
+            f("remaining_due_date", "موعد سداد المتبقي (قسط اتفاقية التقسيط)", "date",
+              required_if={"field": "remaining_amount", "gt": 0})
+            if invoiced else f("remaining_due_date", "موعد سداد المتبقي، إن وجد", "date"),
+        ]),
+    )
+
+
+def payment(title="تفاصيل الدفعة", when=True, invoiced=False, details=True):
+    # invoiced: the payment becomes a Daftra receipt, which needs the treasury it was received into
+    # details=False: طريقة الدفع is asked for and the rest of the payment's details are offered
+    # but never demanded (عرض السعر: how it would be paid, not a payment taken)
+    rest = need(when) if details else {}
+    return section(
+        title,
+        f("payment_method", "طريقة الدفع", "select", options=PAYMENT_METHODS, **need(when)),
+        *([f("treasury", "الخزينة / الحساب المستلم في دفترة", "daftra_treasury",
+             default_from={"field": "payment_method", "values": TREASURY_BY_METHOD}, **rest)] if invoiced else []),
+        # Today, because a payment is nearly always taken on the day the request is written
+        f("payment_date", "تاريخ الدفع", "date", default="today", not_future=True, **rest),
+        f("payment_reference", "رقم التحويل / طلب تابي / السند الورقي", **rest),
+        f("collector_name", "اسم المحصل، في حالة الدفع النقدي", "staff", required_if=CASH_PAYMENT),
+    )
+
+
+def attachments(*fields):
+    return section("المرفقات", *fields)
+
+
+NOTES = section("ملاحظات", f("notes", "أي اتفاق خاص أو ملاحظات إضافية", "textarea"))
+INSCRIPTION = [
+    # Picked from the catalogue, whose codes the labels carry; what is saved and engraved is the
+    # wording alone, so everything downstream (the invoice's service line, the work order) reads
+    # it as it always did. «أخرى» is for anything the catalogue has not got, typed in by hand.
+    # blank_value: left alone it saves as «لا يوجد», which is what the empty line of the list says,
+    # so there is nothing to write and nothing to charge for.
+    f("inscription", "الكتابة المطلوبة", "text", max_length=500, choices=inscription_choices(),
+      other_label=OTHER_LABEL, blank_value=NO_INSCRIPTION[0]),
+    f("inscription_place", "مكان الكتابة، إن وجدت"),
+]
