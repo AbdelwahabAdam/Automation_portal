@@ -1,8 +1,8 @@
 // The controls a request form is made of, one per field type in backend/app/forms/.
 import { useMemo, useState } from 'react';
 import { FileRow } from '../attachments.jsx';
-import { Button, Choice, Combobox, Icon, Select, TextArea, TextInput } from '../ds/index.jsx';
-import { matchesQuery } from '../ds/match.js';
+import { Button, Choice, Combobox, Icon, Select, TextArea, TextInput } from '../../../ds/index.jsx';
+import { matchesQuery } from '../../../ds/match.js';
 import { localPhone } from '../validation.js';
 
 const ACCEPT = '.jpg,.jpeg,.png,.webp,.heic,.pdf,.mp4,.mov,.doc,.docx';
@@ -34,30 +34,20 @@ export function FileField({ spec, files, busy, invalid, onAdd, onRemove }) {
           <Button size="sm" variant="ghost" icon="trash" iconOnly label={`حذف ${file.filename}`} onClick={() => onRemove(file)} />
         </FileRow>
       ))}
-      <div className="fl-uploads">
-        <label
-          className={['fl-dropzone', busy && 'fl-dropzone--busy', invalid && 'fl-dropzone--invalid', over && 'fl-dropzone--over'].filter(Boolean).join(' ')}
-          onDragOver={(e) => { e.preventDefault(); setOver(true); }}
-          onDragLeave={() => setOver(false)}
-          onDrop={onDrop}
-        >
-          <Icon name={busy ? 'loader' : 'upload'} size={18} />
-          {busy ? 'جارٍ الرفع…' : over ? 'أفلت الملفات هنا' : 'إضافة ملف أو إفلاته هنا'}
-          <input
-            type="file" multiple hidden accept={ACCEPT} disabled={busy} aria-label={spec.label}
-            onChange={(e) => { add(e.target.files); e.target.value = ''; }}
-          />
-        </label>
-        {/* On a phone this opens the camera; on a computer the browser offers the files instead */}
-        <label className={busy ? 'fl-camera fl-camera--busy' : 'fl-camera'}>
-          <Icon name="image" size={18} />
-          <span>التقاط صورة</span>
-          <input
-            type="file" hidden accept="image/*" capture="environment" disabled={busy} aria-label={`التقاط صورة — ${spec.label}`}
-            onChange={(e) => { add(e.target.files); e.target.value = ''; }}
-          />
-        </label>
-      </div>
+      {/* One way in: the phone's own file picker offers its camera among the rest */}
+      <label
+        className={['fl-dropzone', busy && 'fl-dropzone--busy', invalid && 'fl-dropzone--invalid', over && 'fl-dropzone--over'].filter(Boolean).join(' ')}
+        onDragOver={(e) => { e.preventDefault(); setOver(true); }}
+        onDragLeave={() => setOver(false)}
+        onDrop={onDrop}
+      >
+        <Icon name={busy ? 'loader' : 'upload'} size={18} />
+        {busy ? 'جارٍ الرفع…' : over ? 'أفلت الملفات هنا' : 'إضافة ملف أو إفلاته هنا'}
+        <input
+          type="file" multiple hidden accept={ACCEPT} disabled={busy} aria-label={spec.label}
+          onChange={(e) => { add(e.target.files); e.target.value = ''; }}
+        />
+      </label>
     </div>
   );
 }
@@ -175,7 +165,9 @@ export function ChoiceOrOther({ spec, value, invalid, onChange }) {
 
 // A field typed freely, offering the suggestions that match what is typed (staff names, areas,
 // discount names) in the portal's own list rather than the browser's, which cannot be styled
-export function SuggestInput({ spec, value, invalid, onChange, onBlur }) {
+// onPick: what a name chosen from the list does, when that is more than typing it (an initiative
+// fills in its own قيمة الخصم). Without it, picking is the same as typing the name.
+export function SuggestInput({ spec, value, invalid, onChange, onPick, onBlur }) {
   const matches = useMemo(
     () => (spec.suggestions || []).filter((text) => matchesQuery(value ?? '', text)).slice(0, 50),
     [spec.suggestions, value],
@@ -185,7 +177,7 @@ export function SuggestInput({ spec, value, invalid, onChange, onBlur }) {
       id={spec.name} value={value} invalid={invalid} icon={spec.type === 'staff' ? 'user' : 'chevron-down'}
       // Nothing matching closes the list: what is typed is kept as it is
       items={matches.length ? matches : null} itemKey={(text) => text} renderItem={(text) => <bdi>{text}</bdi>}
-      onInput={(text) => onChange(spec.name, text)} onPick={(text) => onChange(spec.name, text)}
+      onInput={(text) => onChange(spec.name, text)} onPick={(text) => (onPick || onChange)(spec.name, text)}
       onBlur={onBlur && (() => onBlur(spec.name, value ?? ''))}
     />
   );
@@ -243,7 +235,7 @@ function PhoneInput({ spec, value, invalid, onChange, onSearch }) {
 
 // The control for one plain field. onSearch: the field looks the client up; both its magnifier and
 // the keyboard's own search key run the search
-export function Control({ spec, value, invalid, onChange, onBlur, onSearch }) {
+export function Control({ spec, value, invalid, onChange, onPick, onBlur, onSearch }) {
   const common = {
     id: spec.name,
     value: value ?? '',
@@ -277,7 +269,7 @@ export function Control({ spec, value, invalid, onChange, onBlur, onSearch }) {
   }
   if (spec.type === 'textarea') return <TextArea {...common} rows={3} />;
   if (spec.suggestions && !onSearch) {
-    return <SuggestInput spec={spec} value={value} invalid={invalid} onChange={onChange} onBlur={onBlur} />;
+    return <SuggestInput spec={spec} value={value} invalid={invalid} onChange={onChange} onPick={onPick} onBlur={onBlur} />;
   }
   if (spec.type === 'date') return <TextInput {...common} type="date" />;
   if (spec.type === 'phone') return <PhoneInput spec={spec} value={value} invalid={invalid} onChange={onChange} onSearch={onSearch} />;
@@ -292,7 +284,9 @@ export function Control({ spec, value, invalid, onChange, onBlur, onSearch }) {
           Enter key says «بحث» and runs the search */}
       <TextInput
         {...common} icon={icon} type="text" autoComplete="off"
-        inputMode={inputMode ?? (searching ? 'numeric' : undefined)} enterKeyHint={searching ? 'search' : undefined}
+        /* ltr: a value that is read left to right whatever the page is, e.g. «24.178700, 55.604510» */
+        dir={spec.ltr ? 'ltr' : undefined}
+        inputMode={inputMode ?? (spec.ltr ? 'decimal' : searching ? 'numeric' : undefined)} enterKeyHint={searching ? 'search' : undefined}
         onIconClick={onSearch && (() => onSearch(spec.name, value ?? ''))} iconLabel={onSearch && `بحث عن العميل بـ${spec.label}`}
         onKeyDown={onSearch && ((e) => {
           if (e.key !== 'Enter') return;

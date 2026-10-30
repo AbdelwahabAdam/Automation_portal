@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
-import { api } from '../api.js';
+import * as identityApi from '../../api/identity.js';
 import {
   Alert, Badge, Button, Checkbox, Choice, Drawer, EmptyState, Field, Filters, Loading, PageHeader, Pager, SearchInput, Select, TextInput,
   Skeleton, useConfirm, useToast, useWidth,
-} from '../ds/index.jsx';
-import { formatDate, matchesQuery } from '../formsMeta.js';
-import { useAction } from '../hooks.js';
-import { TABLE_MIN_WIDTH } from '../RequestList.jsx';
+} from '../../ds/index.jsx';
+import { formatDate } from '../../lib/format.js';
+import { matchesQuery } from '../../ds/match.js';
+import { useAction } from '../../lib/hooks.js';
+import { TABLE_MIN_WIDTH } from '../requests/RequestList.jsx';
 
-const EMPTY = { username: '', email: '', full_name: '', role_ids: [], manages: [], is_admin: false, is_active: true, daftra_staff_id: null };
+const EMPTY = { username: '', email: '', full_name: '', role_ids: [], is_admin: false, is_active: true, daftra_staff_id: null };
 
 function statusOf(user) {
   if (!user.is_active) return <Badge tone="neutral">موقوف</Badge>;
@@ -16,7 +17,7 @@ function statusOf(user) {
   return <Badge tone="success">نشط</Badge>;
 }
 
-function UserDrawer({ user, roles, departments, staff, isSelf, onSaved, onDeleted, onClose }) {
+function UserDrawer({ user, roles, staff, isSelf, onSaved, onDeleted, onClose }) {
   const [values, setValues] = useState(
     user ? { ...EMPTY, ...user, email: user.email || '', role_ids: user.roles.map((role) => role.id) } : EMPTY,
   );
@@ -27,14 +28,14 @@ function UserDrawer({ user, roles, departments, staff, isSelf, onSaved, onDelete
   function submit(e) {
     e?.preventDefault();
     run('save', async () => {
-      const { email, full_name, role_ids, manages, is_admin, is_active, username, daftra_staff_id } = values;
+      const { email, full_name, role_ids, is_admin, is_active, username, daftra_staff_id } = values;
       if (user) {
-        onSaved(await api(`/admin/users/${user.id}`, {
-          method: 'PUT', body: { email, full_name, role_ids, manages, is_admin, is_active, daftra_staff_id },
+        onSaved(await identityApi.updateUser(user.id, {
+          method: 'PUT', body: { email, full_name, role_ids, is_admin, is_active, daftra_staff_id },
         }));
       } else {
-        const invite = await api('/admin/users', {
-          method: 'POST', body: { username, email, full_name, role_ids, manages, is_admin, daftra_staff_id },
+        const invite = await identityApi.createUser({
+          method: 'POST', body: { username, email, full_name, role_ids, is_admin, daftra_staff_id },
         });
         onSaved(invite.user, invite);
       }
@@ -47,7 +48,7 @@ function UserDrawer({ user, roles, departments, staff, isSelf, onSaved, onDelete
       confirmLabel: 'إيقاف التحقق بخطوتين',
     });
     if (!yes) return;
-    run('mfa', async () => onSaved(await api(`/admin/users/${user.id}/mfa-reset`, { method: 'POST' })));
+    run('mfa', async () => onSaved(await identityApi.resetUserTwoStep(user.id)));
   }
 
   async function remove() {
@@ -57,7 +58,7 @@ function UserDrawer({ user, roles, departments, staff, isSelf, onSaved, onDelete
     });
     if (!yes) return;
     run('delete', async () => {
-      await api(`/admin/users/${user.id}`, { method: 'DELETE' });
+      await identityApi.deleteUser(user.id);
       onDeleted(user);
     });
   }
@@ -117,10 +118,6 @@ function UserDrawer({ user, roles, departments, staff, isSelf, onSaved, onDelete
               value={values.role_ids} onChange={(v) => set('role_ids', v)} />
           )}
         </Field>
-        <Field label="مدير قسم" hint="مدير القسم يفتح كل صفحات قسمه، ومنها «المراجعة» في المبيعات.">
-          <Choice name="u_manages" multiple options={departments.map((d) => ({ value: d.key, label: d.label }))}
-            value={values.manages} onChange={(v) => set('manages', v)} />
-        </Field>
         <div className="fl-stack fl-stack--sm">
           <Checkbox checked={values.is_admin} disabled={isSelf} onChange={(v) => set('is_admin', v)}>
             مدير النظام — يفتح كل الصفحات ويدير المستخدمين، ويدخل دائمًا برمز تحقق يصله بالبريد
@@ -156,7 +153,6 @@ function InviteResult({ invite, onDismiss }) {
 export default function Users({ user: me }) {
   const [users, setUsers] = useState(null);
   const [roles, setRoles] = useState([]);
-  const [departments, setDepartments] = useState([]);
   // Daftra's active staff, to link a user to; null until loaded, or if Daftra cannot be reached
   const [staff, setStaff] = useState(null);
   const [error, setError] = useState('');
@@ -175,18 +171,16 @@ export default function Users({ user: me }) {
   const [area, areaWidth] = useWidth();
 
   useEffect(() => {
-    Promise.all([api('/admin/users'), api('/admin/roles'), api('/admin/departments')])
-      .then(([loadedUsers, loadedRoles, loadedDepartments]) => {
+    Promise.all([identityApi.listUsers(), identityApi.listRoles()])
+      .then(([loadedUsers, loadedRoles]) => {
         setUsers(loadedUsers);
         setRoles(loadedRoles);
-        setDepartments(loadedDepartments);
       })
       .catch((err) => setError(err.message));
-    api('/admin/daftra/staff').then(setStaff).catch(() => {});
+    identityApi.daftraStaffForLinking().then(setStaff).catch(() => {});
   }, []);
   useEffect(() => setPage(1), [query, roleFilter, statusFilter, pageSize]);
 
-  const departmentLabels = Object.fromEntries(departments.map((department) => [department.key, department.label]));
   const filtered = useMemo(() => (users || []).filter((u) => matchesQuery(query, u.full_name, u.username, u.email || '')
     && (!roleFilter || (roleFilter === 'admin' ? u.is_admin : u.roles.some((r) => String(r.id) === roleFilter)))
     && (!statusFilter || (statusFilter === 'active' && u.is_active && u.has_password)
@@ -207,7 +201,7 @@ export default function Users({ user: me }) {
     open(null);
     setSendingTo(user.id);
     try {
-      setInvite(await api(`/admin/users/${user.id}/invite`, { method: 'POST' }));
+      setInvite(await identityApi.inviteUser(user.id));
     } catch (err) {
       setError(err.message);
     } finally {
@@ -240,9 +234,8 @@ export default function Users({ user: me }) {
   const permissions = (user) => (
     <div className="fl-badges">
       {user.is_admin && <Badge tone="warning" icon="shield">مدير النظام</Badge>}
-      {user.manages.map((key) => <Badge key={key} tone="success">مدير {departmentLabels[key] || key}</Badge>)}
       {user.roles.map((role) => <Badge key={role.id} tone="brand">{role.name}</Badge>)}
-      {!user.is_admin && !user.roles.length && !user.manages.length && <span className="fl-muted">بدون صلاحيات</span>}
+      {!user.is_admin && !user.roles.length && <span className="fl-muted">بدون صلاحيات</span>}
     </div>
   );
   const accountState = (user) => (
@@ -358,7 +351,6 @@ export default function Users({ user: me }) {
           key={panel.user?.id ?? 'new'}
           user={panel.user}
           roles={roles}
-          departments={departments}
           staff={staff}
           isSelf={panel.user?.id === me.id}
           onSaved={saved}

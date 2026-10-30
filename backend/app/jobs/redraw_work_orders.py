@@ -19,14 +19,15 @@ import argparse
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from . import printouts
-from .integrations import daftra
-from .core.config import UPLOAD_DIR
-from .integrations.daftra import DaftraError
-from .daftra_sync.common import WORK_ORDER_ATTACHMENT_FIELD
-from .daftra_sync.work_order import draw_work_order
-from .core.database import SessionLocal
-from .models import Request
+from ..integrations import daftra
+from ..core.config import UPLOAD_DIR
+from ..integrations.daftra import DaftraError
+from ..modules.invoicing import WORK_ORDER_ATTACHMENT_FIELD
+from ..modules.invoicing import printouts
+from ..modules.invoicing.work_order import draw_work_order
+from ..core.database import SessionLocal
+from ..modules.models import Request
+from .registry import job
 
 
 def redraw(request: Request, db, dry_run: bool = False) -> str:
@@ -67,6 +68,13 @@ def redraw(request: Request, db, dry_run: bool = False) -> str:
     db.commit()
     return f"redrawn {attachment.filename}: {was:,} → {len(content):,} bytes"
 
+
+
+@job("redraw_work_orders", label="إعادة رسم أوامر الشغل", recorded=False,
+     about="Draws the work-order PDFs again for approved requests")
+def _run(db, who):
+    """This one is a command line only: `python -m app.jobs redraw_work_orders …`."""
+    raise SystemExit("Run it as: python -m app.jobs redraw_work_orders [options]")
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)

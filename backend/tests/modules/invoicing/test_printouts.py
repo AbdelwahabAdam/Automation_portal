@@ -1,6 +1,6 @@
 """The PDFs the portal draws itself (app.printouts)."""
 
-from app import printouts
+from app.modules.invoicing import printouts
 
 ROWS = [
     "نوع الجهاز: باقة برادة سقيا الخير - 2 صنبور - أبيض",
@@ -55,3 +55,10 @@ def test_the_work_order_comes_out_on_one_page():
     from weasyprint import HTML
     document = HTML(string=work_order_html(), base_url=str(printouts.TEMPLATE_DIR)).render()
     assert len(document.pages) == 1
+
+
+def test_the_extensions_line_is_printed_when_there_are_any():
+    """Daftra's own form leaves «التمديدات» blank for the floor; we print it when the request has it."""
+    assert "التمديدات" in work_order_html()
+    filled = work_order_html(values={**VALUES, "extensions": "تمديد الكهرباء، اعمال الحفر"})
+    assert "تمديد الكهرباء، اعمال الحفر" in filled

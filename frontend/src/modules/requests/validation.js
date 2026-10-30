@@ -24,7 +24,8 @@ const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 // has found no client (values.new_client, set by form/ClientLookup.jsx); the server decides the same way
 export const fieldApplies = (spec, values) => !spec.new_client || values.new_client === true;
 // Field types holding the id of a row in a Daftra list (see DAFTRA_LIST_TYPES in backend/app/forms/validation.py)
-export const DAFTRA_LIST_TYPES = ['daftra_order_source', 'daftra_treasury', 'daftra_client_category', 'daftra_client_invoice'];
+export const DAFTRA_LIST_TYPES = ['daftra_order_source', 'daftra_treasury', 'daftra_client_category',
+  'daftra_client_invoice', 'daftra_staff'];
 
 const toLatinDigits = (text) => text.replace(/[٠-٩۰-۹]/g, (d) => ARABIC_DIGITS.indexOf(d) % 10);
 
@@ -98,6 +99,16 @@ export function packageColors(spec, packageName) {
   return family ? family.colors : [];
 }
 
+// The text a package fills a field with (a field's default_by_package, from the backend's
+// INSTALLATION_WORK): the first family whose words the package's name contains, '' when none does.
+// Mirrors installation_work() in backend/app/modules/form_engine/options.py.
+export function packageDefault(spec, packageName) {
+  const name = String(packageName ?? '').split(/\s+/).filter(Boolean).join(' ');
+  const family = (spec.default_by_package || []).find(
+    (f) => f.match.some((w) => name.includes(w)) && !f.exclude.some((w) => name.includes(w)));
+  return family ? family.text : '';
+}
+
 // How many of the package a line was picked from (its «الكمية»); 1 for a product picked on its own
 export function packageQuantity(line) {
   const value = Number(line.details?.package_quantity);
@@ -105,7 +116,12 @@ export function packageQuantity(line) {
 }
 
 // A line's price: what the product costs inside the package it was picked from, else its own price
-export function linePrice(line, priceById) {
+// lineFields: a field marked line_price holds the price of a line whose product has none of its
+// own («أخرى» on اعمال اضافية). The server works it out again the same way.
+export function linePrice(line, priceById, lineFields = []) {
+  const typed = lineFields.find((dspec) => dspec.line_price);
+  const written = typed && line.details?.[typed.name];
+  if (written !== undefined && written !== '' && written !== null) return Number(toLatinDigits(String(written))) || 0;
   return typeof line.unit_price === 'number' ? line.unit_price : priceById.get(Number(line.product_id)) || 0;
 }
 
@@ -164,7 +180,7 @@ export function evaluateForm(formType, values, fileCounts = {}, catalog = {}) {
     let total = 0;
     for (const line of lines) {
       // A package's «الكمية» is already in its products' quantities
-      total += linePrice(line, priceById) * (Number(line.quantity) || 0);
+      total += linePrice(line, priceById, spec.line_fields || []) * (Number(line.quantity) || 0);
       // A package's details sit on each of its lines, so its charges (e.g. the inscription) count once per package
       if (!line.group_id || !seenGroups.has(line.group_id)) {
         total += charges.reduce((sum, name) => sum + (Number(toLatinDigits(String(line.details?.[name] ?? ''))) || 0), 0) * packageQuantity(line);

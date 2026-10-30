@@ -11,9 +11,10 @@ Categories are matched by Daftra's id: existing rows are updated, new ones added
 
 from sqlalchemy import select
 
-from .modules import clients
-from .core.database import SessionLocal, run_migrations
-from .models import ClientCategory
+from ..modules import clients
+from ..core.database import SessionLocal, run_migrations
+from ..modules.models import ClientCategory
+from .registry import job
 
 
 def import_categories() -> tuple[int, int]:
@@ -33,6 +34,13 @@ def import_categories() -> tuple[int, int]:
         db.commit()
     return added, updated
 
+
+
+@job("import_client_categories", label="تصنيفات العملاء", recorded=False,
+     about="Copies Daftra's client categories, each with where its clients live")
+def _run(db, who):
+    """This one is a command line only: `python -m app.jobs import_client_categories …`."""
+    raise SystemExit("Run it as: python -m app.jobs import_client_categories [options]")
 
 def main():
     run_migrations()

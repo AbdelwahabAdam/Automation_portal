@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import { api } from '../api.js';
-import { Alert, Badge, Button, Card, Loading, PageHeader } from '../ds/index.jsx';
-import { formatDate, formatMoney } from '../formsMeta.js';
+import * as jobsApi from '../../api/jobs.js';
+import { Alert, Badge, Button, Card, Loading, PageHeader } from '../../ds/index.jsx';
+import { formatDate, formatMoney } from '../../lib/format.js';
 
 // Refreshes our copies of Daftra's lists (backend/app/daftra_refresh.py): the catalog's linked
 // products, and the clients the sales forms look up
@@ -103,7 +103,7 @@ export default function DaftraSync() {
   const [error, setError] = useState('');
   const [starting, setStarting] = useState('');
 
-  const load = useCallback(() => api('/admin/daftra-sync').then(setState).catch((err) => setError(err.message)), []);
+  const load = useCallback(() => jobsApi.syncStatus().then(setState).catch((err) => setError(err.message)), []);
   useEffect(() => { load(); }, [load]);
 
   const busy = Boolean(state?.kinds.some((kind) => kind.busy));
@@ -118,7 +118,7 @@ export default function DaftraSync() {
     setStarting(key);
     setError('');
     try {
-      await api('/admin/daftra-sync', { method: 'POST', body: { kinds } });
+      await jobsApi.startSync(kinds);
       await load();
     } catch (err) {
       setError(err.message);

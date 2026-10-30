@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { api } from './api.js';
-import { Alert, Badge, Button, Card, Field, Loading, PageHeader, PasswordInput, TextInput } from './ds/index.jsx';
-import { useAction } from './hooks.js';
+import * as identityApi from '../../api/identity.js';
+import { Alert, Badge, Button, Card, Field, Loading, PageHeader, PasswordInput, TextInput } from '../../ds/index.jsx';
+import { useAction } from '../../lib/hooks.js';
 
 function Feedback({ state }) {
   if (state.error) return <Alert tone="error">{state.error}</Alert>;
@@ -9,11 +9,10 @@ function Feedback({ state }) {
 }
 
 function Permissions({ account }) {
-  const none = !account.is_admin && !account.manages.length && !account.roles.length;
+  const none = !account.is_admin && !account.roles.length;
   return (
     <div className="fl-badges">
       {account.is_admin && <Badge tone="warning" icon="shield">مدير النظام</Badge>}
-      {account.manages.map((name) => <Badge key={name} tone="success">مدير {name}</Badge>)}
       {account.roles.map((name) => <Badge key={name} tone="brand">{name}</Badge>)}
       {none && <span className="fl-muted">بدون صلاحيات</span>}
     </div>
@@ -25,7 +24,7 @@ function Profile({ account, onChange }) {
   const state = useAction();
   const submit = (e) => {
     e.preventDefault();
-    state.run('save', async () => onChange(await api('/account', { method: 'PUT', body: { full_name: fullName } })), 'تم حفظ الاسم.');
+    state.run('save', async () => onChange(await identityApi.renameMe(fullName)), 'تم حفظ الاسم.');
   };
   return (
     <form onSubmit={submit} noValidate>
@@ -64,7 +63,7 @@ function Password({ username }) {
     if (values.next !== values.repeat) return setProblem('repeat');
     setProblem('');
     state.run('password', async () => {
-      await api('/account/password', { method: 'POST', body: { current_password: values.current, new_password: values.next } });
+      await identityApi.changeMyPassword(values.current, values.next);
       setValues({ current: '', next: '', repeat: '' });
     }, 'تم تغيير كلمة المرور.');
   }
@@ -106,13 +105,13 @@ function TwoStep({ account, onChange }) {
   }, [state.error]);
 
   const sendCode = () => state.run('send', async () => {
-    setHint((await api('/account/mfa/send-code', { method: 'POST' })).email_hint);
+    setHint((await identityApi.sendTwoStepCode()).email_hint);
     setStep('confirm');
   });
   const enable = (e) => {
     e.preventDefault();
     state.run('enable', async () => {
-      const updated = await api('/account/mfa/enable', { method: 'POST', body: { code } });
+      const updated = await identityApi.enableTwoStep(code);
       setStep(null);
       setCode('');
       onChange(updated);
@@ -121,7 +120,7 @@ function TwoStep({ account, onChange }) {
   const disable = (e) => {
     e.preventDefault();
     state.run('disable', async () => {
-      const updated = await api('/account/mfa/disable', { method: 'POST', body: { password } });
+      const updated = await identityApi.disableTwoStep(password);
       setStep(null);
       setPassword('');
       onChange(updated);
@@ -187,7 +186,7 @@ export default function Account({ onUserChange }) {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    api('/account').then(setAccount).catch((err) => setError(err.message));
+    identityApi.myAccount().then(setAccount).catch((err) => setError(err.message));
   }, []);
 
   // The header shows the name

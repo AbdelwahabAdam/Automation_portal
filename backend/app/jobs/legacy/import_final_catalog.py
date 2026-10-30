@@ -16,9 +16,9 @@ from decimal import Decimal
 
 from openpyxl import load_workbook
 
-from .catalog import set_items
-from .core.database import SessionLocal, run_migrations
-from .models import Package, PackageItem, Product
+from ...modules.catalog.service import set_items
+from ...core.database import SessionLocal, run_migrations
+from ...modules.models import Package, PackageItem, Product
 
 DEFAULT_TAX_RATE = Decimal("0.05")
 COLOR_WORDS = ["أبيض", "أسود", "ذهبي"]

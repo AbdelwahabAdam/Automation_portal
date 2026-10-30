@@ -1,11 +1,11 @@
-// src/api.js with fetch and localStorage stood in for: the messages a failed call shows.
+// src/api/http.js with fetch and localStorage stood in for: the messages a failed call shows.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 const store = new Map();
 globalThis.localStorage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v), removeItem: (k) => store.delete(k) };
 globalThis.window = { location: { reload() {} } };
-const { api, ApiError } = await import('../src/api.js');
+const { api, ApiError } = await import('../src/api/http.js');
 
 const answer = (status, body) => async () => ({
   ok: status < 400, status, statusText: 'x', json: async () => body,

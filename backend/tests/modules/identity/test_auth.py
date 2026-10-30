@@ -3,10 +3,10 @@
 import re
 
 from app.core.config import settings
-from app.models import AuditLog, User
-from app.security import create_password_link
+from app.modules.models import AuditLog, User
+from app.modules.identity import create_password_link
 
-from .conftest import PASSWORD, auth, make_user
+from ...conftest import PASSWORD, auth, make_user
 
 
 def login(client, username, password=PASSWORD, code=""):
@@ -20,7 +20,12 @@ def test_login_by_username_or_email(client, sales):
         body = response.json()
         assert body["access_token"]
         assert body["user"]["username"] == "sales1"
-        assert [d["key"] for d in body["user"]["navigation"]] == ["sales"]
+        # The «المبيعات» group is «الطلبات» now: the forms are no longer sales-only
+        assert [group["key"] for group in body["user"]["navigation"]] == ["requests"]
+        pages = body["user"]["navigation"][0]["pages"]
+        assert [page["key"] for page in pages] == ["forms", "my_requests"]
+        # Each entry carries where it lives, so the menu needs no table of its own
+        assert pages[0]["path"] == "/forms"
 
 
 def test_wrong_password_is_refused_and_logged(client, db, sales):

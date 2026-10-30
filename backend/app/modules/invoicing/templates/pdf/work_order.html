@@ -66,7 +66,8 @@
   <div class="row"><span class="k">تصميم قديم &amp; جديد:</span> {{ values.design_version or '' }}</div>
   <div class="row"><span class="k">لون البرادة:</span> {{ values.cooler_color or '' }}</div>
   <div class="row"><span class="k">لون القاعدة:</span> {{ values.base_color or '' }}</div>
-  <div class="row"><span class="k">التمديدات:</span> <span class="blank"></span></div>
+  <div class="row"><span class="k">التمديدات:</span>
+    {% if values.extensions %}{{ values.extensions }}{% else %}<span class="blank"></span>{% endif %}</div>
   <div class="row"><span class="k">صورة المنتج:</span>
     {% if product_image %}<span class="url">{{ product_image }}</span>{% else %}<span class="blank"></span>{% endif %}</div>
   <div class="row"><span class="k">صورة المعاينة:</span> <span class="blank"></span></div>

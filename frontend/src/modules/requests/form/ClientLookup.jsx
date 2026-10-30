@@ -1,8 +1,8 @@
 // Finding the request's client in our copy of Daftra's client list (by phone or client code),
 // filling in their details, choosing one of their addresses, and what Daftra itself knows of them.
 import { useRef, useState } from 'react';
-import { api } from '../api.js';
-import { Alert, Button, Select } from '../ds/index.jsx';
+import * as clientsApi from '../../../api/clients.js';
+import { Alert, Button, Select } from '../../../ds/index.jsx';
 import { coordinatesFromLink, normalizePhone } from '../validation.js';
 
 // Form fields that an existing Daftra client can fill
@@ -35,7 +35,7 @@ export function useClientLookup(form) {
   async function loadClientInfo(daftraId, theirLink = "") {
     setClientInfo({ status: 'loading' });
     try {
-      const info = await api(`/daftra/clients/${daftraId}`);
+      const info = await clientsApi.clientInDaftra(daftraId);
       setClientInfo({ status: 'ready', ...info });
       // Decided here, not inside the update: an update is run when React next renders, which is
       // after this line, so anything read back out of one is read too early
@@ -63,7 +63,7 @@ export function useClientLookup(form) {
       // link pasted by hand. A client's link is usually a place, and a place does lead to a point.
       if (!point && theirLink && form.fieldNames.has("coordinates") && !typingNewAddress.current) {
         try {
-          const at = await api(`/location/from-link?url=${encodeURIComponent(theirLink)}`);
+          const at = await clientsApi.pointOfLink(theirLink);
           const found = `${at.lat.toFixed(6)}, ${at.lng.toFixed(6)}`;
           form.setValues((current) => {
             // Unless they have moved on: another client, or their own point typed in meanwhile
@@ -129,7 +129,7 @@ export function useClientLookup(form) {
     const { client } = lookup;
     setAddressBusy(true);
     try {
-      const address = await api(`/clients/${client.daftra_id}/addresses`, {
+      const address = await clientsApi.addClientAddress(client.daftra_id, {
         // The coordinates go too: Daftra will not save a client without them
         method: 'POST',
         body: { ...Object.fromEntries(ADDRESS_FIELDS.map((f) => [f, values[f] || ''])), coordinates: values.coordinates || '' },
@@ -157,7 +157,7 @@ export function useClientLookup(form) {
     lastLookup.current = query;
     setLookup({ field, status: 'loading' });
     try {
-      const { matches } = await api(`/clients/lookup?${query}`);
+      const { matches } = await clientsApi.lookupClient(query);
       if (lastLookup.current !== query) return;
       if (matches.length === 1) applyClient(matches[0], field);
       else setLookup({ field, status: matches.length ? 'many' : 'none', matches });

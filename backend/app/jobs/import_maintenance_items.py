@@ -15,8 +15,9 @@ from decimal import Decimal
 from openpyxl import load_workbook
 from sqlalchemy import func, select
 
-from .core.database import SessionLocal, run_migrations
-from .models import Product
+from ..core.database import SessionLocal, run_migrations
+from ..modules.models import Product
+from .registry import job
 
 # Each item's Daftra product: the one used on invoices where Daftra has several with the same name
 DAFTRA_IDS = {
@@ -45,6 +46,13 @@ def read_items(path: str) -> list[tuple[str, str, str]]:
             rows.append((str(group).strip(), " ".join(str(invoice_name).split()), str(portal_name or "").strip()))
     return rows
 
+
+
+@job("import_maintenance_items", label="بنود الصيانة", recorded=False,
+     about="Loads the maintenance items workbook into the catalog")
+def _run(db, who):
+    """This one is a command line only: `python -m app.jobs import_maintenance_items …`."""
+    raise SystemExit("Run it as: python -m app.jobs import_maintenance_items [options]")
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)

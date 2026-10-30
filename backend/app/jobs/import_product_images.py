@@ -15,9 +15,10 @@ import json
 
 from sqlalchemy import select
 
-from .integrations import daftra
-from .core.database import SessionLocal, run_migrations
-from .models import Product
+from ..integrations import daftra
+from ..core.database import SessionLocal, run_migrations
+from ..modules.models import Product
+from .registry import job
 
 
 def images_by_product(raw_products: list[dict]) -> dict[int, int]:
@@ -29,6 +30,13 @@ def images_by_product(raw_products: list[dict]) -> dict[int, int]:
             found[int(product["id"])] = int(images[0]["id"])
     return found
 
+
+
+@job("import_product_images", label="صور المنتجات", recorded=False,
+     about="Links each product to its image in Daftra")
+def _run(db, who):
+    """This one is a command line only: `python -m app.jobs import_product_images …`."""
+    raise SystemExit("Run it as: python -m app.jobs import_product_images [options]")
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)

@@ -32,6 +32,10 @@ services:
       SMTP_PORT: 1025
       SMTP_STARTTLS: "false"
       MAIL_FROM: ${MAIL_FROM:-FutureLife Portal <no-reply@futurelife.local>}
+      # The stand-in for Daftra: on unless set to false, so a portal on someone's machine cannot
+      # write to the live account by accident. Apply a change with `docker compose up -d backend`
+      # (`restart` keeps the old value).
+      DAFTRA_FAKE: ${DAFTRA_FAKE:-true}
       DAFTRA_SUBDOMAIN: ${DAFTRA_SUBDOMAIN:-}
       DAFTRA_API_KEY: ${DAFTRA_API_KEY:-}
       DAFTRA_SEND_PAYMENT_PROOF: ${DAFTRA_SEND_PAYMENT_PROOF:-false}

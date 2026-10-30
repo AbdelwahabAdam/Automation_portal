@@ -1,4 +1,8 @@
-"""The Daftra client itself (app.daftra._call), with urlopen replaced: retries, errors, lookups."""
+"""The live Daftra client (app.integrations.daftra.live), with urlopen replaced: retries, errors, lookups.
+
+These go straight at `live.call`, not through the switch, because this is the HTTP code itself:
+with DAFTRA_FAKE on, as the tests run, the switch would answer from the fake instead.
+"""
 
 import io
 import json
@@ -9,7 +13,7 @@ import pytest
 
 from app.integrations import daftra
 from app.modules import clients
-from app.integrations.daftra import call as real_call  # taken before the fake_daftra fixture replaces it
+from app.integrations.daftra.live import call as real_call
 from app.core.text import local_phone
 
 

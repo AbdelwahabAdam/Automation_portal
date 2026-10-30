@@ -1,6 +1,6 @@
 """What invoicing holds that is ours rather than Daftra's."""
 
-from app.forms import PAYMENT_METHODS
+from app.modules.form_engine import PAYMENT_METHODS
 from app.modules.invoicing import PAYMENT_METHOD_KEYS
 
 

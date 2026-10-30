@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { api, uploadAttachment } from './api.js';
+import * as clientsApi from '../../api/clients.js';
+import * as requestsApi from '../../api/requests.js';
 import {
   ActionBar, Alert, Badge, Button, Dialog, Field, PageHeader, Section, Skeleton, TextInput, useToast,
-} from './ds/index.jsx';
+} from '../../ds/index.jsx';
 import { ClientLookupNote, SEARCH_FIELDS, useClientLookup } from './form/ClientLookup.jsx';
 import { Control, DaftraListSelect, FileField, ProductPicker, guessFromProductName, showsAsChoice } from './form/fields.jsx';
 import FormProgress, { Totals, formTotals } from './form/FormProgress.jsx';
-import LocationPicker from './form/LocationPicker.jsx';
 import OrderLines from './form/OrderLines.jsx';
-import { formatAmount } from './formsMeta.js';
+import { formatAmount } from '../../lib/format.js';
 import { DAFTRA_LIST_TYPES, allFields, coordinatesFromLink, evaluateForm, fieldApplies, initialValues } from './validation.js';
 
 // Sections open when a form starts; the rest are folded until needed
@@ -90,7 +90,7 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
 
   useEffect(() => {
     if (!requestId) return;
-    api(`/requests/${requestId}`)
+    requestsApi.getRequest(requestId)
       .then((request) => {
         setValues(request.data);
         setSavedSnapshot(JSON.stringify(request.data));
@@ -213,18 +213,49 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
     else clearError(name);
   }
 
-  // What the map last gave as الإحداثيات, which is what makes them read-only. Empty once a link
-  // could not be followed to a point, so they can be typed in instead.
-  const fromTheMap = useRef('');
-
-  // The map's pin: the link and the coordinates are one act, never two
-  function pickLocation(link, coordinates) {
-    setValues((current) => ({ ...current, location_url: link, coordinates }));
-    autoFilled.current.location_url = link;
-    autoFilled.current.coordinates = coordinates;
-    fromTheMap.current = coordinates;
+  // الإحداثيات follow the link whenever it carries a point; otherwise they are typed in
+  function changeLocation(name, value) {
+    const point = coordinatesFromLink(value);
+    setValues((current) => {
+      const next = { ...current, [name]: value };
+      if (point) autoFill(current, next, 'coordinates', point);
+      return next;
+    });
     setMessage(null);
-    clearError('location_url', 'coordinates');
+    clearError(name, ...(point ? ['coordinates'] : []));
+  }
+
+  // A link shared from a phone (maps.app.goo.gl/…) carries no point, so the server follows it.
+  // The browser cannot: reading another site's redirect is not allowed.
+  async function resolveLocation(name, value) {
+    const link = String(value || '').trim();
+    if (!link || coordinatesFromLink(link) || values.coordinates) return;
+    try {
+      const at = await clientsApi.pointOfLink(link);
+      const point = `${at.lat.toFixed(6)}, ${at.lng.toFixed(6)}`;
+      setValues((current) => {
+        // Unless the link has changed again meanwhile
+        if ((current[name] || '').trim() !== link) return current;
+        const next = { ...current };
+        autoFill(current, next, 'coordinates', point);
+        return next;
+      });
+      clearError('coordinates');
+    } catch {
+      // The link leads nowhere we can read; الإحداثيات stay to be typed in
+    }
+  }
+
+  // A name picked from a list that carries an amount of its own: the initiative's own قيمة الخصم
+  // goes in, over anything typed there, and can be changed afterwards
+  function pickNamed(name, text) {
+    const spec = specOf(name);
+    const amount = spec?.fills_by_choice?.[text];
+    setValues((current) => ({
+      ...current, [name]: text, ...(amount === undefined ? {} : { [spec.fills]: String(amount) }),
+    }));
+    setMessage(null);
+    clearError(name, ...(amount === undefined ? [] : [spec.fills]));
   }
 
   // الإمارة narrows the areas suggested for المنطقة, and a known area fills in its emirate.
@@ -250,8 +281,8 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
   async function save(action) {
     const body = { form_type: formType.key, data: values, action };
     const result = id
-      ? await api(`/requests/${id}`, { method: 'PUT', body })
-      : await api('/requests', { method: 'POST', body });
+      ? await requestsApi.updateRequest(id, body)
+      : await requestsApi.createRequest(body);
     setId(result.id);
     setSavedSnapshot(JSON.stringify(body.data));
     return result;
@@ -331,7 +362,7 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
     try {
       const requestIdToUse = id ?? (await save('draft')).id;
       for (const file of files) {
-        const attachment = await uploadAttachment(requestIdToUse, field, file);
+        const attachment = await requestsApi.addAttachment(requestIdToUse, field, file);
         setAttachments((current) => [...current, attachment]);
       }
       if (errors[field]) clearError(field);
@@ -344,7 +375,7 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
 
   async function removeFile(file) {
     try {
-      await api(`/attachments/${file.id}`, { method: 'DELETE' });
+      await requestsApi.deleteAttachment(file.id);
       setAttachments((current) => current.filter((a) => a.id !== file.id));
     } catch (err) {
       setMessage({ error: err.message });
@@ -453,23 +484,18 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
     // (shared from a phone's own position, where Google kept only the place's name) leaves them to
     // be filled in by hand, and they are still required.
     if (spec.coordinates_from) {
-      // They are the map's to give while the map gave them. A link that could not be followed to a
-      // point leaves them to be typed, and so does a client's own saved address, which may be wrong.
-      const fromLocation = Boolean(values[spec.name]) && values[spec.name] === fromTheMap.current;
       const location = values[spec.coordinates_from];
       return {
-        locked: fromLocation ? spec.locked : undefined,
-        hint: fromLocation || !location || coordinatesFromLink(location) ? null
-          : 'الرابط لا يحمل إحداثيات، اكتبها هنا أو اختر الموقع على الخريطة.',
-        control: <Control spec={{ ...spec, readonly: fromLocation }} value={values[spec.name]} invalid={invalid}
-          onChange={change} />,
+        hint: location && !values[spec.name] && !coordinatesFromLink(location)
+          ? 'الرابط لا يحمل إحداثيات، اكتبها هنا.' : null,
+        control: <Control spec={spec} value={values[spec.name]} invalid={invalid} onChange={change} />,
       };
     }
-    if (spec.type === 'location') {
-      // The pin writes both fields at once, so الإحداثيات can never belong to another place
+    if (spec.name === 'location_url') {
       return {
-        control: <LocationPicker spec={spec} value={values[spec.name]} coordinates={values.coordinates}
-          invalid={invalid} onPick={pickLocation} />,
+        hint: 'الصق رابط الموقع من خرائط جوجل؛ تُملأ الإحداثيات منه تلقائيًا إن حمَلها.',
+        control: <Control spec={spec} value={values[spec.name]} invalid={invalid}
+          onChange={changeLocation} onBlur={resolveLocation} />,
       };
     }
     if (spec.name === 'emirate') {
@@ -480,6 +506,12 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
       // chosen emirate offered as suggestions
       const suggestions = (values.emirate && spec.areas_by_emirate?.[values.emirate]) || spec.suggestions;
       return { control: <Control spec={{ ...spec, suggestions }} value={values.area} invalid={invalid} onChange={(_, v) => chooseArea(v)} /> };
+    }
+    if (spec.fills) {
+      return {
+        hint: 'اختيار اسم المبادرة يملأ قيمة الخصم، ويمكن تعديلها بعدها.',
+        control: <Control spec={spec} value={values[spec.name]} invalid={invalid} onChange={change} onPick={pickNamed} />,
+      };
     }
     if (spec.type === 'staff') {
       // Daftra's staff names are offered, and a name typed by hand is kept

@@ -1,8 +1,8 @@
 // Where the user is in a long form: how many sections are complete, each section's state (click
 // to go to it), and the amounts worked out so far. Beside the form on a wide screen, and as a
 // one-line summary in the action bar on a narrow one.
-import { Icon, ProgressBar } from '../ds/index.jsx';
-import { formatMoney } from '../formsMeta.js';
+import { Icon, ProgressBar } from '../../../ds/index.jsx';
+import { formatMoney } from '../../../lib/format.js';
 
 // The amounts a form can show as it is filled in, in the order they are read
 const TOTALS = [

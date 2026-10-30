@@ -9,11 +9,19 @@ import argparse
 
 from sqlalchemy import select
 
-from .admin import EMAIL_RE, USERNAME_RE
-from .core.database import SessionLocal, run_migrations
-from .models import User
-from .security import hash_password
+from ..modules.identity.service.users import EMAIL_RE, USERNAME_RE
+from ..core.database import SessionLocal, run_migrations
+from ..modules.models import User
+from ..core.security import hash_password
+from .registry import job
 
+
+
+@job("create_user", label="إضافة مستخدم", recorded=False,
+     about="Adds a user from the command line")
+def _run(db, who):
+    """This one is a command line only: `python -m app.jobs create_user …`."""
+    raise SystemExit("Run it as: python -m app.jobs create_user [options]")
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)

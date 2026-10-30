@@ -1,41 +1,45 @@
-import AuditLog from './admin/AuditLog.jsx';
-import Catalog from './admin/Catalog.jsx';
-import DaftraSync from './admin/DaftraSync.jsx';
-import MailTest from './admin/MailTest.jsx';
-import OrderSources from './admin/OrderSources.jsx';
-import Permissions from './admin/Permissions.jsx';
-import Users from './admin/Users.jsx';
-import { MyRequestsPage, NewRequestPage } from './Sales.jsx';
-import Review from './Review.jsx';
+// A URL for every screen, every form and every request.
+//
+// `key` is the menu key the route belongs to (app/core/permissions.py's MENU): a route whose key
+// the user does not hold shows the no-access page. `open: true` means any signed-in user may try
+// it and the server decides — a request is readable by its owner and by anyone who may view or
+// review that request's form, which only the server can say.
+import AuditLog from '../modules/audit/AuditLog.jsx';
+import Catalog from '../modules/catalog/Catalog.jsx';
+import Roles from '../modules/identity/Roles.jsx';
+import Users from '../modules/identity/Users.jsx';
+import OrderSources from '../modules/lookups/OrderSources.jsx';
+import MailTest from '../modules/notifications/MailTest.jsx';
+import {
+  EditRequestScreen, FormsScreen, MyRequestsScreen, NewRequestScreen, RequestScreen, ReviewRequestScreen, ReviewScreen,
+} from '../modules/requests/screens.jsx';
+import Sync from '../modules/system/Sync.jsx';
 
-// The screen for each page key in backend/app/pages.py.
-// A page without an entry here shows as a blank page with its label.
-export const PAGE_COMPONENTS = {
-  'sales.new_request': NewRequestPage,
-  'sales.my_requests': MyRequestsPage,
-  'sales.review': Review,
-  'admin.users': Users,
-  'admin.permissions': Permissions,
-  'admin.audit': AuditLog,
-  'admin.catalog': Catalog,
-  'admin.daftra_sync': DaftraSync,
-  'admin.order_sources': OrderSources,
-  'admin.mail': MailTest,
-};
+export const ROUTES = [
+  { key: 'forms', path: '/forms', screen: FormsScreen },
+  { key: 'forms', path: '/forms/:formKey', screen: NewRequestScreen },
+  { key: 'my_requests', path: '/requests/mine', screen: MyRequestsScreen },
+  // Its owner, or anyone who may view or review its form: the server decides
+  { key: 'my_requests', path: '/requests/:requestId', screen: RequestScreen, open: true },
+  { key: 'my_requests', path: '/requests/:requestId/edit', screen: EditRequestScreen, open: true },
+  { key: 'review', path: '/review', screen: ReviewScreen },
+  { key: 'review', path: '/review/:requestId', screen: ReviewRequestScreen },
+  { key: 'admin.users', path: '/admin/users', screen: Users },
+  { key: 'admin.roles', path: '/admin/roles', screen: Roles },
+  { key: 'admin.audit', path: '/admin/audit', screen: AuditLog },
+  { key: 'admin.catalog', path: '/admin/catalog', screen: Catalog },
+  { key: 'admin.sync', path: '/admin/sync', screen: Sync },
+  { key: 'admin.order_sources', path: '/admin/order-sources', screen: OrderSources },
+  { key: 'admin.mail', path: '/admin/mail', screen: MailTest },
+];
 
-// Sidebar and bottom-bar icon for each page (from the design system's icon set)
-export const PAGE_ICONS = {
-  'sales.new_request': 'grid',
-  'sales.my_requests': 'inbox',
-  'sales.review': 'check-circle',
-  'data_entry.home': 'file-text',
-  'accounting.home': 'receipt',
-  'operations.home': 'tool',
-  'admin.users': 'users',
-  'admin.permissions': 'shield',
-  'admin.audit': 'history',
-  'admin.catalog': 'package',
-  'admin.daftra_sync': 'refresh',
-  'admin.order_sources': 'link',
-  'admin.mail': 'mail',
+// The paths the portal used before. They redirect for good, because emails already sent and
+// bookmarks already made link to them.
+export const REDIRECTS = {
+  '/sales/new_request': '/forms',
+  '/sales/my_requests': '/requests/mine',
+  '/sales/review': '/review',
+  '/admin/permissions': '/admin/roles',
+  '/admin/daftra_sync': '/admin/sync',
+  '/admin/order_sources': '/admin/order-sources',
 };

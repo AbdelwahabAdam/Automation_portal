@@ -1,15 +1,16 @@
-"""The «المزامنة مع دفترة» admin page: refreshing the linked products and the clients from Daftra."""
+"""The «المزامنة مع دفترة» admin page, and the jobs behind it: refreshing the linked products
+and the clients from Daftra."""
 
-import sys
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 import pytest
 
-from app import daftra_refresh, import_clients
-from app.models import AuditLog, Client, Product, SyncRun
+from app.jobs import runner, sync_clients
+from app.jobs.models import JobRun
+from app.modules.models import AuditLog, Client, Product
 
-from .conftest import auth
+from ..conftest import auth
 
 
 @pytest.fixture(autouse=True)
@@ -22,7 +23,7 @@ def runs_inline(monkeypatch):
         def start(self):
             self.target(*self.args)
 
-    monkeypatch.setattr(daftra_refresh.threading, "Thread", Inline)
+    monkeypatch.setattr(runner.threading, "Thread", Inline)
 
 
 def daftra_product(product_id, name, price=None, deactivate="0"):
@@ -87,7 +88,8 @@ def test_clients_are_rebuilt_from_daftra(client, db, admin, fake_daftra):
     db.expire_all()
     assert [c.customer_name for c in db.query(Client)] == ["A"]
     last = next(k for k in client.get("/api/admin/daftra-sync", headers=auth(admin)).json()["kinds"] if k["key"] == "clients")["last"]
-    assert last["summary"] == {"daftra_clients": 2, "kept": 1, "without_phone": 1, "addresses": 1, "added": 1, "removed": 1}
+    assert last["summary"] == {"daftra_clients": 2, "kept": 1, "without_phone": 1, "addresses": 1,
+                               "added": 1, "updated": 0, "removed": 1}
 
 
 def test_a_failed_sync_changes_nothing_and_says_why(client, db, admin, fake_daftra):
@@ -95,15 +97,15 @@ def test_a_failed_sync_changes_nothing_and_says_why(client, db, admin, fake_daft
     db.commit()
     fake_daftra.fail_once = "/api2/products.json"
     client.post("/api/admin/daftra-sync", json={"kinds": ["products", "clients"]}, headers=auth(admin))
-    runs = {run.kind: run for run in db.query(SyncRun)}
-    assert runs["products"].status == "failed" and "simulated failure" in runs["products"].error
+    runs = {run.name: run for run in db.query(JobRun)}
+    assert runs["sync_products"].status == "failed" and "simulated failure" in runs["sync_products"].error
     # The other part still ran
-    assert runs["clients"].status == "done"
+    assert runs["sync_clients"].status == "done"
     assert db.query(Product).one().unit_price == Decimal("1500")
 
 
 def test_one_sync_at_a_time_and_a_dead_one_is_closed(client, db, admin):
-    running = SyncRun(kind="clients", status="running", started_by_name="x")
+    running = JobRun(name="sync_clients", status="running", started_by_name="x")
     db.add(running)
     db.commit()
     assert client.post("/api/admin/daftra-sync", json={"kinds": ["products"]}, headers=auth(admin)).status_code == 409
@@ -117,10 +119,10 @@ def test_one_sync_at_a_time_and_a_dead_one_is_closed(client, db, admin):
     assert client.post("/api/admin/daftra-sync", json={"kinds": ["nope"]}, headers=auth(admin)).status_code == 422
 
 
-def test_the_nightly_client_job_is_recorded_as_a_run(db, fake_daftra, monkeypatch, capsys):
+def test_the_nightly_client_job_is_recorded_as_a_run(db, fake_daftra, capsys):
     fake_daftra.add_client(1, "0501111111", name="A")
-    monkeypatch.setattr(sys, "argv", ["import"])
-    import_clients.main()
-    run = db.query(SyncRun).one()
-    assert (run.kind, run.status, run.started_by_name, run.started_by_id) == ("clients", "done", "المزامنة الليلية", None)
+    sync_clients.main([])
+    run = db.query(JobRun).one()
+    assert (run.name, run.status, run.started_by_name, run.started_by_id) == (
+        "sync_clients", "done", "المزامنة الليلية", None)
     assert "1 of 1 clients kept" in capsys.readouterr().out

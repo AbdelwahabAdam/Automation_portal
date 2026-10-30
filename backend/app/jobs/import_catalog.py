@@ -28,10 +28,11 @@ from pathlib import Path
 
 import pdfplumber
 
-from .integrations import daftra as daftra_api
-from .catalog import set_items
-from .core.database import SessionLocal, run_migrations
-from .models import Package, PackageItem, Product
+from ..integrations import daftra as daftra_api
+from ..modules.catalog.service import set_items
+from ..core.database import SessionLocal, run_migrations
+from ..modules.models import Package, PackageItem, Product
+from .registry import job
 
 DEFAULT_TAX_RATE = Decimal("0.05")
 COLOR_WORDS = {"أبيض": "White", "أسود": "Black", "ذهبي": "Gold"}
@@ -198,6 +199,13 @@ def daftra_fields(row: dict | None) -> dict:
         "description": (row.get("description") or "").replace("\r\n", "\n").strip(),
     }
 
+
+
+@job("import_catalog", label="الباقات من عروض السعر", recorded=False,
+     about="Rebuilds the catalog from the Proposal quotation PDFs")
+def _run(db, who):
+    """This one is a command line only: `python -m app.jobs import_catalog …`."""
+    raise SystemExit("Run it as: python -m app.jobs import_catalog [options]")
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)

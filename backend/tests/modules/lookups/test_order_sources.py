@@ -1,8 +1,8 @@
 """The «مصادر الطلب» admin page: Daftra's order sources, and adding one there."""
 
-from app.models import AuditLog
+from app.modules.models import AuditLog
 
-from .conftest import auth
+from ...conftest import auth
 
 
 def test_only_admins_see_and_add_order_sources(client, sales, manager):

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { api } from '../api.js';
-import { Alert, Button, Card, Field, Loading, PageHeader, Select, TextInput } from '../ds/index.jsx';
+import * as mailApi from '../../api/notifications.js';
+import { Alert, Button, Card, Field, Loading, PageHeader, Select, TextInput } from '../../ds/index.jsx';
 
 // Sends any of the portal's emails, filled with made-up values, to an address the admin chooses
 export default function MailTest() {
@@ -13,7 +13,7 @@ export default function MailTest() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    api('/admin/mail')
+    mailApi.settings()
       .then((loaded) => {
         setSettings(loaded);
         setTemplate(loaded.templates[0].key);
@@ -26,7 +26,7 @@ export default function MailTest() {
     if (!template) return undefined;
     let stale = false;
     setPreview(null);
-    api(`/admin/mail/preview/${template}`)
+    mailApi.preview(template)
       .then((loaded) => !stale && setPreview(loaded))
       .catch((err) => !stale && setError(err.message));
     return () => { stale = true; };
@@ -38,7 +38,7 @@ export default function MailTest() {
     setError('');
     setSent('');
     try {
-      await api('/admin/mail/test', { method: 'POST', body: { template, to } });
+      await mailApi.sendTest(template, to);
       setSent(`تم إرسال الرسالة إلى ${to.trim()}. إن لم تجدها في البريد الوارد فابحث في البريد غير المرغوب.`);
     } catch (err) {
       setError(err.message);

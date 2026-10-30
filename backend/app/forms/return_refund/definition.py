@@ -1,0 +1,75 @@
+"""The fields of طلب مرتجع ورد مبلغ, as sections (form_engine has the building blocks)."""
+
+from ...modules.form_engine import (
+    CASH,
+    NOTES,
+    address,
+    attachments,
+    client,
+    f,
+    files,
+    money,
+    original_refs,
+    request_info,
+    section,
+)
+
+# Choices only this form offers
+REFUND_METHODS = ["تحويل بنكي", CASH, "تابي", "تمارا", "أخرى"]
+
+SECTIONS = [
+    request_info(),
+    client(True),
+    address("عنوان الخدمة / استلام المرتجع"),
+    section(
+        "تفاصيل الطلب",
+        *original_refs(),
+        f("return_type", "نوع المرتجع", "select", True, options=["كامل الطلب", "جزء من الطلب"]),
+        f("returned_items", "المنتج / الأصناف المطلوب إرجاعها", "textarea", True),
+        f("returned_quantities", "الكمية المرتجعة من كل صنف", "textarea", True),
+        f("return_reason", "سبب المرتجع", "textarea", True),
+        f("product_condition", "حالة المنتج وملاحظات عليه", "textarea", True),
+        f("receipt_status", "حالة استلام المرتجع", "select", True, options=["لم يُستلم", "تم الاستلام"]),
+        f("receipt_date", "تاريخ الاستلام، إن تم", "date", not_future=True,
+          required_if={"field": "receipt_status", "equals": "تم الاستلام"}),
+        f("received_by", "اسم الموظف الذي استلم المرتجع، إن تم", "staff",
+          required_if={"field": "receipt_status", "equals": "تم الاستلام"}),
+        f("return_approved_by", "اسم المسؤول الذي اعتمد المرتجع، إن تم اعتماده", "staff"),
+    ),
+    section(
+        "قيمة الطلب",
+        money("invoice_total", "قيمة الطلب النهائية المسجلة على الفاتورة", True),
+        money("total_paid", "إجمالي المبلغ المدفوع على الطلب الأصلي", True),
+        money("returned_value", "قيمة الأصناف المرتجعة حسب الفاتورة", True),
+        money("deduction_amount", "قيمة أي استقطاع أو رسوم مرتبطة بالمرتجع، إن وجدت"),
+        f("deduction_reason", "سبب الاستقطاع واسم المسؤول الذي اعتمده",
+          required_if={"field": "deduction_amount", "gt": 0}),
+        money("approved_refund", "المبلغ المعتمد رده للعميل، إن تم تحديده"),
+        f("refund_approved_by", "اسم المسؤول الذي اعتمد مبلغ الرد", "staff",
+          required_if={"field": "approved_refund", "gt": 0}),
+        money("refunded_amount", "المبلغ المردود فعليًا الآن", True),
+        f("refund_remaining", "المبلغ المتبقي من مبلغ الرد المعتمد", "number", money=True,
+          computed=["approved_refund", "refunded_amount"],
+          negative_message="المبلغ المردود أكبر من مبلغ الرد المعتمد"),
+        f("refund_remaining_date", "موعد رد المتبقي، إن تم تحديده", "date"),
+    ),
+    section(
+        "تفاصيل رد المبلغ — إن تم",
+        f("refund_method", "طريقة رد المبلغ", "select", options=REFUND_METHODS,
+          required_if={"field": "refunded_amount", "gt": 0}),
+        f("refund_date", "تاريخ رد المبلغ", "date", not_future=True,
+          required_if={"field": "refunded_amount", "gt": 0}),
+        f("refund_reference", "رقم التحويل / مرجع عملية الرد / السند",
+          required_if={"field": "refunded_amount", "gt": 0}),
+        f("refund_paid_by", "اسم الموظف الذي سلّم المبلغ، في حالة الرد النقدي", "staff",
+          required_if={"field": "refund_method", "equals": CASH}),
+    ),
+    attachments(
+        files("invoice_image", "صورة الفاتورة الأصلية، إن توفرت"),
+        files("product_photos", "صور المنتج المرتجع وحالته", True),
+        files("receipt_proof", "إثبات استلام المرتجع، إن تم",
+              required_if={"field": "receipt_status", "equals": "تم الاستلام"}),
+        files("refund_proof", "إثبات رد المبلغ، إن تم", required_if={"field": "refunded_amount", "gt": 0}),
+    ),
+    NOTES,
+]

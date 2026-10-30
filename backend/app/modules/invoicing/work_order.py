@@ -6,13 +6,13 @@ from datetime import datetime, timedelta
 
 from sqlalchemy.orm import Session
 
-from .. import printouts
-from ..integrations import daftra
-from ..core.config import settings
-from ..integrations.daftra import DaftraError
-from ..forms import NO_INSCRIPTION, package_colors, package_quantity
-from ..models import Product, Request, User
-from ..core.text import UAE, day_month_year, display_name, squash
+from . import printouts
+from ...integrations import daftra
+from ...core.config import settings
+from ...integrations.daftra import DaftraError
+from ..form_engine import NO_INSCRIPTION, package_colors, package_quantity
+from ..catalog import Product
+from ...core.text import UAE, day_month_year, display_name, squash
 from .common import WORK_ORDER_ATTACHMENT_FIELD, attach_pdf, marker
 
 # The work order's custom fields in our Daftra account (its form «نموذج أمر تشغيل ومتابعة عقد»), worked
@@ -31,6 +31,10 @@ WORK_ORDER_FIELDS = {
     "front_design": "field_46",              # تصميم القطعه الاماميه
     "inscription": "field_47",               # الآية القرآنية المطبوعة
     "plate_color": "field_49",               # لون اللوحه
+    # التمديدات الزيادة: found by reading every work order on the account — five of 3,088 have it
+    # filled, and they hold «تمديد الكهرباء» and «تمديد المياه» (work orders 358, 359, 370, 1942, 2112).
+    # The form stopped asking for them, so only a request from before that still fills this in.
+    "extensions": "field_34",                # التمديدات الزياده ان وجدت
 }
 # Daftra replaces the whole custom form on every save, so a field left out of the body is emptied,
 # not kept. Every field is therefore always sent, blank ones included.
@@ -60,7 +64,7 @@ def product_image_id(data: dict, db: Session) -> str:
     return str(settings.daftra_work_order_image_id)
 
 
-def work_order_values(request: Request, db: Session) -> dict:
+def work_order_values(request, db: Session) -> dict:
     """The custom field values for the work order, from the request. A field the request has
     nothing for is left out. Several packages' values are joined with « / »."""
     data = request.data
@@ -92,6 +96,7 @@ def work_order_values(request: Request, db: Session) -> dict:
 
     values = {
         "installation_accessories": joined(lambda d, _: d.get("installation_accessories")),
+        "extensions": joined(lambda d, _: "، ".join(d.get("extensions") or [])),
         "available_colors": joined(available_colors),
         "cover_back": joined(lambda d, _: d.get("cover_back")),
         "base_color": joined(lambda d, _: BASE_TEXT.get(d.get("base_color"), d.get("base_color"))),
@@ -108,13 +113,13 @@ def work_order_values(request: Request, db: Session) -> dict:
     return values
 
 
-def work_order_custom_fields(request: Request, db: Session) -> dict:
+def work_order_custom_fields(request, db: Session) -> dict:
     """The same values under the field ids Daftra knows them by."""
     # Every field, blank ones included: Daftra empties any field the body leaves out
     return {WORK_ORDER_FIELDS[name]: value or "" for name, value in work_order_values(request, db).items()}
 
 
-def set_work_order_fields(request: Request, row: dict, db: Session) -> bool:
+def set_work_order_fields(request, row: dict, db: Session) -> bool:
     """Writes the work order's custom fields, then reads them back to be sure. With a real file id in
     صورة المنتج Daftra answers 200, but it answered 500 for a while and the values saved anyway, so the
     read decides. A failure here does not stop the approval; the same details are in the description
@@ -153,7 +158,7 @@ def work_order_title(data: dict, invoice: dict) -> str:
     return " ".join(str(part).strip() for part in parts if part and str(part).strip())[:250]
 
 
-def work_order_rows(request: Request, reviewer: User) -> list[str]:
+def work_order_rows(request, reviewer) -> list[str]:
     """What the technicians need, one line each: in the Daftra description and on the PDF.
     Daftra's API cannot set who a work order is for, so the approving manager is written in it."""
     data = request.data
@@ -177,6 +182,8 @@ def work_order_rows(request: Request, reviewer: User) -> list[str]:
             rows.append(" — ".join(b for b in build if b))
         if details.get("installation_accessories"):
             rows.append(f"ملحقات التركيب: {details['installation_accessories']}")
+        if details.get("extensions"):
+            rows.append("التمديدات الزيادة: " + "، ".join(details["extensions"]))
         text = str(details.get("inscription") or "").strip()
         if text and text not in NO_INSCRIPTION:
             place = f" (مكان الكتابة: {details['inscription_place']})" if details.get("inscription_place") else ""
@@ -198,34 +205,34 @@ def work_order_rows(request: Request, reviewer: User) -> list[str]:
     return [row for row in rows if row]
 
 
-def work_order_description(request: Request, reviewer: User) -> str:
+def work_order_description(request, reviewer) -> str:
     """The rows, ending with the marker that finds the work order again on a retry."""
     return "\n".join([f"■ {row}" for row in work_order_rows(request, reviewer)] + [marker(request)])
 
 
-def find_work_order(request: Request) -> int | None:
+def find_work_order(request) -> int | None:
     rows = daftra.get("work_orders.json", {"client_id": request.daftra_client_id, "status": -1, "limit": 100}).get("data", [])
     return next((int(row["WorkOrder"]["id"]) for row in rows
                  if str(row["WorkOrder"].get("client_id")) == str(request.daftra_client_id)
                  and (row["WorkOrder"].get("description") or "").rstrip().endswith(marker(request))), None)
 
 
-def ensure_work_order(request: Request, invoice: dict, reviewer: User, db: Session):
+def ensure_work_order(request, invoice: dict, reviewer, db: Session):
     """The installation work order for the approving manager: it starts today and is due after the
     request's مدة التركيب. It is linked to the invoice, so the invoice shows it, and its PDF is attached."""
     data = request.data
     if request.daftra_work_order_id is None:
-        request.daftra_work_order_id = find_work_order(request)
+        request.save_document("work_order", find_work_order(request))
     if request.daftra_work_order_id is None:
         start = datetime.now(UAE).date()
         days = int(data.get("installation_days") or 20)
-        request.daftra_work_order_id = daftra.create("work_orders.json", {"WorkOrder": {
+        request.save_document("work_order", daftra.create("work_orders.json", {"WorkOrder": {
             "title": work_order_title(data, invoice), "client_id": request.daftra_client_id,
             "start_date": start.isoformat(), "delivery_date": (start + timedelta(days=days)).isoformat(),
             "description": work_order_description(request, reviewer),
-        }})
+        }}))
     row = daftra.get(f"work_orders/{request.daftra_work_order_id}.json").get("data", {}).get("WorkOrder", {})
-    request.daftra_work_order_no = row.get("number")
+    request.save_document("work_order", request.daftra_work_order_id, row.get("number") or "")
     if str(invoice.get("work_order_id") or "0") != str(request.daftra_work_order_id):
         daftra.post(f"invoices/assign_work_order/{request.daftra_invoice_id}.json",
                     {"Invoice": {"work_order_id": request.daftra_work_order_id}})
@@ -233,7 +240,7 @@ def ensure_work_order(request: Request, invoice: dict, reviewer: User, db: Sessi
     return save_work_order_pdf(request, row, invoice, reviewer, db), fields_saved
 
 
-def draw_work_order(request: Request, row: dict, invoice: dict, reviewer: User, db: Session) -> bytes:
+def draw_work_order(request, row: dict, invoice: dict, reviewer, db: Session) -> bytes:
     """The work order PDF, drawn to match «نموذج أمر تشغيل ومتابعة عقد» as Daftra prints it:
     Daftra's own file is behind a staff login, which an API key cannot open.
     row: the work order as Daftra returns it, for its number, title and dates.
@@ -258,7 +265,7 @@ def draw_work_order(request: Request, row: dict, invoice: dict, reviewer: User, 
     )
 
 
-def save_work_order_pdf(request: Request, row: dict, invoice: dict, reviewer: User, db: Session) -> bool:
+def save_work_order_pdf(request, row: dict, invoice: dict, reviewer, db: Session) -> bool:
     """Attaches the work order PDF once. A PDF that cannot be drawn does not stop the approval."""
     if any(a.field == WORK_ORDER_ATTACHMENT_FIELD for a in request.attachments):
         return True

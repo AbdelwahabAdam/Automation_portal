@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { api } from './api.js';
-import { Alert, Button, Field, Loading, PasswordInput } from './ds/index.jsx';
+import * as identityApi from '../../api/identity.js';
+import { Alert, Button, Field, Loading, PasswordInput } from '../../ds/index.jsx';
 import { AuthCard } from './Login.jsx';
 
 // Opened from the link in an invitation or password reset email
@@ -16,7 +16,7 @@ export default function SetPassword({ onDone }) {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    api(`/auth/password-link?${new URLSearchParams({ token })}`)
+    identityApi.whosePasswordLink(token)
       .then(setLink)
       .catch((err) => setLink({ invalid: err.message }));
   }, [token]);
@@ -28,7 +28,7 @@ export default function SetPassword({ onDone }) {
     setBusy(true);
     setErrors({});
     try {
-      await api('/auth/set-password', { method: 'POST', body: { token, password } });
+      await identityApi.setPassword(token, password);
       onDone('تم تعيين كلمة المرور. سجّل الدخول الآن.');
     } catch (err) {
       setErrors({ form: err.message });

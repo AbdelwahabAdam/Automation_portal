@@ -1,8 +1,8 @@
 // Showing the files attached to a request: a small picture of an image, an icon for anything else.
 // The files need the login header, so they are fetched rather than linked to.
 import { useEffect, useState } from 'react';
-import { attachmentUrl, openAttachment } from './api.js';
-import { Icon } from './ds/index.jsx';
+import { attachmentUrl, openAttachment } from '../../api/http.js';
+import { Icon } from '../../ds/index.jsx';
 
 export const isImage = (file) => /^image\//.test(file.content_type || '');
 

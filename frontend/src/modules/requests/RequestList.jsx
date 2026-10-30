@@ -1,7 +1,7 @@
 // A page of requests: a table on a wide area, cards on a narrow one (same data, same actions).
 // Used by «طلباتي» and «المراجعة», which differ only in their columns and actions.
-import { Pager, StatusBadge } from './ds/index.jsx';
-import { formatDate } from './formsMeta.js';
+import { Pager, StatusBadge } from '../../ds/index.jsx';
+import { formatDate } from '../../lib/format.js';
 
 // Table on a wide area, cards on a narrow one
 export const TABLE_MIN_WIDTH = 760;

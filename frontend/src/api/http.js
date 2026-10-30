@@ -89,6 +89,52 @@ export async function openAttachment(id) {
   }
 }
 
+// The same file, kept so that sharing it is one tap and not a download each time
+const fetched = new Map();
+async function attachmentFile(id, filename) {
+  if (!fetched.has(id)) {
+    const blob = await (await request(`/attachments/${id}`)).blob();
+    fetched.set(id, new File([blob], filename, { type: blob.type || 'application/octet-stream' }));
+  }
+  return fetched.get(id);
+}
+
+// Whether this device can hand a file to another app at all. The browser only offers it in a secure
+// context, so over plain HTTP (today's server) and on most computers the answer is no.
+export function canShareFiles() {
+  if (!navigator.canShare) return false;
+  try {
+    return navigator.canShare({ files: [new File(['.'], 'a.pdf', { type: 'application/pdf' })] });
+  } catch {
+    return false;
+  }
+}
+
+// Loads the file ahead of the tap, so the share sheet opens without an await in between: Safari
+// drops the user's gesture across one and then refuses to share.
+export const prepareShare = (id, filename) => attachmentFile(id, filename).catch(() => null);
+
+// Hands a document to whatever the device shares with — WhatsApp, Mail, Drive. Returns what
+// happened: 'shared', 'cancelled', or 'downloaded' when the device cannot share files and the
+// file was saved instead, to be sent from any app by hand.
+export async function shareAttachment(id, filename, title) {
+  const file = await attachmentFile(id, filename);
+  if (navigator.canShare?.({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title: title || filename });
+      return 'shared';
+    } catch (err) {
+      if (err?.name === 'AbortError') return 'cancelled';
+      // The sheet refused (no target for it, or the gesture had gone): saving the file still works
+    }
+  }
+  const link = document.createElement('a');
+  link.href = blobUrl(file);
+  link.download = filename;
+  link.click();
+  return 'downloaded';
+}
+
 // Saves an API response as a file; a plain link cannot send the auth header
 export async function downloadFile(path, filename) {
   const link = document.createElement('a');

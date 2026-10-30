@@ -1,35 +1,17 @@
 """A salesperson's requests: drafts, attachments, submitting, and who can see what."""
 
-from app.models import AuditLog, Request
+from app.modules.models import AuditLog, Request
 
-from . import seed
-from .conftest import auth, make_user
-
-
-def create(client, user, data, action="draft", form_type="new_sale"):
-    return client.post("/api/requests", json={"form_type": form_type, "data": data, "action": action}, headers=auth(user))
-
-
-def upload(client, user, request_id, field, name="proof.jpg", content=b"image-bytes"):
-    return client.post(f"/api/requests/{request_id}/attachments", params={"field": field, "filename": name},
-                       content=content, headers=auth(user))
-
-
-def submitted_sale(client, db, user, **overrides) -> int:
-    """A new sale request with its files, submitted for review; returns its id."""
-    request_id = create(client, user, seed.sale_data(**overrides)).json()["id"]
-    assert upload(client, user, request_id, "payment_proof").status_code == 201
-    assert upload(client, user, request_id, "design_image").status_code == 201
-    response = client.put(f"/api/requests/{request_id}", json={"data": seed.sale_data(**overrides), "action": "submit"},
-                          headers=auth(user))
-    assert response.status_code == 200, response.json()
-    return request_id
+from ... import seed
+from ...seed import create, submitted_sale, upload
+from ...conftest import VISIBLE_FORMS, auth, make_user, may_fill
 
 
 def test_form_types_list_hides_the_hidden_forms(client, sales):
     types = client.get("/api/form-types", headers=auth(sales)).json()
     shown = {t["key"] for t in types if not t["hidden"]}
-    assert shown == {"new_sale", "contract_renewal", "balance_payment", "maintenance"}
+    assert shown == {"new_sale", "contract_renewal", "balance_payment", "maintenance", "quotation",
+                     "tech_extra_works"}
 
 
 def test_draft_then_submit(client, db, sales):
@@ -58,13 +40,17 @@ def test_submit_with_errors_answers_with_them_and_keeps_the_draft(client, db, sa
     assert db.get(Request, request_id).status == "draft"
 
 
-def test_hidden_and_unknown_forms_take_no_new_requests(client, sales):
-    assert create(client, sales, {}, form_type="quotation").status_code == 409
+def test_hidden_and_unknown_forms_take_no_new_requests(client, db, sales):
+    # A form nobody granted is refused before anything else is said about it
+    assert create(client, sales, {}, form_type="quote_to_invoice").status_code == 403
     assert create(client, sales, {}, form_type="nope").status_code == 404
+    # Granted, but hidden: no new requests all the same
+    granted = make_user(db, "quoter", permissions=may_fill("quote_to_invoice"))
+    assert create(client, granted, {}, form_type="quote_to_invoice").status_code == 409
 
 
 def test_requests_are_private_to_their_owner(client, db, sales):
-    other = make_user(db, "sales2", pages=["sales.new_request"])
+    other = make_user(db, "sales2", permissions=may_fill(*VISIBLE_FORMS))
     request_id = create(client, sales, {"customer_name": "x"}).json()["id"]
     assert client.get(f"/api/requests/{request_id}", headers=auth(other)).status_code == 404
     assert client.put(f"/api/requests/{request_id}", json={"data": {}, "action": "draft"}, headers=auth(other)).status_code == 404
@@ -72,10 +58,13 @@ def test_requests_are_private_to_their_owner(client, db, sales):
     assert client.get("/api/requests/mine", headers=auth(other)).json() == []
 
 
-def test_users_without_the_sales_pages_cannot_use_them(client, db):
+def test_a_user_granted_no_form_sees_none_and_can_make_none(client, db):
+    """A new form — and a new user — is closed until an admin grants it."""
     outsider = make_user(db, "outsider")
-    assert client.get("/api/form-types", headers=auth(outsider)).status_code == 403
-    assert client.get("/api/requests/mine", headers=auth(outsider)).status_code == 403
+    assert client.get("/api/form-types", headers=auth(outsider)).json() == []
+    # Their own requests are still theirs to read; they simply have none
+    assert client.get("/api/requests/mine", headers=auth(outsider)).json() == []
+    assert create(client, outsider, {}).status_code == 403
 
 
 def test_attachments(client, db, sales):
@@ -87,7 +76,7 @@ def test_attachments(client, db, sales):
     assert attachment["filename"] == "إيصال.pdf" and attachment["content_type"] == "application/pdf"
     downloaded = client.get(f"/api/attachments/{attachment['id']}", headers=auth(sales))
     assert downloaded.status_code == 200 and downloaded.content == b"image-bytes"
-    other = make_user(db, "sales2", pages=["sales.new_request"])
+    other = make_user(db, "sales2", permissions=may_fill(*VISIBLE_FORMS))
     assert client.get(f"/api/attachments/{attachment['id']}", headers=auth(other)).status_code == 404
     assert client.delete(f"/api/attachments/{attachment['id']}", headers=auth(sales)).status_code == 204
     assert client.get(f"/api/attachments/{attachment['id']}", headers=auth(sales)).status_code == 404
@@ -159,9 +148,13 @@ def test_catalog_picker_lists_packages_with_their_prices(client, db, sales):
     package = next(item for item in items if item["kind"] == "package")
     assert package["price"] == 2800
     assert [(i["product_id"], i["unit_price"]) for i in package["items"]] == [(1, 2000.0), (2, 800.0)]
-    assert {item["name"] for item in items if item["kind"] == "product"} == {"WATER COOLER BLACK 3 T", "exchange contract", "RO .PP 10"}
+    assert {item["name"] for item in items if item["kind"] == "product"} == {
+        "WATER COOLER BLACK 3 T", "exchange contract", "RO .PP 10", "Water Connection Service", "service"}
+    # Each product's Daftra id goes too: a form naming the products it offers (اعمال اضافية) picks by it
+    assert {item["name"]: item["daftra_id"] for item in items if item["kind"] == "product"}["Water Connection Service"] == 212
     products = client.get("/api/products", headers=auth(sales)).json()
-    assert [p["name"] for p in products] == ["exchange contract", "RO .PP 10", "WATER COOLER BLACK 3 T"]
+    assert [p["name"] for p in products] == ["exchange contract", "RO .PP 10", "service",
+                                             "Water Connection Service", "WATER COOLER BLACK 3 T"]
 
 
 def test_daftra_lists_for_the_forms(client, db, sales):
@@ -191,7 +184,7 @@ def test_my_request_counts(client, db, sales):
     create(client, sales, {"customer_name": "a"})
     create(client, sales, {"customer_name": "b"})
     submitted_sale(client, db, sales)
-    other = make_user(db, "sales2", pages=["sales.new_request"])
+    other = make_user(db, "sales2", permissions=may_fill(*VISIBLE_FORMS))
     create(client, other, {"customer_name": "c"})
     counts = client.get("/api/requests/mine/counts", headers=auth(sales)).json()
     assert counts == {"draft": 2, "submitted": 1, "returned": 0, "approved": 0}

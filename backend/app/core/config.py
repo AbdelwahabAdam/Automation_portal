@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     database_url: str
     jwt_secret: str
     jwt_expire_minutes: int = 60 * 12
+    # On: nothing reaches Daftra; a stand-in inside the portal answers instead, so the whole flow
+    # can be tried locally without touching the live account (see the README's "Run"). The default
+    # here is off; docker-compose.yml turns it on locally, and the production file hard-codes it off.
+    daftra_fake: bool = False
     daftra_subdomain: str = Field("", validation_alias=AliasChoices("daftra_subdomain", "subdomain"))
     daftra_api_key: str = Field("", validation_alias=AliasChoices("daftra_api_key", "apikey"))
     # Ids in our Daftra account used on every invoice an approved new sale creates

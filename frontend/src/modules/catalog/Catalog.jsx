@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { api } from '../api.js';
+import * as catalogApi from '../../api/catalog.js';
 import {
   Alert, Badge, Button, Checkbox, Drawer, EmptyState, Field, Loading, PageHeader, Pager, SearchInput, Select, Tabs, TextArea, TextInput,
   Skeleton, useConfirm, useToast,
-} from '../ds/index.jsx';
-import { formatMoney as money, matchesQuery } from '../formsMeta.js';
-import { useAction } from '../hooks.js';
+} from '../../ds/index.jsx';
+import { formatMoney as money } from '../../lib/format.js';
+import { matchesQuery } from '../../ds/match.js';
+import { useAction } from '../../lib/hooks.js';
 
 // ---------- Products ----------
 
@@ -43,7 +44,7 @@ function ProductDrawer({ product, onSaved, onDeleted, onClose }) {
         daftra_id: values.daftra_id === '' || values.daftra_id == null ? null : Number(values.daftra_id),
         maintenance_group: values.maintenance_group || '',
       };
-      onSaved(product ? await api(`/admin/products/${product.id}`, { method: 'PUT', body }) : await api('/admin/products', { method: 'POST', body }));
+      onSaved(product ? await catalogApi.updateProduct(product.id, body) : await catalogApi.createProduct(body));
     });
   }
 
@@ -51,7 +52,7 @@ function ProductDrawer({ product, onSaved, onDeleted, onClose }) {
     const yes = await confirm({ title: `حذف المنتج «${product.name}»؟`, body: 'يُحذف المنتج نهائيًا من الكتالوج.', confirmLabel: 'حذف المنتج', tone: 'danger' });
     if (!yes) return;
     run('delete', async () => {
-      await api(`/admin/products/${product.id}`, { method: 'DELETE' });
+      await catalogApi.deleteProduct(product.id);
       onDeleted(product);
     });
   }
@@ -259,7 +260,7 @@ function PackageDrawer({ pack, products, onSaved, onDeleted, onClose }) {
           price_includes_tax: line.price_includes_tax, discount: Number(line.discount || 0),
         })),
       };
-      onSaved(pack ? await api(`/admin/packages/${pack.id}`, { method: 'PUT', body }) : await api('/admin/packages', { method: 'POST', body }));
+      onSaved(pack ? await catalogApi.updatePackage(pack.id, body) : await catalogApi.createPackage(body));
     });
   }
 
@@ -267,7 +268,7 @@ function PackageDrawer({ pack, products, onSaved, onDeleted, onClose }) {
     const yes = await confirm({ title: `حذف الباقة «${pack.name}»؟`, body: 'تُحذف الباقة نهائيًا؛ المنتجات نفسها لا تُحذف.', confirmLabel: 'حذف الباقة', tone: 'danger' });
     if (!yes) return;
     run('delete', async () => {
-      await api(`/admin/packages/${pack.id}`, { method: 'DELETE' });
+      await catalogApi.deletePackage(pack.id);
       onDeleted(pack);
     });
   }
@@ -456,7 +457,7 @@ export default function Catalog() {
 
   // A change to a product shows in the packages that contain it, so both lists are reloaded together
   function load() {
-    Promise.all([api('/admin/products'), api('/admin/packages')])
+    Promise.all([catalogApi.listProducts(), catalogApi.listPackages()])
       .then(([loadedProducts, loadedPackages]) => {
         setProducts(loadedProducts);
         setPackages(loadedPackages);

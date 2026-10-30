@@ -5,9 +5,9 @@ import hmac
 import secrets
 from datetime import datetime, timedelta, timezone
 
-from .core.config import settings
+from ...core.config import settings
 from .models import User
-from .core.text import digits
+from ...core.text import digits
 
 CODE_MINUTES = 10
 # Wrong tries allowed on one code before a new one has to be sent

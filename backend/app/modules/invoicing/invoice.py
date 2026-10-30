@@ -5,14 +5,16 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .. import printouts
-from ..integrations import daftra
-from ..core.config import UPLOAD_DIR, settings
-from ..integrations.daftra import DaftraError, NotFound
-from ..forms import NO_INSCRIPTION, package_quantity
-from ..models import Product, Request, User
-from ..core.text import day_month_year, display_name, squash
-from .common import (INVOICE_ATTACHMENT_FIELD, RECEIPT_ATTACHMENT_FIELD, TOTAL_TOLERANCE, SyncError, address_fields,
+from . import printouts
+from ...core.errors import SyncError
+from ...integrations import daftra
+from ..clients import address_fields
+from ...core.config import UPLOAD_DIR, settings
+from ...integrations.daftra import DaftraError, NotFound
+from ..form_engine import NO_INSCRIPTION, package_quantity
+from ..catalog import Product
+from ...core.text import day_month_year, display_name, squash
+from .common import (INVOICE_ATTACHMENT_FIELD, RECEIPT_ATTACHMENT_FIELD, TOTAL_TOLERANCE, 
                      attach_pdf, made_before_the_request, marker, money)
 
 
@@ -72,6 +74,11 @@ def invoice_items(data: dict, db: Session) -> list[dict]:
         }
         if product.description:
             item["description"] = product.description
+        # What the salesperson wrote about this line stands in for it (اعمال اضافية: «أخرى» is the
+        # catalog's own «service» product, so only the description says what the work was)
+        described = str((line.get("details") or {}).get("work_description") or "").strip()
+        if described:
+            item["description"] = described
         items.append(item)
 
         # A package's details are copied onto each of its lines, so its inscription is invoiced once
@@ -100,7 +107,7 @@ def get_invoice(invoice_id: int) -> dict:
     return daftra.get(f"invoices/{invoice_id}.json")["data"]["Invoice"]
 
 
-def find_invoice(request: Request) -> int | None:
+def find_invoice(request) -> int | None:
     """The invoice this request already made, if the last approval got that far. An older invoice
     wearing the same mark belongs to someone else's request, and is not taken for this one's."""
     rows = daftra.get("invoices.json", {"client_id": request.daftra_client_id, "limit": 100}).get("data", [])
@@ -109,7 +116,7 @@ def find_invoice(request: Request) -> int | None:
                  and not made_before_the_request(request, row["Invoice"].get("created"))), None)
 
 
-def ensure_invoice(request: Request, items: list[dict], staff_id: int, notes: str = "") -> dict:
+def ensure_invoice(request, items: list[dict], staff_id: int, notes: str = "") -> dict:
     data = request.data
     invoice = None
     if request.daftra_invoice_id is not None:
@@ -125,21 +132,23 @@ def ensure_invoice(request: Request, items: list[dict], staff_id: int, notes: st
                 raise NotFound("not this request's invoice")
         except NotFound:
             # Deleted in Daftra since (e.g. because its total was wrong), so it is made again
-            request.daftra_invoice_id = request.daftra_invoice_no = None
-            request.daftra_payment_id = request.daftra_receipt_no = None
+            request.forget_document("invoice")
+            request.forget_document("payment")
     if invoice is None:
-        request.daftra_invoice_id = find_invoice(request)
+        request.save_document("invoice", find_invoice(request))
         if request.daftra_invoice_id is None:
             fields = {
                 # Offline like every invoice on the account: not emailed, so the client needs no email
                 "client_id": request.daftra_client_id, "date": data.get("request_date"), "draft": 0, "is_offline": 1,
                 "currency_code": "AED", "store_id": settings.daftra_store_id, "branch_id": settings.daftra_branch_id,
-                "sales_person_id": staff_id, "order_source_id": data.get("order_source"), "po_number": marker(request),
+                "sales_person_id": staff_id, "po_number": marker(request),
                 "html_notes": WARRANTY_TERMS_HTML,
                 # The address this request is for, printed on the invoice. Without it the invoice
                 # carries whatever the client record holds, which may be another of their addresses
                 # or nothing at all. Sent only when the form has one, so it can never blank it.
                 **invoice_address(data),
+                # Left out rather than sent empty when the form does not ask for it, or does not insist
+                **({"order_source_id": data["order_source"]} if data.get("order_source") else {}),
             }
             if notes:
                 fields["notes"] = notes
@@ -147,9 +156,10 @@ def ensure_invoice(request: Request, items: list[dict], staff_id: int, notes: st
             if discount > 0:
                 fields["adjustment_label"] = data.get("discount_label") or "خصم"
                 fields["adjustment_value"] = float(-discount)
-            request.daftra_invoice_id = daftra.create("invoices.json", {"Invoice": fields, "InvoiceItem": items})
+            request.save_document(
+                "invoice", daftra.create("invoices.json", {"Invoice": fields, "InvoiceItem": items}))
         invoice = get_invoice(request.daftra_invoice_id)
-    request.daftra_invoice_no = invoice.get("no")
+    request.save_document("invoice", request.daftra_invoice_id, invoice.get("no") or "")
 
     expected, actual = money(data.get("total_amount")), money(invoice.get("summary_total"))
     if abs(expected - actual) > TOTAL_TOLERANCE:
@@ -160,7 +170,7 @@ def ensure_invoice(request: Request, items: list[dict], staff_id: int, notes: st
     return invoice
 
 
-def save_invoice_pdf(request: Request, invoice: dict, db: Session) -> bool:
+def save_invoice_pdf(request, invoice: dict, db: Session) -> bool:
     """Attaches the invoice PDF to the request once. A PDF that cannot be fetched does not stop the
     approval: the invoice exists, and can be printed from Daftra."""
     if any(a.field == INVOICE_ATTACHMENT_FIELD for a in request.attachments):
@@ -180,7 +190,7 @@ def save_invoice_pdf(request: Request, invoice: dict, db: Session) -> bool:
 PAYMENT_PROOF_FIELD = "payment_proof"
 
 
-def send_payment_proof(request: Request, invoice: dict) -> bool:
+def send_payment_proof(request, invoice: dict) -> bool:
     """Shows the إثبات الدفع the sales person uploaded on the invoice in Daftra, once.
 
     Two steps: the file goes into Daftra's file store, then its id is linked to the invoice.
@@ -210,17 +220,17 @@ def send_payment_proof(request: Request, invoice: dict) -> bool:
     return sent
 
 
-def payment_of(request: Request, invoice: dict) -> int | None:
+def payment_of(request, invoice: dict) -> int | None:
     """The payment this request already made on the invoice, found by the marker in its notes."""
     return next((int(p["id"]) for p in invoice.get("InvoicePayment") or []
                  if (p.get("notes") or "").strip() == marker(request)), None)
 
 
-def ensure_payment(request: Request, invoice: dict, paid: Decimal, method: str, reviewer: User):
+def ensure_payment(request, invoice: dict, paid: Decimal, method: str, reviewer):
     data = request.data
     existing = payment_of(request, invoice)
     if existing:
-        request.daftra_payment_id = existing
+        request.save_document("payment", existing)
     else:
         fields = {
             "invoice_id": request.daftra_invoice_id, "amount": float(paid), "payment_method": method,
@@ -230,12 +240,13 @@ def ensure_payment(request: Request, invoice: dict, paid: Decimal, method: str, 
         # Daftra prints this staff member as the receipt's المستلم; without it, "API"
         if reviewer.daftra_staff_id:
             fields["staff_id"] = reviewer.daftra_staff_id
-        request.daftra_payment_id = daftra.create("invoice_payments.json", {"InvoicePayment": fields})
+        request.save_document("payment",
+                              daftra.create("invoice_payments.json", {"InvoicePayment": fields}))
     row = daftra.get(f"invoice_payments/{request.daftra_payment_id}.json").get("data", {}).get("InvoicePayment", {})
-    request.daftra_receipt_no = row.get("code")
+    request.save_document("payment", request.daftra_payment_id, row.get("code") or "")
 
 
-def save_receipt_pdf(request: Request, invoice: dict, paid: Decimal, reviewer: User, db: Session) -> bool:
+def save_receipt_pdf(request, invoice: dict, paid: Decimal, reviewer, db: Session) -> bool:
     """Attaches the receipt PDF once. Like the invoice PDF, failing to make it does not stop the approval."""
     if not request.daftra_receipt_no or any(a.field == RECEIPT_ATTACHMENT_FIELD for a in request.attachments):
         return bool(request.daftra_receipt_no)
@@ -255,7 +266,7 @@ def save_receipt_pdf(request: Request, invoice: dict, paid: Decimal, reviewer: U
     return True
 
 
-def finish(request: Request, invoice: dict, paid: Decimal, method: str | None, reviewer: User, db: Session) -> dict:
+def finish(request, invoice: dict, paid: Decimal, method: str | None, reviewer, db: Session) -> dict:
     """The steps every request shares once its invoice exists: the payment, the receipt, both PDFs."""
     if paid > 0 and request.daftra_payment_id is None:
         ensure_payment(request, invoice, paid, method, reviewer)

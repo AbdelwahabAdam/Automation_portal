@@ -1,8 +1,8 @@
-"""Talking to Daftra over HTTP: the calls, their retries, Daftra's own error messages,
+"""The live Daftra account, over HTTP: the calls, their retries, Daftra's own error messages,
 the file upload and the invoice PDF.
 
-This file knows nothing about forms, requests, our tables or our wording. Everything above it
-calls `resources.py`, which names what each call does in Daftra.
+`fake.py` offers the same three functions — `call`, `upload_file` and `invoice_pdf` — without a
+network, and `client.py` picks between the two. Nothing above them knows which it got.
 """
 
 import http.cookiejar

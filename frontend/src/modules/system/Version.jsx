@@ -1,13 +1,13 @@
 // Which version of the portal is running, under the الإدارة pages. Staff never see it; it is here
 // so a problem can be reported against a known version, and so a deploy can be confirmed to have landed.
 import { useEffect, useState } from 'react';
-import { api } from '../api.js';
+import * as systemApi from '../../api/system.js';
 
 export default function Version() {
   const [running, setRunning] = useState(null);
 
   useEffect(() => {
-    api('/admin/version').then(setRunning).catch(() => {});
+    systemApi.version().then(setRunning).catch(() => {});
   }, []);
 
   if (!running) return null;

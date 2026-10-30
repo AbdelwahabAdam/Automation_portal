@@ -9,6 +9,7 @@ our fields and the city table to `modules/clients`, our payment methods as Daftr
 `modules/invoicing`.
 """
 
+from . import cache, client, fake, live
 from .cache import CACHE_SECONDS, cached, clear, forget
 from .client import call, invoice_pdf, upload_file
 from .errors import DaftraError, NotFound
@@ -38,6 +39,7 @@ from .resources import (
 
 __all__ = [
     "CACHE_SECONDS", "DaftraError", "NotFound", "all_order_sources", "all_records",
+    "cache", "client", "fake", "live",
     "attach_invoice_document", "cached", "call", "clear", "client_category",
     "client_invoices", "create", "create_order_source", "forget", "get", "invoice_pdf",
     "list_client_categories", "list_clients", "list_order_sources", "list_products", "list_staff",

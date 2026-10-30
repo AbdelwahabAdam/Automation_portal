@@ -40,6 +40,10 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_STARTTLS: ${SMTP_STARTTLS:-true}
       MAIL_FROM: ${MAIL_FROM:-}
+      # Hard-coded, never read from .env: with the stand-in on, every approval here would look
+      # successful with no invoice behind it. The portal also refuses to start with it on and a
+      # real version, so a mistake stops the deploy instead of losing invoices.
+      DAFTRA_FAKE: "false"
       DAFTRA_SUBDOMAIN: ${DAFTRA_SUBDOMAIN:-}
       DAFTRA_API_KEY: ${DAFTRA_API_KEY:-}
       DAFTRA_SEND_PAYMENT_PROOF: ${DAFTRA_SEND_PAYMENT_PROOF:-false}

@@ -29,6 +29,9 @@ const ICONS = {
   shield: ['M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z'], 'minus-circle': ['M12 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18z', 'M8 12h8'],
   loader: ['M12 3a9 9 0 1 0 9 9'], dot: ['M12 10a2 2 0 1 1 0 4 2 2 0 0 1 0-4z'], layers: ['M12 3.5l8.5 4.5L12 12.5 3.5 8z', 'M3.5 12.5L12 17l8.5-4.5', 'M3.5 16.5L12 21l8.5-4.5'],
   mail: ['M4 6h16v12H4z', 'M4 7l8 6 8-6'],
+  // Not in FL.ICONS yet: the portal shares a document with whatever app the device offers
+  share: ['M18 3a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5z', 'M6 9.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5z',
+          'M18 16a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5z', 'M8.2 10.9l7.6-4.3', 'M8.2 13.1l7.6 4.3'],
 };
 
 // Directional icons point the other way in right-to-left text

@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { api, setToken } from './api.js';
-import { BRAND, LOGO } from './brand.js';
-import { Alert, Button, Field, PasswordInput, TextInput } from './ds/index.jsx';
+import { setToken } from '../../api/http.js';
+import * as identityApi from '../../api/identity.js';
+import { BRAND, LOGO } from '../../lib/brand.js';
+import { Alert, Button, Field, PasswordInput, TextInput } from '../../ds/index.jsx';
 
 export function AuthCard({ title, subtitle, children, footer, onSubmit }) {
   return (
@@ -29,7 +30,7 @@ function ForgotPassword({ initial, onBack }) {
     setBusy(true);
     setError('');
     try {
-      await api('/auth/forgot-password', { method: 'POST', body: { username } });
+      await identityApi.forgotPassword(username);
       setSent(true);
     } catch (err) {
       setError(err.message);
@@ -77,7 +78,7 @@ export default function Login({ onLogin, notice }) {
     setBusy(true);
     setError('');
     try {
-      const result = await api('/auth/login', { method: 'POST', body: { username, password, code: needsCode ? code : '' } });
+      const result = await identityApi.logIn(username, password, needsCode ? code : '');
       if (result.mfa_required) {
         setNeedsCode(result);
       } else {
@@ -106,7 +107,7 @@ export default function Login({ onLogin, notice }) {
     setError('');
     setResent('');
     try {
-      const result = await api('/auth/login', { method: 'POST', body: { username, password, code: '' } });
+      const result = await identityApi.logIn(username, password);
       setResent(result.resend_in < 60 ? `أُرسل رمز قبل قليل. يمكنك طلب رمز جديد بعد ${result.resend_in} ثانية.` : 'أرسلنا رمزًا جديدًا.');
     } catch (err) {
       setError(err.message);

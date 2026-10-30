@@ -1,32 +1,38 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
-import Account from './Account.jsx';
-import { api, getToken, setToken } from './api.js';
-import { BRAND, LOGO_MARK } from './brand.js';
-import { Button, Icon, Loading, Menu } from './ds/index.jsx';
-import Login from './Login.jsx';
-import { useKeyboardOpen } from './hooks.js';
-import Version from './admin/Version.jsx';
-import { PAGE_COMPONENTS, PAGE_ICONS } from './pages.jsx';
-import { pagePath } from './paths.js';
-import { useSalesData } from './salesData.js';
-import SetPassword from './SetPassword.jsx';
+import Account from '../modules/identity/Account.jsx';
+import { getToken, setToken } from '../api/http.js';
+import * as identityApi from '../api/identity.js';
+import { BRAND, LOGO_MARK } from '../lib/brand.js';
+import { Button, Icon, Loading, Menu } from '../ds/index.jsx';
+import Login from '../modules/identity/Login.jsx';
+import { useKeyboardOpen } from '../lib/hooks.js';
+import Version from '../modules/system/Version.jsx';
+import { PAGE_ICONS } from './nav.js';
+import { REDIRECTS, ROUTES } from './routes.jsx';
+import { useSalesData } from '../modules/requests/useFormData.js';
+import SetPassword from '../modules/identity/SetPassword.jsx';
 
 // Pages shown in the phone's bottom bar before the rest move to «المزيد»
 const BOTTOM_NAV_SIZE = 3;
 
-function Blank({ label }) {
+/** A page this user may not open. Shown instead of the screen, never instead of the server's check. */
+function NoAccess() {
   return (
     <div className="fl-blank">
-      <div className="fl-blank__title">{label}</div>
+      <div>
+        <div className="fl-blank__title">هذه الصفحة غير متاحة لك</div>
+        <p className="fl-muted">تواصل مع مدير النظام إن كنت تحتاج صلاحيتها.</p>
+      </div>
     </div>
   );
 }
 
+
 function NavItem({ page, onNavigate }) {
   return (
     <li>
-      <NavLink to={pagePath(page.key)} className="fl-navlink" onClick={onNavigate}>
+      <NavLink to={page.path} className="fl-navlink" onClick={onNavigate}>
         <Icon name={PAGE_ICONS[page.key] || 'file'} size={20} />
         <span>{page.label}</span>
       </NavLink>
@@ -59,17 +65,18 @@ export default function App() {
 
   useEffect(() => {
     if (!getToken()) return;
-    api('/auth/me').then(setUser).catch(() => setToken(null)).finally(() => setLoading(false));
+    identityApi.me().then(setUser).catch(() => setToken(null)).finally(() => setLoading(false));
   }, []);
 
   const departments = user?.navigation || [];
   // Form definitions, our product catalog and Daftra's lists, for the sales pages
-  const sales = useSalesData(departments.some((department) => department.key === 'sales'));
+  // The «الطلبات» group: loaded once for anyone who has any of its pages
+  const sales = useSalesData(departments.some((group) => group.key === 'requests'));
 
   useEffect(() => setMoreOpen(false), [location.pathname]);
 
   async function logout() {
-    await api('/auth/logout', { method: 'POST' }).catch(() => {});
+    await identityApi.logOut().catch(() => {});
     setToken(null);
     setUser(null);
     setNotice('');
@@ -91,11 +98,13 @@ export default function App() {
   if (loading) return <div className="fl-auth"><Loading /></div>;
   if (!user) return <Login onLogin={setUser} notice={notice} />;
 
-  const reloadUser = () => api('/auth/me').then(setUser).catch(() => {});
+  const reloadUser = () => identityApi.me().then(setUser).catch(() => {});
   const pages = departments.flatMap((department) => department.pages);
+  // The menu keys this user may open; a route of any other shows the no-access page
+  const allowed = new Set(pages.map((page) => page.key));
   const bottomPages = pages.slice(0, BOTTOM_NAV_SIZE);
   const hasMore = pages.length > BOTTOM_NAV_SIZE;
-  const inMore = hasMore && !bottomPages.some((page) => location.pathname === pagePath(page.key));
+  const inMore = hasMore && !bottomPages.some((page) => location.pathname === page.path);
   const accountMenu = (iconOnly) => (
     <Menu
       label={iconOnly ? 'حسابي' : user.full_name || user.username} icon="user" iconOnly={iconOnly}
@@ -115,6 +124,11 @@ export default function App() {
       </nav>
 
       <div className="fl-main-col">
+        {/* Nothing is reaching Daftra: say so on every page, so no one takes a made-up
+            invoice number for a real one. The backend turns this on with DAFTRA_FAKE. */}
+        {user.daftra_fake && (
+          <div className="fl-fakebar" role="status">دفترة تجريبية: لا يصل شيء إلى دفترة</div>
+        )}
         <header className="fl-topbar">
           <div className="fl-brand fl-topbar__brand"><img className="fl-brand__logo" src={LOGO_MARK} alt="" />{BRAND}</div>
           <div className="fl-topbar__end">
@@ -135,17 +149,20 @@ export default function App() {
             </div>
           ) : (
             <Routes>
-              {pages.map((page) => {
-                const Page = PAGE_COMPONENTS[page.key];
-                return (
-                  <Route
-                    key={page.key}
-                    path={pagePath(page.key)}
-                    element={Page ? <Page user={user} sales={sales} /> : <Blank label={page.label} />}
-                  />
-                );
-              })}
-              <Route path="*" element={<Navigate to={pagePath(pages[0].key)} replace />} />
+              {/* The paths the portal used before; emails already sent link to them */}
+              {Object.entries(REDIRECTS).map(([from, to]) => (
+                <Route key={from} path={from} element={<Navigate to={to} replace />} />
+              ))}
+              {ROUTES.map(({ key, path, screen: Screen, open }) => (
+                <Route
+                  key={path}
+                  path={path}
+                  element={open || allowed.has(key)
+                    ? <Screen user={user} sales={sales} />
+                    : <NoAccess />}
+                />
+              ))}
+              <Route path="*" element={<Navigate to={pages[0].path} replace />} />
             </Routes>
           )}
           {/* Only on the الإدارة pages */}
@@ -156,7 +173,7 @@ export default function App() {
       {pages.length > 0 && (
         <nav className="fl-bottomnav" aria-label="التنقل الرئيسي">
           {bottomPages.map((page) => (
-            <NavLink key={page.key} to={pagePath(page.key)} className="fl-bottomnav__item">
+            <NavLink key={page.key} to={page.path} className="fl-bottomnav__item">
               <Icon name={PAGE_ICONS[page.key] || 'file'} size={22} />
               <span>{page.label}</span>
             </NavLink>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { api } from '../api.js';
-import { Alert, Badge, Button, Card, Field, Loading, PageHeader, TextInput, useConfirm } from '../ds/index.jsx';
+import * as lookupsApi from '../../api/lookups.js';
+import { Alert, Badge, Button, Card, Field, Loading, PageHeader, TextInput, useConfirm } from '../../ds/index.jsx';
 
 // Daftra's order sources (an invoice's «مصدر الطلب في دفترة»): adding one there, and turning one on or off
 // (backend/app/order_sources.py). The sales forms offer the active ones.
@@ -15,7 +15,7 @@ export default function OrderSources() {
   const [confirmDialog, confirm] = useConfirm();
 
   useEffect(() => {
-    api('/admin/order-sources').then(setRows).catch((err) => setError(err.message));
+    lookupsApi.listOrderSources().then(setRows).catch((err) => setError(err.message));
   }, []);
 
   async function add(e) {
@@ -24,7 +24,7 @@ export default function OrderSources() {
     setError('');
     setAdded('');
     try {
-      const source = await api('/admin/order-sources', { method: 'POST', body: { name } });
+      const source = await lookupsApi.addOrderSource(name);
       setRows((current) => [...(current || []), source]);
       setAdded(`تمت إضافة «${source.name}» في دفترة، ويظهر في نماذج المبيعات من الآن.`);
       setName('');
@@ -47,7 +47,7 @@ export default function OrderSources() {
     setError('');
     setAdded('');
     try {
-      const saved = await api(`/admin/order-sources/${row.id}`, { method: 'PUT', body: { active } });
+      const saved = await lookupsApi.setOrderSourceActive(row.id, active);
       setRows((current) => current.map((item) => (item.id === saved.id ? saved : item)));
     } catch (err) {
       setError(err.message);

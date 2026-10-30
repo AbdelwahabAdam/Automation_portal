@@ -329,11 +329,12 @@ export function Select({ invalid, children, className, value, onChange, disabled
 
 // ---------- Choice (FlChoice): option cards for radio or checkbox ----------
 
-export function Choice({ name, options, value, multiple, onChange, invalid, columns }) {
+export function Choice({ name, options, value, multiple, onChange, invalid, columns, label }) {
   const chosen = multiple ? (Array.isArray(value) ? value : []) : value;
   return (
+    // label: what the group is for, when it stands on its own without a <Field> above it
     <div className={cx('fl-choice', invalid && 'fl-choice--invalid')} role={multiple ? 'group' : 'radiogroup'}
-      style={columns ? { '--fl-choice-columns': columns } : undefined}>
+      aria-label={label} style={columns ? { '--fl-choice-columns': columns } : undefined}>
       {options.map((option) => {
         const optionValue = typeof option === 'string' ? option : option.value;
         const optionLabel = typeof option === 'string' ? option : option.label;

@@ -21,10 +21,37 @@ class DomainError(Exception):
         return self.message
 
 
+class BadRequest(DomainError):
+    """What was sent cannot be used at all, e.g. a password link that is not a valid token: 400.
+
+    Apart from `Invalid`, which is about a value failing a rule and carries a message per field.
+    """
+
+    status_code = 400
+
+
 class NotFound(DomainError):
     """Asked for something that is not there: 404."""
 
     status_code = 404
+
+
+class Unauthorized(DomainError):
+    """Not signed in, or the credentials given are not right: 401."""
+
+    status_code = 401
+
+
+class TooManyRequests(DomainError):
+    """Asked too often, e.g. one account's failed logins: 429."""
+
+    status_code = 429
+
+
+class Unavailable(DomainError):
+    """The portal cannot do this just now and it is worth trying again: 503."""
+
+    status_code = 503
 
 
 class Conflict(DomainError):
@@ -54,6 +81,24 @@ class Invalid(DomainError):
 
     def body(self):
         return {"errors": self.fields} if self.fields else self.message
+
+
+class SyncError(DomainError):
+    """Why the Daftra documents an approved request needs could not be created, in words the
+    manager can act on.
+
+    It lives here rather than in `invoicing` because `clients` raises it too — the client is one
+    of the things approving creates — and neither module may import the other.
+    """
+
+    def __init__(self, message: str, from_daftra: bool = False):
+        super().__init__(message)
+        # Whether Daftra itself refused or failed, rather than one of our own checks
+        self.from_daftra = from_daftra
+
+    @property
+    def status_code(self) -> int:
+        return 502 if self.from_daftra else 409
 
 
 class ExternalFailure(DomainError):

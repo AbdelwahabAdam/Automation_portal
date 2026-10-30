@@ -2,7 +2,7 @@
 
 import pytest
 
-from app import location
+from app.modules.clients import location
 
 # The address a Google short link resolves to, in the two shapes the real ones take
 A_PLACE = ("https://www.google.com/maps/place/Giza+Necropolis/@29.9772223,31.1322659,21z/"

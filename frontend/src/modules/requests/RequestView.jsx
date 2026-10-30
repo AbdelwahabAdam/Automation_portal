@@ -1,21 +1,66 @@
 import { Fragment, useEffect, useState } from 'react';
-import { api, openAttachment } from './api.js';
+import { canShareFiles, openAttachment, prepareShare, shareAttachment } from '../../api/http.js';
+import * as requestsApi from '../../api/requests.js';
+import * as reviewApi from '../../api/review.js';
 import { FileRow } from './attachments.jsx';
 import {
   ActionBar, Alert, Badge, Button, Card, Dialog, Field, Icon, Loading, PageHeader, StatusBadge, TextArea,
-} from './ds/index.jsx';
-import { formatAmount, formatDate, formatDay, formatMoney } from './formsMeta.js';
+  useToast,
+} from '../../ds/index.jsx';
+import { formatAmount, formatDate, formatDay, formatMoney } from '../../lib/format.js';
 import { DAFTRA_LIST_TYPES, groupLines } from './validation.js';
 
-// The PDFs approving a request saves on it (see backend/app/daftra_sync/)
-const DAFTRA_PDFS = [['daftra_invoice', 'الفاتورة PDF'], ['daftra_receipt', 'سند القبض PDF'], ['daftra_work_order', 'أمر الشغل PDF']];
+// The PDFs approving a request saves on it (see backend/app/modules/invoicing/)
+const DAFTRA_PDFS = [['daftra_estimate', 'عرض السعر PDF'], ['daftra_invoice', 'الفاتورة PDF'],
+  ['daftra_receipt', 'سند القبض PDF'], ['daftra_work_order', 'أمر الشغل PDF']];
+
+// One of the documents Daftra made: open it, or hand it to another app — WhatsApp, Mail, Drive.
+// Where the browser cannot share a file (plain HTTP, and most computers) it is saved instead, and
+// the toast says so; the file is then sent from any app by hand.
+function DocRow({ label, file }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+
+  // Loaded before the tap: Safari stops counting the tap as the user's own across an await, and
+  // then refuses to share. Only worth doing where sharing is possible at all.
+  useEffect(() => {
+    if (canShareFiles()) prepareShare(file.id, file.filename);
+  }, [file.id, file.filename]);
+
+  async function share() {
+    setBusy(true);
+    try {
+      if (await shareAttachment(file.id, file.filename, label) === 'downloaded') {
+        toast('تم تنزيل الملف لإرساله من أي تطبيق.');
+      }
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+    setBusy(false);
+  }
+
+  return (
+    <div>
+      <dt>{label}</dt>
+      <dd className="fl-row fl-doc">
+        <button type="button" className="fl-link fl-row" onClick={() => openAttachment(file.id)}>
+          <Icon name="file-text" size={16} /><bdi>{file.filename}</bdi>
+        </button>
+        <Button
+          size="sm" variant="ghost" icon={busy ? 'loader' : 'share'} iconOnly disabled={busy}
+          label={`مشاركة ${label}`} onClick={share}
+        />
+      </dd>
+    </div>
+  );
+}
 
 // What approving the request created in Daftra, or why it could not be created
 function DaftraCard({ request }) {
   const pdfs = DAFTRA_PDFS
     .map(([field, label]) => [label, request.attachments.find((a) => a.field === field)])
     .filter(([, file]) => file);
-  if (!request.daftra_invoice_no && !request.daftra_error) return null;
+  if (!request.daftra_invoice_no && !request.daftra_estimate_no && !request.daftra_error) return null;
   return (
     <Card title="دفترة">
       {request.daftra_error && (
@@ -25,19 +70,11 @@ function DaftraCard({ request }) {
         </Alert>
       )}
       <dl className="fl-dl">
+        {request.daftra_estimate_no && <div><dt>رقم عرض السعر</dt><dd><bdi dir="ltr">{request.daftra_estimate_no}</bdi></dd></div>}
         {request.daftra_invoice_no && <div><dt>رقم الفاتورة</dt><dd><bdi dir="ltr">{request.daftra_invoice_no}</bdi></dd></div>}
         {request.daftra_receipt_no && <div><dt>رقم سند القبض</dt><dd><bdi dir="ltr">{request.daftra_receipt_no}</bdi></dd></div>}
         {request.daftra_work_order_no && <div><dt>رقم أمر الشغل</dt><dd><bdi dir="ltr">{request.daftra_work_order_no}</bdi></dd></div>}
-        {pdfs.map(([label, file]) => (
-          <div key={file.id}>
-            <dt>{label}</dt>
-            <dd>
-              <button type="button" className="fl-link fl-row" onClick={() => openAttachment(file.id)}>
-                <Icon name="file-text" size={16} /><bdi>{file.filename}</bdi>
-              </button>
-            </dd>
-          </div>
-        ))}
+        {pdfs.map(([label, file]) => <DocRow key={file.id} label={label} file={file} />)}
       </dl>
     </Card>
   );
@@ -61,7 +98,8 @@ function Summary({ request }) {
   ].filter(([, value]) => value);
   const money = SUMMARY_MONEY.filter(([name]) => typeof data[name] === 'number');
   const daftra = [
-    ['الفاتورة', request.daftra_invoice_no], ['سند القبض', request.daftra_receipt_no], ['أمر الشغل', request.daftra_work_order_no],
+    ['عرض السعر', request.daftra_estimate_no], ['الفاتورة', request.daftra_invoice_no],
+    ['سند القبض', request.daftra_receipt_no], ['أمر الشغل', request.daftra_work_order_no],
   ].filter(([, value]) => value);
   if (!facts.length && !money.length) return null;
   return (
@@ -121,7 +159,7 @@ function History({ events }) {
 }
 
 // Approve, or return to the salesperson with a reason; the decision is tied to the revision on screen
-// daftraNote: what approving creates in Daftra, from the form's definition (backend/app/forms/definitions.py "daftra_note")
+// daftraNote: what approving creates in Daftra, from the form's definition (backend/app/forms/<key>/__init__.py "daftra_note")
 function ReviewActions({ request, own, daftraNote, onDone }) {
   // null | 'approve' | 'return'
   const [asking, setAsking] = useState(null);
@@ -134,7 +172,7 @@ function ReviewActions({ request, own, daftraNote, onDone }) {
     setError('');
     try {
       const body = kind === 'approve' ? { revision: request.revision } : { revision: request.revision, reason };
-      await api(`/review/requests/${request.id}/${kind}`, { method: 'POST', body });
+      await reviewApi.decide(request.id, kind, body);
       onDone(kind === 'approve' ? `تم اعتماد الطلب رقم ${request.id}.` : `تمت إعادة الطلب رقم ${request.id} للتعديل.`);
     } catch (err) {
       setError(err.message);
@@ -176,13 +214,15 @@ function ReviewActions({ request, own, daftraNote, onDone }) {
 }
 
 // One request, read-only. With review set, a manager can approve or return it.
-export default function RequestView({ requestId, formTypes, onBack, ownerName, review, actions }) {
+export default function RequestView({ requestId, formTypes, onBack, ownerName: given, review, actions }) {
   const [request, setRequest] = useState(null);
+  // Whose it is, shown to whoever is reviewing it rather than to its own owner
+  const ownerName = given ?? (review && request ? request.created_by_name : null);
   const [events, setEvents] = useState([]);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    Promise.all([api(`/requests/${requestId}`), api(`/requests/${requestId}/history`)])
+    Promise.all([requestsApi.getRequest(requestId), requestsApi.requestHistory(requestId)])
       .then(([loaded, history]) => { setRequest(loaded); setEvents(history); })
       .catch((err) => setError(err.message));
   }, [requestId]);

@@ -15,8 +15,8 @@ from decimal import Decimal
 
 from sqlalchemy import select
 
-from .core.database import SessionLocal, run_migrations
-from .models import Product
+from ...core.database import SessionLocal, run_migrations
+from ...modules.models import Product
 
 DEFAULT_TAX_RATE = Decimal("0.05")
 

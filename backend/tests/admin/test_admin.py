@@ -3,10 +3,10 @@
 import csv
 import io
 
-from app.models import AuditLog, Request, User
+from app.modules.models import AuditLog, Request, User
 
-from . import seed
-from .conftest import auth, make_user
+from .. import seed
+from ..conftest import auth, make_user, may_fill
 
 
 def test_admin_pages_are_for_admins_only(client, sales, manager):
@@ -16,19 +16,20 @@ def test_admin_pages_are_for_admins_only(client, sales, manager):
 
 
 def test_creating_a_user_sends_the_invitation(client, db, admin, outbox):
-    role = client.post("/api/admin/roles", json={"name": "مبيعات", "pages": ["sales.new_request", "admin.users", "nope"]},
-                       headers=auth(admin)).json()
-    # Admin pages and unknown keys cannot be put in a role
-    assert role["pages"] == ["sales.new_request"]
+    role = client.post("/api/admin/roles", json={
+        "name": "مبيعات", "permissions": ["form.new_sale.submit", "admin.users", "nope"],
+    }, headers=auth(admin)).json()
+    # The admin-only keys and unknown ones cannot be put in a role
+    assert role["permissions"] == ["form.new_sale.submit"]
     created = client.post("/api/admin/users", json={
         "username": "New.User", "email": "New@Example.com ", "full_name": "New User", "role_ids": [role["id"]],
-        "manages": ["sales", "admin"], "daftra_staff_id": 71,
+        "daftra_staff_id": 71,
     }, headers=auth(admin))
     assert created.status_code == 201
     body = created.json()
     assert body["email_sent"] is True and body["link"] is None
     assert body["user"]["username"] == "new.user" and body["user"]["email"] == "new@example.com"
-    assert body["user"]["manages"] == ["sales"] and body["user"]["has_password"] is False
+    assert body["user"]["has_password"] is False
     assert outbox[-1]["to"] == "new@example.com"
     duplicate = client.post("/api/admin/users", json={"username": "new.user", "email": "x@y.z", "full_name": "x"},
                             headers=auth(admin))
@@ -57,18 +58,26 @@ def test_roles(client, db, admin, sales):
     [role] = roles
     assert role["user_count"] == 1
     assert client.delete(f"/api/admin/roles/{role['id']}", headers=auth(admin)).status_code == 409
-    taken = client.post("/api/admin/roles", json={"name": role["name"].upper(), "pages": []}, headers=auth(admin))
+    taken = client.post("/api/admin/roles", json={"name": role["name"].upper(), "permissions": []},
+                        headers=auth(admin))
     assert taken.status_code == 409
-    pages = client.get("/api/admin/pages", headers=auth(admin)).json()
-    assert [d["key"] for d in pages] == ["sales"]
-    assert [p["key"] for p in pages[0]["pages"]] == ["sales.new_request", "sales.my_requests"]
+    # The two tabs of الأدوار والصلاحيات: a row per form with its three keys, then the admin pages
+    offered = client.get("/api/admin/permissions", headers=auth(admin)).json()
+    assert offered["what"] == {"submit": "تعبئة", "view": "عرض", "review": "مراجعة"}
+    new_sale = next(row for row in offered["forms"] if row["key"] == "new_sale")
+    assert new_sale["keys"] == {"submit": "form.new_sale.submit", "view": "form.new_sale.view",
+                               "review": "form.new_sale.review"}
+    # Every form is offered, including the hidden ones, and the two admin-only keys are not
+    assert len(offered["forms"]) == 19
+    assert {p["key"] for p in offered["admin_pages"]}.isdisjoint({"admin.users", "admin.roles"})
 
 
 def test_products_and_packages(client, db, admin):
     seed.catalog(db)
     products = client.get("/api/admin/products", headers=auth(admin)).json()
     assert {p["name"]: p["package_count"] for p in products} == {
-        "exchange contract": 1, "RO .PP 10": 0, "WATER COOLER BLACK 3 T": 1}
+        "exchange contract": 1, "RO .PP 10": 0, "WATER COOLER BLACK 3 T": 1,
+        "Water Connection Service": 0, "service": 0}
     new = client.post("/api/admin/products", json={"name": "  New   Filter ", "unit_price": "99.5", "daftra_id": 777},
                       headers=auth(admin)).json()
     assert new["name"] == "New Filter" and new["unit_price"] == 99.5
@@ -141,7 +150,7 @@ def count_queries(client, path, headers):
 def test_lists_load_in_a_fixed_number_of_queries(client, db, admin, sales):
     seed.catalog(db)
     for n in range(8):
-        make_user(db, f"extra{n}", pages=["sales.new_request"])
+        make_user(db, f"extra{n}", permissions=may_fill("new_sale"))
         db.add(Request(form_type="new_sale", data={"customer_name": str(n)}, status="submitted", created_by_id=sales.id))
     db.commit()
     headers = auth(admin)

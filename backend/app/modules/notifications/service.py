@@ -1,6 +1,6 @@
 """Sending email through the SMTP server set in .env.
 
-Each email is a pair of Jinja2 templates in templates/email: <name>.html, which extends
+Each email is a pair of Jinja2 templates in `templates/email`: <name>.html, which extends
 base.html for the shared look, and <name>.txt for mail apps that show plain text.
 """
 
@@ -10,7 +10,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined, select_autoescape
 
-from .core.config import settings
+from ...core.config import settings
 
 TIMEOUT_SECONDS = 15
 IMPLICIT_TLS_PORT = 465
@@ -103,6 +103,6 @@ def compose_sample(name: str, to: str, full_name: str) -> tuple[str, str, str]:
         "reason": "رقم هاتف العميل ناقص، وصورة إثبات الدفع غير واضحة. صحّح البيانات وأعد الإرسال.",
     }
     if name.startswith("request_"):
-        values["link"] = f"{settings.public_url.rstrip('/')}/sales/my_requests"
+        values["link"] = f"{settings.public_url.rstrip('/')}/requests/{values['request_id']}"
     subject, text, html = compose(name, **values)
     return f"[تجربة] {subject}", text, html

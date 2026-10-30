@@ -2,48 +2,14 @@
 
 from datetime import date, timedelta
 
-from app import forms
-from app.forms import FORM_TYPES, form_fields, package_colors, package_quantity, sanitize_draft, validate_submission
-from app.forms.inscriptions import INSCRIPTIONS
+# conftest imports app.main, which imports app.forms, so every form is registered by now
 from app.core.text import uae_today
 
-PACKAGE = "باقة برادة سقيا الخير - 3 صنابير - أسود"
-PRODUCTS = {
-    "1": {"id": 1, "name": "WATER COOLER BLACK 3 T", "price": 1000, "maintenance_group": None},
-    "2": {"id": 2, "name": "exchange contract", "price": 1200, "maintenance_group": None},
-    "3": {"id": 3, "name": "RO .PP 10", "price": 50, "maintenance_group": "الفلاتر"},
-}
-PACKAGE_PRICES = {("10", "1"): 2000.0, ("10", "2"): 800.0}
-LISTS = {"daftra_order_source": {16: "Sales-جديد"}, "daftra_treasury": {13: "ADIB NEW CURRENT", 9: "خزينه المكتب"},
-         "daftra_client_category": {5: "العين العامره"}}
-# What the portal calls today is the UAE's day, which is not the machine's when it runs behind UTC+4
-TODAY = uae_today().isoformat()
-
-
-def package_lines(quantity=2, **details):
-    shared = {"package_quantity": str(quantity), "cooler_color": "أسود", "cover_color": "الاسود مقاس طبيعي",
-              "inscription": "بسم الله", "inscription_price": "300", **details}
-    return [
-        {"product_id": "1", "name": "WATER COOLER BLACK 3 T", "quantity": quantity, "base_quantity": 1, "group_id": "g1",
-         "group_name": PACKAGE, "package_id": 10, "unit_price": 1, "details": dict(shared)},
-        {"product_id": "2", "name": "exchange contract", "quantity": quantity, "base_quantity": 1, "group_id": "g1",
-         "group_name": PACKAGE, "package_id": 10, "unit_price": 1, "details": dict(shared)},
-    ]
-
-
-def new_sale(**overrides):
-    data = {
-        "request_date": TODAY, "order_source": "16", "phone": "0501234567", "customer_name": "عميل تجريبي",
-        "customer_type": "فرد", "gender": "ذكر",
-        "category": "5", "area": "منطقة العين", "emirate": "أبوظبي", "street": "شارع 1", "house": "فيلا 2",
-        "location_url": "https://www.google.com/maps?q=24.178700,55.604510", "coordinates": "24.178700, 55.604510",
-        "order_lines": package_lines(), "discount_amount": "200", "discount_approved_by": "Manager One",
-        "discount_label": "مبادرة لك ان تشارك", "paid_amount": "1000", "remaining_due_date": TODAY,
-        "payment_method": "تحويل بنكي", "treasury": "13", "payment_date": TODAY, "payment_reference": "TRX-1",
-        "create_work_order": "نعم", "installation_days": "20",
-    }
-    data.update(overrides)
-    return data
+from ...seed import LISTS, PACKAGE_PRICES, PRODUCTS, TODAY, new_sale, package_lines
+from app.modules.form_engine import (INSCRIPTIONS, INSTALLATION_WORK, form_fields, installation_work, keys,
+                                     package_colors, package_quantity, sanitize_draft, validate_submission,
+                                     visible_forms)
+from app.modules.invoicing.work_order import WORK_ORDER_FIELDS
 
 
 def validate(form_type, data, files=None):
@@ -123,8 +89,8 @@ def test_an_inscription_left_empty_is_saved_as_there_being_none():
 
 
 def test_an_empty_inscription_on_a_form_that_asks_it_once_is_saved_the_same_way():
-    # طلب عرض سعر asks for it as a field of its own, not per line; the rest of the form is beside the point here
-    clean, errors = validate("quotation", {"inscription": ""})
+    # طلب إضافة على الطلب asks for it as a field of its own, not per line; the rest of the form is beside the point here
+    clean, errors = validate("order_addition", {"inscription": ""})
     assert "inscription" not in errors
     assert clean["inscription"] == "لا يوجد"
 
@@ -161,24 +127,56 @@ def test_unknown_products_are_dropped_and_an_empty_order_refused():
     assert errors["order_lines"] == "اختر منتجًا أو باقة واحدة على الأقل"
 
 
-def test_maintenance_only_takes_maintenance_items_and_must_be_paid_in_full():
+def maintenance_data(**overrides):
     data = {
         "request_date": TODAY, "order_source": "16", "phone": "0501234567", "customer_name": "عميل",
         "category": "5", "area": "منطقة العين", "emirate": "أبوظبي",
         "location_url": "https://www.google.com/maps?q=24.100000,55.600000", "coordinates": "24.100000, 55.600000",
-        "devices": ["فلتر RO VIB", "not a device"], "service": "تبديل فلاتر", "visit_date": TODAY,
-        "order_lines": [
-            {"product_id": "3", "name": "RO .PP 10", "quantity": 2, "details": {}},
-            # Not a maintenance item: dropped whatever the browser sends
-            {"product_id": "1", "name": "WATER COOLER BLACK 3 T", "quantity": 1, "details": {}},
-        ],
-        "paid_amount": "50", "payment_method": "تحويل بنكي", "treasury": "13", "payment_date": TODAY,
+        "devices": ["فلتر RO VIB"], "service": "تبديل فلاتر", "visit_date": TODAY,
+        "order_lines": [{"product_id": "3", "name": "RO .PP 10", "quantity": 2, "details": {"item_price": "65"}}],
+        "paid_amount": "130", "payment_method": "تحويل بنكي", "treasury": "13", "payment_date": TODAY,
     }
+    data.update(overrides)
+    return data
+
+
+def test_maintenance_only_takes_maintenance_items_and_must_be_paid_in_full():
+    data = maintenance_data(
+        devices=["فلتر RO VIB", "not a device"],
+        order_lines=[
+            {"product_id": "3", "name": "RO .PP 10", "quantity": 2, "details": {"item_price": "65"}},
+            # Not a maintenance item: dropped whatever the browser sends
+            {"product_id": "1", "name": "WATER COOLER BLACK 3 T", "quantity": 1, "details": {"item_price": "10"}},
+        ],
+        paid_amount="50",
+    )
     clean, errors = validate("maintenance", data, {"payment_proof": 1})
     assert [line["product_id"] for line in clean["order_lines"]] == ["3"]
     assert clean["devices"] == ["فلتر RO VIB"]
-    assert clean["subtotal_amount"] == 100
+    # What was typed on the line, not the item's catalog price (50 a piece)
+    assert clean["subtotal_amount"] == 130
     assert errors == {"paid_amount": "يجب دفع قيمة الطلب كاملة"}
+
+
+def test_a_maintenance_item_is_priced_on_its_own_line():
+    """What a part or a service costs is settled per visit, so سعر الوحدة is typed, not looked up."""
+    lines = next(spec for spec in form_fields("maintenance") if spec["type"] == "order_lines")
+    # The five whose price never changes; everything else is offered with none
+    assert lines["item_prices"] == {662: 725, 635: 150, 636: 150, 634: 150, 212: 150}
+    priced = next(dspec for dspec in lines["line_fields"] if dspec.get("line_price"))
+    # Asked for on every line (no only_for), and shown in the table's own سعر الوحدة column
+    assert priced["required"] and priced["column"] and "only_for" not in priced
+    # A line with no price is refused rather than quietly invoiced at the catalog's figure
+    clean, errors = validate("maintenance", maintenance_data(
+        order_lines=[{"product_id": "3", "name": "RO .PP 10", "quantity": 2, "details": {}}],
+    ), {"payment_proof": 1})
+    assert errors["order_lines"]["lines"]["0"] == {"item_price": "مطلوب"}
+    # And a free part (a replacement under warranty) is allowed, typed as 0
+    clean, errors = validate("maintenance", maintenance_data(
+        order_lines=[{"product_id": "3", "name": "RO .PP 10", "quantity": 2, "details": {"item_price": "0"}}],
+        paid_amount="0", payment_method="", treasury="", payment_date="",
+    ), {"payment_proof": 1})
+    assert errors == {} and clean["subtotal_amount"] == 0
 
 
 def test_field_types_are_checked():
@@ -245,7 +243,7 @@ def test_drafts_keep_what_was_typed_without_validating():
 
 
 def test_every_form_definition_is_consistent():
-    for key, definition in FORM_TYPES.items():
+    for key in keys():
         names = [spec["name"] for spec in form_fields(key)]
         assert len(names) == len(set(names)), f"{key} repeats a field name"
         for spec in form_fields(key):
@@ -255,7 +253,7 @@ def test_every_form_definition_is_consistent():
                 assert condition["field"] in names, f"{key}.{spec['name']} depends on an unknown field"
             for operand in spec.get("computed", []):
                 assert operand in names, f"{key}.{spec['name']} is computed from an unknown field"
-    assert forms.VISIBLE_FORM_TYPES <= set(FORM_TYPES)
+    assert {form.key for form in visible_forms()} <= set(keys())
 
 
 def test_numbers_that_are_not_amounts_are_refused():
@@ -273,7 +271,7 @@ def test_malformed_order_lines_do_not_break_validation_or_drafts():
 
 
 def test_dates_are_checked_against_the_uae_day(monkeypatch):
-    monkeypatch.setattr("app.forms.validation.uae_today", lambda: date(2026, 10, 21))
+    monkeypatch.setattr("app.modules.form_engine.validation.uae_today", lambda: date(2026, 10, 21))
     _, errors = validate("new_sale", new_sale(request_date="2026-10-21", payment_date="2026-10-21",
                                               remaining_due_date="2026-10-21"), FILES)
     assert "request_date" not in errors
@@ -293,7 +291,7 @@ def test_text_helpers():
 
 def test_every_amount_field_is_marked_as_money():
     """The form and the request's page print a money field with «درهم»; a count must not be."""
-    for key in FORM_TYPES:
+    for key in keys():
         for spec in form_fields(key):
             if spec["type"] != "number":
                 continue
@@ -309,16 +307,6 @@ def test_the_area_keeps_the_neighbourhood_daftra_holds():
     assert clean["area"] == "الخوانيج 2"
 
 
-def test_the_coordinates_are_the_point_in_the_location_whatever_is_sent():
-    """الإحداثيات are the pin's own position. The field is read-only in the form, which stops a
-    person typing in it but not a browser, so the server takes them from the location itself."""
-    data = new_sale(location_url="https://www.google.com/maps?q=25.200000,55.270000",
-                    coordinates="1.000000, 2.000000")
-    clean, errors = validate("new_sale", data, FILES)
-    assert errors == {}
-    assert clean["coordinates"] == "25.200000, 55.270000"
-
-
 def test_a_request_needs_a_location():
     _, errors = validate("new_sale", new_sale(location_url="", coordinates=""), FILES)
     assert errors["location_url"] == "مطلوب"
@@ -326,7 +314,7 @@ def test_a_request_needs_a_location():
 
 def test_a_location_that_is_not_a_map_link_is_refused():
     _, errors = validate("new_sale", new_sale(location_url="24.1787, 55.6045"), FILES)
-    assert errors["location_url"] == "اختر الموقع على الخريطة"
+    assert errors["location_url"] == "الصق رابط الموقع من خرائط جوجل"
 
 
 def test_coordinates_typed_by_hand_are_kept_when_the_location_has_no_point():
@@ -396,8 +384,8 @@ def test_an_existing_client_is_not_asked_for_type_gender_or_email():
 
 def test_only_forms_that_create_a_daftra_client_ask_for_type_gender_and_email():
     # Only the forms whose approval creates a client in Daftra ask; a renewal is for a client Daftra has
-    asking = {key for key in FORM_TYPES if {"customer_type", "gender", "email"} <= {s["name"] for s in form_fields(key)}}
-    assert asking == {"new_sale", "maintenance"}
+    asking = {key for key in keys() if {"customer_type", "gender", "email"} <= {s["name"] for s in form_fields(key)}}
+    assert asking == {"new_sale", "maintenance", "quotation"}
 
 
 def test_installation_days_is_any_whole_number_of_days():
@@ -408,3 +396,182 @@ def test_installation_days_is_any_whole_number_of_days():
                            ("abc", "أدخل رقمًا صحيحًا")):
         _, errors = validate("new_sale", new_sale(installation_days=typed), FILES)
         assert errors["installation_days"] == message, typed
+
+
+def test_the_form_no_longer_asks_for_the_extensions():
+    """التمديدات الزيادة were dropped from طلب بيع لعميل جديد; anything still sent is left out."""
+    line = next(s for s in form_fields("new_sale") if s["name"] == "order_lines")
+    assert "extensions" not in {detail["name"] for detail in line["line_fields"]}
+    clean, errors = validate("new_sale", new_sale(
+        order_lines=package_lines(extensions=["تمديد الكهرباء", "اعمال الحفر"])), FILES)
+    assert errors == {}
+    assert "extensions" not in clean["order_lines"][0]["details"]
+
+
+def tech_works(lines=None, **overrides):
+    data = {"request_date": TODAY, "order_source": "16", "phone": "0501234567", "customer_name": "عميل تجريبي",
+            "technician": "40", "paid_amount": "0",
+            "order_lines": lines if lines is not None else [service_line()]}
+    data.update(overrides)
+    return data
+
+
+def service_line(product_id="4", name="Water Connection Service", quantity=2, **details):
+    return {"product_id": product_id, "name": name, "quantity": quantity, "base_quantity": None, "group_id": None,
+            "group_name": "", "package_id": None, "unit_price": 1, "details": details}
+
+
+def test_extra_works_take_only_the_technical_departments_services():
+    """The form offers four products by their Daftra id; the browser sending anything else is ignored."""
+    lines = [service_line(), service_line("1", "WATER COOLER BLACK 3 T")]
+    clean, errors = validate("tech_extra_works", tech_works(lines))
+    assert "order_lines" not in errors
+    # Saved under the name the form gives it; the invoice still carries Daftra's own
+    assert [line["name"] for line in clean["order_lines"]] == ["تمديد المياة"]
+    # 2 x 6, straight from the catalog: the lines' total is the request's total
+    assert clean["total_amount"] == 12
+
+
+def test_an_other_work_is_described_and_priced_on_its_own_line():
+    line = service_line("5", "service", quantity=3, work_description="نقل خزان علوي", work_price="400")
+    clean, errors = validate("tech_extra_works", tech_works([line]))
+    assert errors == {}
+    assert clean["order_lines"][0]["details"] == {"work_description": "نقل خزان علوي", "work_price": 400}
+    # The typed price stands in for the catalog's 300, three times over
+    assert clean["order_lines"][0]["unit_price"] == 400
+    assert clean["total_amount"] == 1200
+
+
+def test_an_other_work_without_its_description_and_price_is_refused():
+    _, errors = validate("tech_extra_works", tech_works([service_line("5", "service")]))
+    assert errors["order_lines"]["lines"]["0"] == {"work_description": "مطلوب", "work_price": "مطلوب"}
+
+
+def test_the_description_and_price_belong_to_other_alone():
+    """A service with a catalog price neither asks for them nor keeps them."""
+    line = service_line(work_description="لا ينبغي حفظه", work_price="999")
+    clean, errors = validate("tech_extra_works", tech_works([line]))
+    assert errors == {}
+    assert clean["order_lines"][0]["details"] == {}
+    assert clean["total_amount"] == 12
+
+
+def test_extra_works_ask_for_no_address_and_no_attachments():
+    names = {spec["name"] for spec in form_fields("tech_extra_works")}
+    assert not names & {"category", "area", "emirate", "location_url", "coordinates", "payment_proof",
+                        "create_work_order", "installation_days", "discount_amount", "discount_approved_by",
+                        "discount_label"}
+    # Nothing in تفاصيل الدفعة is asked for until there is a payment
+    paid = {spec["name"] for spec in form_fields("tech_extra_works") if spec["required"]}
+    # مصدر الطلب is not among them either: the technical department often does not know it
+    assert paid == {"request_date", "phone", "customer_name", "order_lines", "technician", "paid_amount"}
+
+
+def test_a_payment_on_extra_works_needs_what_daftra_asks_for():
+    _, errors = validate("tech_extra_works", tech_works(paid_amount="300"))
+    assert errors["payment_method"] == "مطلوب" and errors["treasury"] == "مطلوب" and errors["payment_date"] == "مطلوب"
+
+
+def test_extra_works_can_be_sent_without_an_order_source():
+    clean, errors = validate("tech_extra_works", tech_works(order_source=""))
+    assert errors == {} and "order_source" not in clean
+
+
+def test_the_coordinates_come_from_the_location_link_when_none_were_sent():
+    """Pasting a link that carries a point is enough on its own."""
+    data = new_sale(location_url="https://www.google.com/maps?q=25.200000,55.270000", coordinates="")
+    clean, errors = validate("new_sale", data, FILES)
+    assert errors == {}
+    assert clean["coordinates"] == "25.200000, 55.270000"
+
+
+def test_coordinates_that_were_sent_are_kept_over_the_links_own_point():
+    """What the salesperson has in الإحداثيات is the point they mean; the link may be the area's."""
+    data = new_sale(location_url="https://www.google.com/maps?q=25.200000,55.270000",
+                    coordinates="24.178700, 55.604510")
+    clean, errors = validate("new_sale", data, FILES)
+    assert errors == {}
+    assert clean["coordinates"] == "24.178700, 55.604510"
+
+
+def test_the_form_has_no_map():
+    """The location is a link pasted from خرائط جوجل, and الإحداثيات can be typed."""
+    spec = {s["name"]: s for s in form_fields("new_sale")}
+    assert spec["location_url"]["type"] == "text"
+    assert not spec["coordinates"].get("readonly")
+    assert not any(s["type"] == "location" for key in keys() for s in form_fields(key))
+
+
+def test_an_initiative_carries_the_amount_it_takes_off():
+    """Picking its name in «اسم الخصم كما يظهر في الفاتورة» fills in قيمة الخصم (form/fields.jsx)."""
+    for key in ("new_sale", "contract_renewal"):
+        spec = next(s for s in form_fields(key) if s["name"] == "discount_label")
+        assert spec["fills"] == "discount_amount", key
+        assert spec["fills_by_choice"] == {"مبادرة دعم نبع المزن": 1275, "مبادرة دعم سقيا الخير": 1750,
+                                           "مبادرة لك ان تشارك": 1150}, key
+        # Every initiative is offered, and a name that is no initiative carries no amount
+        assert set(spec["fills_by_choice"]) <= set(spec["suggestions"])
+        assert "خصم من قبل الإدارة" in spec["suggestions"] and "خصم من قبل الإدارة" not in spec["fills_by_choice"]
+
+
+def test_the_discount_amount_is_the_salespersons_whatever_its_name():
+    """The initiative's amount is only where the form starts: what is sent is what is saved."""
+    clean, errors = validate("new_sale", new_sale(discount_amount="900", discount_label="مبادرة دعم سقيا الخير"), FILES)
+    assert errors == {} and clean["discount_amount"] == 900
+
+
+# What installing each package involves, as the catalog names them today. The rules match on words,
+# so a new colour or size of a known cooler needs no edit; a renamed package would fail here first.
+WATER_COOLER_PACKAGES = [
+    "باقة برادة نبع المزن - 2 صنبور - أبيض", "باقة برادة نبع المزن - 2 صنبور - أسود",
+    "باقة برادة نبع المزن - 2 صنبور - ذهبي", "باقة برادة نبع المزن - 4 صنابير - أسود",
+    "باقة برادة نبع المزن - 3 صنابير - أبيض", "باقة برادة نبع المزن - 3 صنابير - أسود",
+    "باقة برادة نبع المزن - 3 صنابير - ذهبي",
+    "باقة نبع المزن مدمجة - برادة مياه 3 صنابير وبرادة طعام - أبيض",
+    "باقة نبع المزن مدمجة - برادة مياه 3 صنابير وبرادة طعام - أسود",
+    "باقة نبع المزن مدمجة - برادة مياه 3 صنابير وبرادة طعام - ذهبي",
+    "باقة برادة سقيا الخير - 2 صنبور - أبيض", "باقة برادة سقيا الخير - 2 صنبور - أسود",
+    "باقة برادة سقيا الخير - 2 صنبور - ذهبي", "باقة برادة سقيا الخير - 3 صنابير - أبيض",
+    "باقة برادة سقيا الخير - 3 صنابير - أسود", "باقة برادة سقيا الخير - 3 صنابير - ذهبي",
+    "باقة سقيا الخير مدمجة - برادتا مياه 3 صنابير وبرادة طعام - أبيض",
+    "باقة سقيا الخير مدمجة - برادتا مياه 3 صنابير وبرادة طعام - أسود",
+    "باقة سقيا الخير مدمجة - برادتا مياه 3 صنابير وبرادة طعام - ذهبي",
+    "باقة سقيا الخير مدمجة - برادة مياه 3 صنابير وبرادة طعام - أبيض",
+    "باقة سقيا الخير مدمجة - برادة مياه 3 صنابير وبرادة طعام - أسود",
+    "باقة سقيا الخير مدمجة - برادة مياه 3 صنابير وبرادة طعام - ذهبي",
+]
+FOOD_COOLER_PACKAGES = ["باقة برادة حفظ الطعام - غطاء سقيا الخير", "باقة برادة حفظ الطعام - غطاء نبع المزن"]
+FILTER_ONLY_PACKAGES = [
+    "باقة برادة سقيا الخير ستانلس ستيل - 2 صنبور", "باقة برادة سقيا الخير ستانلس ستيل - 3 صنابير",
+    "باقة برادة سقيا الخير ستانلس ستيل - 4 صنابير", "باقة برادة مياه - 6 صنابير - أبيض",
+]
+# The packages nothing is written for: the salesperson writes what the job needs
+NO_WORK_PACKAGES = [
+    "باب خلفي جرار لبرادة مدمجة", "لوح كلادينج ثابت لبرادة 3 صنابير",
+    "باقة جهاز تنقية RO VIB - سعة 100 GPD", "باقة فلتر جامبو ثنائي - مقاس 20",
+    "باقة نظام فلترة مركزي - موديل 1054", "فلتر دش Future Life",
+]
+
+
+def test_the_package_picked_says_what_installing_it_involves():
+    """ملحقات التركيب starts from the package, and the salesperson may add to it or empty it."""
+    water = (
+        "تمديد مياه وكهرباء كامل للبرادة • تركيب فلتر 3 مراحل * "
+        "مع تركيب صندوق الفلتر • سينسور إضاءة تلقائي. • إضاءة جانبية + بروفايل ليد *")
+    food = "تمديد كهرباء كامل للبرادة • سينسور إضاءة تلقائي. • إضاءة جانبية + بروفايل ليد * عمل قاعده سراميك"
+    filters = "فلتر 3 مراحل + عمل التمديدات اللازمه"
+    for name in WATER_COOLER_PACKAGES:
+        assert installation_work(name) == water, name
+    for name in FOOD_COOLER_PACKAGES:
+        assert installation_work(name) == food, name
+    for name in FILTER_ONLY_PACKAGES:
+        assert installation_work(name) == filters, name
+    for name in NO_WORK_PACKAGES:
+        assert installation_work(name) == "", name
+    # The field the form asks it in carries the same rules, for the browser to fill it in with
+    lines = next(spec for spec in form_fields("new_sale") if spec["type"] == "order_lines")
+    field = next(d for d in lines["line_fields"] if d["name"] == "installation_accessories")
+    assert field["type"] == "textarea" and not field["required"]
+    assert field["default_by_package"] == INSTALLATION_WORK
+    # And a request carries it to the work order's own ملحقات التركيب (field_8)
+    assert WORK_ORDER_FIELDS["installation_accessories"] == "field_8"

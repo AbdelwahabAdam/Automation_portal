@@ -14,9 +14,9 @@ from decimal import Decimal
 from openpyxl import load_workbook
 from sqlalchemy import select
 
-from .catalog import line_total, set_items
-from .core.database import SessionLocal, run_migrations
-from .models import Package, Product
+from ...modules.catalog.service import line_total, set_items
+from ...core.database import SessionLocal, run_migrations
+from ...modules.models import Package, Product
 
 # Column headers in the workbook
 PACKAGE_CODE = "مرجع النسخة"

@@ -6,8 +6,8 @@ from decimal import Decimal
 
 from openpyxl import Workbook
 
-from app import import_clients, import_maintenance_items
-from app.models import Client, Product
+from app.jobs import import_maintenance_items, sync_clients
+from app.modules.models import Client, Product
 
 
 def test_maintenance_items_are_added_or_marked(db, tmp_path, monkeypatch):
@@ -43,8 +43,7 @@ def test_clients_import_keeps_clients_with_a_phone(db, tmp_path, monkeypatch):
     ]}
     path = tmp_path / "clients.json"
     path.write_text(json.dumps(export, ensure_ascii=False), encoding="utf-8")
-    monkeypatch.setattr(sys, "argv", ["import", str(path)])
-    import_clients.main()
+    sync_clients.main([str(path)])
     clients = {c.client_code: c for c in db.query(Client)}
     assert set(clients) == {"000001", "000002"}
     first, second = clients["000001"], clients["000002"]
@@ -66,8 +65,7 @@ def test_the_import_brings_back_an_address_the_portal_put_in_the_spare_block(db,
     ]}
     path = tmp_path / "clients.json"
     path.write_text(json.dumps(export, ensure_ascii=False), encoding="utf-8")
-    monkeypatch.setattr(sys, "argv", ["import", str(path)])
-    import_clients.main()
+    sync_clients.main([str(path)])
     client = db.query(Client).one()
     assert [(a.emirate, a.area, a.street) for a in client.addresses] == [
         ("دبي", "الخوانيج", "st"), ("عجمان", "مدينة عجمان", "شارع الاتحاد")]
@@ -76,8 +74,8 @@ def test_the_import_brings_back_an_address_the_portal_put_in_the_spare_block(db,
 def test_create_user_from_the_command_line(db, monkeypatch, capsys):
     import pytest
 
-    from app import create_user
-    from app.models import User
+    from app.jobs import create_user
+    from app.modules.models import User
     monkeypatch.setattr(sys, "argv", ["create_user", "Boss", "long-password", "--admin", "--name", "Big Boss",
                                       "--email", "Boss@Example.com"])
     create_user.main()

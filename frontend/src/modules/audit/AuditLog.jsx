@@ -1,9 +1,9 @@
 import { Fragment, useEffect, useState } from 'react';
-import { api, downloadFile } from '../api.js';
+import * as auditApi from '../../api/audit.js';
 import {
   Alert, Badge, Button, EmptyState, Field, Filters, PageHeader, Pager, SearchInput, Select, Skeleton, TextInput,
-} from '../ds/index.jsx';
-import { formatDate } from '../formsMeta.js';
+} from '../../ds/index.jsx';
+import { formatDate } from '../../lib/format.js';
 
 const NO_FILTERS = { user_id: '', action: '', entity_type: '', date_from: '', date_to: '', search: '' };
 const FAILED = new Set(['auth.login_failed']);
@@ -56,13 +56,13 @@ export default function AuditLog() {
   const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
-    api('/admin/audit/options').then(setOptions).catch((err) => setError(err.message));
+    auditApi.options().then(setOptions).catch((err) => setError(err.message));
   }, []);
 
   useEffect(() => {
     let stale = false;
     setError('');
-    api(`/admin/audit?${queryOf(filters, { limit: pageSize, offset: (page - 1) * pageSize })}`)
+    auditApi.page(queryOf(filters, { limit: pageSize, offset: (page - 1) * pageSize }))
       .then((loaded) => !stale && setResult(loaded))
       .catch((err) => !stale && setError(err.message));
     return () => { stale = true; };
@@ -78,7 +78,7 @@ export default function AuditLog() {
     setExporting(true);
     setError('');
     try {
-      await downloadFile(`/admin/audit/export?${queryOf(filters)}`, 'audit-log.csv');
+      await auditApi.exportCsv(queryOf(filters));
     } catch (err) {
       setError(err.message);
     } finally {

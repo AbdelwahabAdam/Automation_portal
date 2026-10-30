@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { api } from './api.js';
+import * as requestsApi from '../../api/requests.js';
 import {
   Alert, Button, EmptyState, Field, Filters, PageHeader, SearchInput, Select, Skeleton, Tabs, useConfirm, useToast, useWidth,
-} from './ds/index.jsx';
-import { matchesQuery } from './formsMeta.js';
+} from '../../ds/index.jsx';
+import { matchesQuery } from '../../ds/match.js';
 import RequestList, { TABLE_MIN_WIDTH } from './RequestList.jsx';
 
 const TABS = [
@@ -33,7 +33,7 @@ export default function MyRequests({ formTypes, onNew, onEdit, onView }) {
   const toast = useToast();
 
   useEffect(() => {
-    api('/requests/mine').then(setRequests).catch((err) => setError(err.message));
+    requestsApi.myRequests().then(setRequests).catch((err) => setError(err.message));
   }, []);
   useEffect(() => setPage(1), [tab, query, formType, pageSize]);
 
@@ -48,7 +48,7 @@ export default function MyRequests({ formTypes, onNew, onEdit, onView }) {
     if (!yes) return;
     setError('');
     try {
-      await api(`/requests/${request.id}`, { method: 'DELETE' });
+      await requestsApi.deleteRequest(request.id);
       setRequests((current) => current.filter((r) => r.id !== request.id));
       toast(`تم حذف المسودة رقم ${request.id}`);
     } catch (err) {

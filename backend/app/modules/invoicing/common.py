@@ -1,18 +1,23 @@
-"""What every Daftra step shares: the error a manager sees, amounts, the marker that finds a
-document again, and saving a PDF on the request."""
+"""What every Daftra step shares: amounts, the marker that finds a document again, and saving a
+PDF on the request.
+
+The error a manager sees is `core.errors.SyncError`: `clients` raises it too, and neither module
+may import the other. The address as Daftra keeps one belongs to `clients`.
+"""
 
 import functools
-import uuid
 from datetime import datetime, timedelta
 from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
-from ..core.config import UPLOAD_DIR, settings
-from ..integrations.daftra import DaftraError
-from ..modules.invoicing import PAYMENT_METHOD_KEYS
-from ..models import Attachment, Request
-from ..core.text import UAE, squash
+from ...core.config import settings
+from ...core.errors import SyncError
+from ...integrations.daftra import DaftraError
+from .. import requests
+from .payment_methods import PAYMENT_METHOD_KEYS
+
+from ...core.text import UAE, squash
 
 # The fields the PDFs approving a request saves are attached under (not fields of any form)
 INVOICE_ATTACHMENT_FIELD = "daftra_invoice"
@@ -21,15 +26,6 @@ WORK_ORDER_ATTACHMENT_FIELD = "daftra_work_order"
 CENT = Decimal("0.01")
 # Daftra rounds each line's tax on its own, so a total can be off by a little
 TOTAL_TOLERANCE = Decimal("0.05")
-
-
-class SyncError(Exception):
-    """Why the Daftra documents could not be created, in words the manager can act on.
-    from_daftra says whether Daftra itself refused or failed, rather than our own checks."""
-
-    def __init__(self, message: str, from_daftra: bool = False):
-        super().__init__(message)
-        self.from_daftra = from_daftra
 
 
 def money(value) -> Decimal:
@@ -51,16 +47,7 @@ def reports_daftra_errors(step):
     return run
 
 
-def address_fields(data: dict) -> dict:
-    """An address as Daftra keeps one: the city holds the emirate and the state holds the area
-    (daftra.address_from_daftra reads them back that way). It goes on the client, and on the
-    invoice, where it is the address printed for that request."""
-    return {"address1": str(data.get("street") or "").strip(), "address2": str(data.get("house") or "").strip(),
-            "city": str(data.get("emirate") or "").strip(), "state": str(data.get("area") or "").strip(),
-            "country_code": "AE"}
-
-
-def marker(request: Request) -> str:
+def marker(request) -> str:
     """What finds this request's invoice, payment and work order in Daftra again on a retry.
 
     The prefix says which portal wrote it. Another portal on the same Daftra account — a test one
@@ -71,7 +58,7 @@ def marker(request: Request) -> str:
     return f"{settings.daftra_marker_prefix}-{request.id}"
 
 
-def made_before_the_request(request: Request, created: str | None) -> bool:
+def made_before_the_request(request, created: str | None) -> bool:
     """Whether Daftra made this before the request existed, which means it is not the request's own.
 
     A request's invoice and work order are made when it is approved, so they are always younger
@@ -86,7 +73,7 @@ def made_before_the_request(request: Request, created: str | None) -> bool:
     return made < request.created_at.astimezone(UAE) - timedelta(minutes=5)
 
 
-def sales_person(request: Request) -> int:
+def sales_person(request) -> int:
     """The submitter's Daftra staff id, the sales person on the invoice."""
     staff_id = request.created_by.daftra_staff_id
     if not staff_id:
@@ -104,14 +91,12 @@ def payment_inputs(data: dict) -> tuple[Decimal, str | None]:
     return paid, method
 
 
-def attach_pdf(request: Request, field: str, title: str, invoice: dict, content: bytes, db: Session):
-    """Saves a PDF on the request, named like the ones staff save by hand: «<title> <customer> <client number>.pdf»."""
+def attach_pdf(request, field: str, title: str, invoice: dict, content: bytes, db: Session):
+    """Saves a PDF on the request, named like the ones staff save by hand: «<title> <customer> <client number>.pdf».
+
+    The name is ours; the saving is `requests`', which owns the attachments table.
+    """
     client_number = (invoice.get("Client") or {}).get("client_number") or ""
     customer = squash(request.data.get("customer_name"))
     filename = " ".join(part for part in (title, customer, client_number) if part) + ".pdf"
-    folder = UPLOAD_DIR / str(request.id)
-    folder.mkdir(parents=True, exist_ok=True)
-    stored_name = uuid.uuid4().hex + ".pdf"
-    (folder / stored_name).write_bytes(content)
-    db.add(Attachment(request=request, field=field, filename=filename[:255], stored_name=stored_name,
-                      content_type="application/pdf", size=len(content)))
+    requests.save_file(db, request, field, filename, content)
