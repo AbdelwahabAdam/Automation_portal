@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 from app import daftra
 from app.config import UPLOAD_DIR, settings
 from app.daftra_sync.invoice import WARRANTY_TERMS_HTML
+from app.daftra_sync.work_order import WORK_ORDER_FIELDS
 from app.redraw_work_orders import redraw
 from app.models import Attachment, Client, Request
 
@@ -17,6 +18,8 @@ from .test_forms import TODAY
 from .test_requests import create, submitted_sale, upload
 
 UAE = timezone(timedelta(hours=4))
+# The custom fields a work order is saved with: the ids we know, and Daftra's own flag
+KNOWN_WORK_ORDER_FIELDS = {*WORK_ORDER_FIELDS.values(), "CONTAINE_CUSTOM_DATA"}
 
 
 def sending_payment_proof(monkeypatch):
@@ -37,6 +40,24 @@ def test_any_number_of_installation_days_sets_the_work_orders_due_date(client, d
     start = datetime.now(UAE).date()
     assert work_order["WorkOrder"]["delivery_date"] == (start + timedelta(days=17)).isoformat()
     assert "■ مدة التركيب: 17 يومًا" in work_order["WorkOrder"]["description"]
+
+
+def test_the_extensions_of_an_older_request_still_reach_the_work_order(client, db, fake_daftra, sales, manager):
+    """التمديدات الزيادة are no longer asked for, but a request submitted while they were still
+    holds them, and they still go into their own field in Daftra (field_34) and the description."""
+    seed.catalog(db)
+    request_id = submitted_sale(client, db, sales)
+    request = db.get(Request, request_id)
+    lines = [{**line, "details": {**line["details"], "extensions": ["تمديد الكهرباء", "اعمال الحفر"]}}
+             for line in request.data["order_lines"]]
+    request.data = {**request.data, "order_lines": lines}
+    db.commit()
+    assert approve(client, manager, request_id).status_code == 200
+    [work_order] = fake_daftra.posted("/api2/work_orders.json")
+    assert "■ التمديدات الزيادة: تمديد الكهرباء، اعمال الحفر" in work_order["WorkOrder"]["description"]
+    saved = next(iter(fake_daftra.work_orders.values()))
+    assert saved["custom"]["field_34"] == "تمديد الكهرباء، اعمال الحفر"
+    assert [key for key in saved["custom"] if key not in KNOWN_WORK_ORDER_FIELDS] == []
 
 
 def test_review_queue_shows_sent_requests_and_the_employees_drafts(client, db, sales, manager):
@@ -124,7 +145,8 @@ def test_approving_a_new_sale_creates_everything_in_daftra(client, db, fake_daft
         "CONTAINE_CUSTOM_DATA": "1",
         # field_30 is the first line's product image (seed.catalog gives the cooler file_id 7809)
         "field_8": "", "field_30": "7809", "field_32": "سقيا الخير-  اللون الاسود مقاس طبيعي",
-        "field_33": "", "field_36": "", "field_37": "https://www.google.com/maps?q=24.178700,55.604510",
+        "field_33": "", "field_34": "", "field_36": "",
+        "field_37": "https://www.google.com/maps?q=24.178700,55.604510",
         "field_38": "", "field_39": "Sales One", "field_44": "اللون الاسود", "field_45": "", "field_46": "",
         "field_47": "بسم الله", "field_49": "اللون الاسود مقاس طبيعي",
     }
@@ -305,6 +327,85 @@ def test_contract_renewal(client, db, fake_daftra, sales, manager):
         "unit_price": 1680.0, "quantity": 1, "tax1": 3, "store_id": 1,
     }]
     assert len(fake_daftra.posted("/api2/invoice_payments.json")) == 1
+
+
+def tech_works_data(**overrides):
+    data = {"request_date": TODAY, "order_source": "16", "phone": "0509999999", "client_code": "4089",
+            "customer_name": "عميل قديم", "technician": "40", "paid_amount": "0",
+            "order_lines": [
+                {"product_id": "4", "name": "Water Connection Service", "quantity": 2, "base_quantity": None,
+                 "group_id": None, "group_name": "", "package_id": None, "unit_price": 6, "details": {}},
+                {"product_id": "5", "name": "service", "quantity": 1, "base_quantity": None, "group_id": None,
+                 "group_name": "", "package_id": None, "unit_price": 300,
+                 "details": {"work_description": "نقل خزان علوي", "work_price": "400"}},
+            ]}
+    data.update(overrides)
+    return data
+
+
+def test_extra_works_are_invoiced_to_an_existing_client(client, db, fake_daftra, sales, manager):
+    """اعمال اضافية (قسم الفنيات): the works as invoice lines, «أخرى» as a service line with its own
+    wording and price, and الفني printed on the invoice."""
+    seed.catalog(db)
+    seed.existing_client(db)
+    fake_daftra.add_client(4053, "0509999999")
+    request_id = create(client, sales, tech_works_data(), form_type="tech_extra_works").json()["id"]
+    sent = client.put(f"/api/requests/{request_id}", json={"data": tech_works_data(), "action": "submit"},
+                      headers=auth(sales))
+    assert sent.status_code == 200, sent.json()
+    assert db.get(Request, request_id).data["total_amount"] == 412
+    assert approve(client, manager, request_id).status_code == 200
+    [invoice] = fake_daftra.posted("/api2/invoices.json")
+    assert invoice["Invoice"]["client_id"] == 4053
+    assert invoice["InvoiceItem"] == [
+        {"product_id": 212, "item": "Water Connection Service", "description": "Water  extension",
+         "unit_price": 6.0, "quantity": 2, "tax1": 3, "store_id": 1},
+        {"product_id": 194, "item": "service", "description": "نقل خزان علوي", "unit_price": 400.0,
+         "quantity": 1, "tax1": 3, "store_id": 1},
+    ]
+    # No payment was taken, so there is no receipt
+    assert fake_daftra.posted("/api2/invoice_payments.json") == []
+
+
+def test_extra_works_print_the_technician_and_the_notes_on_the_invoice(client, db, fake_daftra, sales, manager):
+    seed.catalog(db)
+    seed.existing_client(db)
+    fake_daftra.add_client(4053, "0509999999")
+    data = tech_works_data(notes="العميل يفضل التركيب صباحًا")
+    request_id = create(client, sales, data, form_type="tech_extra_works").json()["id"]
+    client.put(f"/api/requests/{request_id}", json={"data": data, "action": "submit"}, headers=auth(sales))
+    assert approve(client, manager, request_id).status_code == 200
+    [invoice] = fake_daftra.posted("/api2/invoices.json")
+    assert invoice["Invoice"]["notes"] == "الفني: Manager One\nملاحظات: العميل يفضل التركيب صباحًا"
+
+
+def test_an_invoice_without_an_order_source_leaves_the_field_out(client, db, fake_daftra, sales, manager):
+    """اعمال اضافية does not insist on one; the invoice is then made without it, rather than with an
+    empty one, which Daftra would have to make sense of."""
+    seed.catalog(db)
+    seed.existing_client(db)
+    fake_daftra.add_client(4053, "0509999999")
+    data = tech_works_data(order_source="")
+    request_id = create(client, sales, data, form_type="tech_extra_works").json()["id"]
+    sent = client.put(f"/api/requests/{request_id}", json={"data": data, "action": "submit"}, headers=auth(sales))
+    assert sent.status_code == 200, sent.json()
+    assert approve(client, manager, request_id).status_code == 200
+    [invoice] = fake_daftra.posted("/api2/invoices.json")
+    assert "order_source_id" not in invoice["Invoice"]
+
+
+def test_extra_works_for_an_unknown_client_are_refused(client, db, fake_daftra, sales, manager):
+    """No address is asked for, so no client can be created: it must be one Daftra already has."""
+    seed.catalog(db)
+    data = tech_works_data(client_code="", phone="0501111111")
+    request_id = create(client, sales, data, form_type="tech_extra_works").json()["id"]
+    sent = client.put(f"/api/requests/{request_id}", json={"data": data, "action": "submit"}, headers=auth(sales))
+    assert sent.status_code == 200, sent.json()
+    answer = approve(client, manager, request_id)
+    # 409, not 502: the request is wrong, not Daftra
+    assert answer.status_code == 409 and "لعميل مسجل فقط" in answer.json()["detail"]
+    assert fake_daftra.posted("/api2/invoices.json") == []
+    assert db.get(Request, request_id).status == "submitted"
 
 
 def test_renewal_for_an_unknown_client_is_refused(client, db, fake_daftra, sales, manager):
@@ -499,9 +600,9 @@ def test_the_location_link_of_the_request_is_put_on_the_client(client, db, fake_
     seed.existing_client(db)
     fake_daftra.add_client(4053, "0509999999", category_id=5,
                            custom={"test": "N + F", "coordinates_text": "24.100000, 55.600000"})
-    # The link the map writes: it holds the pin's own point, so the two always agree
+    # A link carrying its own point, which is what the form fills الإحداثيات from
     link = "https://www.google.com/maps?q=25.200000,55.270000"
-    request_id = renewal_request(client, db, sales, location_url=link)
+    request_id = renewal_request(client, db, sales, location_url=link, coordinates="25.200000, 55.270000")
     assert approve(client, manager, request_id).status_code == 200
     assert fake_daftra.clients[4053]["link"] == link
     assert fake_daftra.clients[4053]["custom"]["coordinates_text"] == "25.200000, 55.270000"
@@ -628,4 +729,4 @@ def test_a_location_that_is_not_a_link_does_not_stop_the_approval(client, db, fa
     assert approve(client, manager, request_id).status_code == 200
     saved = fake_daftra.clients[4053]
     assert "link" not in saved or saved["link"] == ""
-    assert saved["custom"]["coordinates_text"] == "24.100000, 55.600000"
+    assert saved["custom"]["coordinates_text"] == "24.1787, 55.6045"

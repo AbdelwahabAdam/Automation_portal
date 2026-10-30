@@ -16,18 +16,23 @@ def catalog(db) -> dict:
     contract = Product(id=2, name="exchange contract", unit_price=Decimal("1200"), daftra_id=37,
                        description="عقد تبديل")
     filter_ = Product(id=3, name="RO .PP 10", unit_price=Decimal("50"), daftra_id=625, maintenance_group="الفلاتر")
+    # What اعمال اضافية (قسم الفنيات) offers: a service with a price, and «أخرى» priced on the line
+    water = Product(id=4, name="Water Connection Service", unit_price=Decimal("6"), daftra_id=212,
+                    description="Water  extension", maintenance_group="الخدمات")
+    other = Product(id=5, name="service", unit_price=Decimal("300"), daftra_id=194, maintenance_group="الخدمات")
     package = Package(id=10, name=PACKAGE, items=[
         PackageItem(product=cooler, quantity=1, unit_price=Decimal("2000"), sort_order=1),
         PackageItem(product=contract, quantity=1, unit_price=Decimal("800"), sort_order=2),
     ])
-    db.add_all([cooler, contract, filter_, package,
+    db.add_all([cooler, contract, filter_, water, other, package,
                 ClientCategory(id=5, name="العين العامره", emirate="أبوظبي", area="منطقة العين")])
     db.commit()
     # Rows added later get ids after these
     for table in ("products", "packages"):
         db.execute(text(f"SELECT setval('{table}_id_seq', (SELECT max(id) FROM {table}))"))
     db.commit()
-    return {"cooler": cooler, "contract": contract, "filter": filter_, "package": package}
+    return {"cooler": cooler, "contract": contract, "filter": filter_, "water": water, "other": other,
+            "package": package}
 
 
 def existing_client(db, daftra_id=4053, phone="0509999999", code="004089") -> Client:

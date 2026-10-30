@@ -147,7 +147,9 @@ def catalog_picker(user: User = Depends(sales_user), db: Session = Depends(get_d
         for p in packages
     ] + [
         {"kind": "product", "id": p.id, "name": p.name, "name_ar": p.name_ar, "price": price_or_none(p.unit_price),
-         "maintenance_group": p.maintenance_group}
+         # daftra_id: how a form naming the products it offers names them (اعمال اضافية), whose
+         # list is short enough to show each product's description beside it
+         "maintenance_group": p.maintenance_group, "daftra_id": p.daftra_id, "description": p.description or ""}
         for p in products
     ]
 
@@ -164,7 +166,14 @@ def from_daftra(load, failure: str):
 
 @router.get("/daftra/staff")
 def daftra_staff(user: User = Depends(sales_user)):
+    """Names only, for the forms' «staff» fields (اسم المحصل، اسم من اعتمد الخصم)."""
     return from_daftra(daftra.list_staff, "تعذر تحميل الموظفين من دفترة")
+
+
+@router.get("/daftra/staff_members")
+def daftra_staff_members(user: User = Depends(sales_user)):
+    """With their ids, for a field that holds the staff member and not just their name (الفني)."""
+    return from_daftra(daftra.list_staff_members, "تعذر تحميل الموظفين من دفترة")
 
 
 @router.get("/daftra/treasuries")

@@ -333,33 +333,6 @@ input.fl-input[type="date"] { min-block-size: calc(var(--fl-field-height) - 2px)
 .fl-dropzone--busy { color: var(--fl-color-text-secondary); cursor: progress; }
 .fl-dropzone--invalid { border-color: var(--fl-color-border-error); }
 
-/* ---------- The map a location is picked on ---------- */
-.fl-map { display: flex; flex-direction: column; gap: var(--fl-space-2); }
-.fl-map__tools { display: flex; gap: var(--fl-space-2); align-items: stretch; }
-.fl-map__tools > :first-child { flex: 1 1 auto; min-inline-size: 0; }
-.fl-map__canvas {
-  block-size: 300px; inline-size: 100%; border-radius: var(--fl-radius-md);
-  border: var(--fl-border-width-default) solid var(--fl-color-border-control);
-  background: var(--fl-color-background-sunken); z-index: 0;
-}
-.fl-map__canvas--invalid { border-color: var(--fl-color-border-error); }
-/* A phone shows less of the page at once, and the map still has to be worth looking at */
-@media (max-width: 36rem) { .fl-map__canvas { block-size: 240px; } }
-.fl-map__foot { display: flex; flex-wrap: wrap; gap: 2px var(--fl-space-4); font-size: var(--fl-type-body-sm-size); }
-.fl-map__at { font-variant-numeric: tabular-nums; }
-.fl-map__at--empty, .fl-map__says { color: var(--fl-color-text-secondary); }
-/* The pin is drawn here: Leaflet's own marker images do not survive the build */
-.fl-map__pin { background: none; border: 0; }
-.fl-map__pin::before {
-  content: ""; display: block; inline-size: 18px; block-size: 18px; margin: 4px;
-  border: 3px solid var(--fl-color-action-primary-background); border-radius: 50% 50% 50% 0;
-  transform: rotate(-45deg); background: var(--fl-color-background-surface);
-  box-shadow: 0 1px 4px rgb(0 0 0 / .4);
-}
-/* Leaflet's own controls, in the portal's colours rather than its defaults */
-.fl-map .leaflet-control-attribution { font-size: 10px; }
-.fl-map .leaflet-container { font: inherit; }
-
 /* Order lines (products/packages picked for one request) */
 /* The lines are a table: the quantity and the two amounts each sit under their own heading,
    in their own column, so a bare number is never read as the one beside it */

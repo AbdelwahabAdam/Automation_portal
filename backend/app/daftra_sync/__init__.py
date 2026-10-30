@@ -5,7 +5,8 @@
 - طلب تجديد عقد الصيانة السنوي: the existing client's category, the one-line renewal invoice, and
   its receipt;
 - طلب صيانة وتبديل: the client when new, the invoice of the chosen items, and its receipt;
-- طلب تسديد مبلغ متبقي: a receipt on one of the client's invoices.
+- طلب تسديد مبلغ متبقي: a receipt on one of the client's invoices;
+- اعمال اضافية (قسم الفنيات): the invoice of the works done for an existing client, and its receipt.
 
 Each step keeps the id it got on the request before the next one starts. Approving again after a
 failure therefore carries on from the step that failed. If an id was lost (e.g. the response never
@@ -108,6 +109,31 @@ def sync_maintenance(request: Request, db: Session, reviewer: User) -> dict:
 
 
 @reports_daftra_errors
+def sync_tech_extra_works(request: Request, db: Session, reviewer: User) -> dict:
+    """اعمال اضافية (قسم الفنيات): the invoice of the works done, and its receipt. The form asks for
+    no address, so the client cannot be created here — it must be one Daftra already has."""
+    data = request.data
+    items = invoice_items(data, db)
+    staff_id = sales_person(request)
+    paid, method = payment_inputs(data)
+    if request.daftra_client_id is None:
+        found = existing_client_id(data, db)
+        if found is None:
+            raise SyncError(f"لا يوجد في دفترة عميل بالرقم {local_phone(data.get('phone'))} أو الكود "
+                            f"«{data.get('client_code') or '—'}». الأعمال الإضافية لعميل مسجل فقط؛ "
+                            "أعد الطلب للموظف ليصحح بيانات العميل.")
+        request.daftra_client_id = found
+    # Printed on the invoice, so the technical department finds its own work again, and so whatever
+    # was agreed with the customer travels with it
+    notes = "\n".join(part for part in (
+        f"الفني: {data['technician_name']}" if data.get("technician_name") else "",
+        f"ملاحظات: {data['notes']}" if data.get("notes") else "",
+    ) if part)
+    invoice = ensure_invoice(request, items, staff_id, notes=notes)
+    return finish(request, invoice, paid, method, reviewer, db)
+
+
+@reports_daftra_errors
 def sync_balance_payment(request: Request, db: Session, reviewer: User) -> dict:
     data = request.data
     paid, method = payment_inputs(data)
@@ -127,4 +153,4 @@ def sync_balance_payment(request: Request, db: Session, reviewer: User) -> dict:
 
 
 SYNCS = {"new_sale": sync_new_sale, "contract_renewal": sync_contract_renewal, "balance_payment": sync_balance_payment,
-         "maintenance": sync_maintenance}
+         "maintenance": sync_maintenance, "tech_extra_works": sync_tech_extra_works}

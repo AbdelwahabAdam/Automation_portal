@@ -23,6 +23,7 @@ export function useSalesData(enabled) {
     api('/daftra/treasuries').then((rows) => addList('daftra_treasury', rows)).catch(() => {});
     api('/daftra/order_sources').then((rows) => addList('daftra_order_source', rows)).catch(() => {});
     api('/daftra/client_categories').then((rows) => addList('daftra_client_category', rows)).catch(() => {});
+    api('/daftra/staff_members').then((rows) => addList('daftra_staff', rows)).catch(() => {});
   }, [enabled]);
 
   return sales;

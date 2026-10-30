@@ -14,15 +14,15 @@ EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 # the operators' own digits; landlines are the emirate's code — 2 أبوظبي, 3 العين, 4 دبي, 6 الشارقة
 # وعجمان وأم القيوين, 7 رأس الخيمة, 9 الفجيرة — and seven digits after it.
 PHONE_RE = re.compile(r"^0(?:5[024568]\d{7}|[234679]\d{7})$")
-# The point inside a location link, which the map writes as «?q=24.178700,55.604500»
+# The point inside a location link, e.g. «?q=24.178700,55.604500»
 COORDINATES_IN_LINK = re.compile(r"(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)")
 # Field type "product" holds a name picked from our catalog, "staff" one picked from Daftra's staff list
 DEFAULT_MAX_LENGTH = {"text": 300, "product": 300, "staff": 300, "textarea": 3000, "package_color": 300,
-                      # "location" holds the link the map writes for the pin
-                      "location": 255, "email": 200}
+                      "email": 200}
 # Field types holding the id of a row in a Daftra list; the form shows the list, the data keeps the
 # id in the field and the row's name in "<field>_name"
-DAFTRA_LIST_TYPES = ("daftra_order_source", "daftra_treasury", "daftra_client_category", "daftra_client_invoice")
+DAFTRA_LIST_TYPES = ("daftra_order_source", "daftra_treasury", "daftra_client_category", "daftra_client_invoice",
+                     "daftra_staff")
 
 
 def is_input(spec: dict) -> bool:
@@ -181,6 +181,10 @@ def validate_submission(form_type: str, data: dict, file_counts: dict, employee_
             # A field offering only maintenance items takes nothing else, whatever the browser sends
             if spec.get("items") == "maintenance" and product is not None and not product.get("maintenance_group"):
                 continue
+            # A field offering named products (اعمال اضافية) likewise. They are named by their
+            # Daftra id, which is the same wherever the portal runs; our own ids are not.
+            if spec.get("item_ids") and product is not None and product.get("daftra_id") not in spec["item_ids"]:
+                continue
             # The price is looked up here, never taken from the browser: a product's price inside the
             # package it was picked from, else its own catalog price
             price = None
@@ -190,9 +194,13 @@ def validate_submission(form_type: str, data: dict, file_counts: dict, employee_
                 price = product.get("price") or 0
             # A package's «الكمية» is already in its products' quantities; its charges (the inscription) are per package
             count = package_quantity(line)
-            subtotal += (price or 0) * line["quantity"]
             details, row_errors = {}, {}
-            for dspec in filter(is_input, line_fields):
+            # A line field belonging to certain products only (وصف العمل under «أخرى») is neither
+            # asked for nor kept on a line of any other product
+            daftra_id = product.get("daftra_id") if product else None
+            own_fields = [dspec for dspec in line_fields
+                          if not dspec.get("only_for") or daftra_id in dspec["only_for"]]
+            for dspec in filter(is_input, own_fields):
                 dvalue, derror = _clean_value(dspec, line["details"].get(dspec["name"]))
                 if derror:
                     row_errors[dspec["name"]] = derror
@@ -200,10 +208,10 @@ def validate_submission(form_type: str, data: dict, file_counts: dict, employee_
                     details[dspec["name"]] = dvalue
             # Before anything is required of it: a field left empty that stands for a word saves as
             # that word (an empty الكتابة المطلوبة is «لا يوجد», which charges nothing)
-            for dspec in line_fields:
+            for dspec in own_fields:
                 if dspec.get("blank_value") and not details.get(dspec["name"]):
                     details[dspec["name"]] = dspec["blank_value"]
-            for dspec in line_fields:
+            for dspec in own_fields:
                 dname = dspec["name"]
                 required = dspec["required"] or ("required_if" in dspec and _condition_met(dspec["required_if"], details))
                 if dspec["type"] == "package_color":
@@ -216,6 +224,11 @@ def validate_submission(form_type: str, data: dict, file_counts: dict, employee_
                         del details[dname]
                 if required and dname not in details and dname not in row_errors:
                     row_errors[dname] = "مطلوب"
+            # «أخرى» has no catalog price: what the salesperson typed on the line is the price
+            typed = next((dspec["name"] for dspec in own_fields if dspec.get("line_price")), None)
+            if typed is not None and details.get(typed) is not None:
+                price = details[typed]
+            subtotal += (price or 0) * line["quantity"]
             if row_errors:
                 line_errors[str(len(resolved))] = row_errors
             # A package's details are copied onto each of its lines, so its charges count once
@@ -224,7 +237,9 @@ def validate_submission(form_type: str, data: dict, file_counts: dict, employee_
             if line.get("group_id"):
                 seen_groups.add(line["group_id"])
             resolved.append({
-                "product_id": line["product_id"], "name": product["name"] if product else line["name"],
+                "product_id": line["product_id"],
+                # The name the form gives it, when it gives one (اعمال اضافية calls 194 «أخرى»)
+                "name": spec.get("item_labels", {}).get(daftra_id) or (product["name"] if product else line["name"]),
                 "quantity": line["quantity"], "group_id": line.get("group_id"), "group_name": line.get("group_name"),
                 "package_id": line["package_id"], "base_quantity": line.get("base_quantity"), "unit_price": price,
                 "details": details,
@@ -272,19 +287,18 @@ def validate_submission(form_type: str, data: dict, file_counts: dict, employee_
         if spec.get("blank_value") and not clean.get(spec["name"]):
             clean[spec["name"]] = spec["blank_value"]
 
-    # الإحداثيات are the pin's own position, so they are taken from the link the map wrote and not
-    # from whatever reached us: the field is read-only in the form, which is no guarantee here.
+    # الإحداثيات come from the location link when it carries a point and none were sent, so a
+    # pasted link is enough on its own. What was typed is kept: a link shared from a phone keeps
+    # the place's name and not where it is, and then they are the only point we have.
     for spec in fields:
         source = spec.get("coordinates_from")
-        if not source or not spec.get("readonly"):
+        if not source or spec["name"] in clean:
             continue
         found = COORDINATES_IN_LINK.search(str(clean.get(source) or ""))
         if found:
             clean[spec["name"]] = f"{found[1]}, {found[2]}"
             errors.pop(spec["name"], None)
-        # A location with no point in it — a link shared from a phone's own position keeps the
-        # place's name and not where it is — leaves الإحداثيات to be filled in by hand, and the
-        # «required» check below still has its say
+        # Nothing to take them from leaves them to be filled in, and the «required» check below has its say
 
     # A field that must equal another (e.g. the amount paid must be the whole total)
     for spec in fields:

@@ -68,7 +68,8 @@ def test_products_and_packages(client, db, admin):
     seed.catalog(db)
     products = client.get("/api/admin/products", headers=auth(admin)).json()
     assert {p["name"]: p["package_count"] for p in products} == {
-        "exchange contract": 1, "RO .PP 10": 0, "WATER COOLER BLACK 3 T": 1}
+        "exchange contract": 1, "RO .PP 10": 0, "WATER COOLER BLACK 3 T": 1,
+        "Water Connection Service": 0, "service": 0}
     new = client.post("/api/admin/products", json={"name": "  New   Filter ", "unit_price": "99.5", "daftra_id": 777},
                       headers=auth(admin)).json()
     assert new["name"] == "New Filter" and new["unit_price"] == 99.5

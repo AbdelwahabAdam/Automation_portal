@@ -30,6 +30,10 @@ WORK_ORDER_FIELDS = {
     "front_design": "field_46",              # تصميم القطعه الاماميه
     "inscription": "field_47",               # الآية القرآنية المطبوعة
     "plate_color": "field_49",               # لون اللوحه
+    # التمديدات الزيادة: found by reading every work order on the account — five of 3,088 have it.
+    # The form stopped asking for them, so only a request from before that still fills this in.
+    # filled, and they hold «تمديد الكهرباء» and «تمديد المياه» (work orders 358, 359, 370, 1942, 2112)
+    "extensions": "field_34",                # التمديدات الزياده ان وجدت
 }
 # Daftra replaces the whole custom form on every save, so a field left out of the body is emptied,
 # not kept. Every field is therefore always sent, blank ones included.
@@ -91,6 +95,7 @@ def work_order_values(request: Request, db: Session) -> dict:
 
     values = {
         "installation_accessories": joined(lambda d, _: d.get("installation_accessories")),
+        "extensions": joined(lambda d, _: "، ".join(d.get("extensions") or [])),
         "available_colors": joined(available_colors),
         "cover_back": joined(lambda d, _: d.get("cover_back")),
         "base_color": joined(lambda d, _: BASE_TEXT.get(d.get("base_color"), d.get("base_color"))),
@@ -176,6 +181,8 @@ def work_order_rows(request: Request, reviewer: User) -> list[str]:
             rows.append(" — ".join(b for b in build if b))
         if details.get("installation_accessories"):
             rows.append(f"ملحقات التركيب: {details['installation_accessories']}")
+        if details.get("extensions"):
+            rows.append("التمديدات الزيادة: " + "، ".join(details["extensions"]))
         text = str(details.get("inscription") or "").strip()
         if text and text not in NO_INSCRIPTION:
             place = f" (مكان الكتابة: {details['inscription_place']})" if details.get("inscription_place") else ""

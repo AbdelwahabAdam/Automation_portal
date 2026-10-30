@@ -107,7 +107,7 @@ def active_products(db: Session) -> dict:
     """Our own catalog's active products, keyed by id (as a string, to match the "<field>_id" sent from the form)."""
     return {
         str(p.id): {"id": p.id, "name": p.name, "price": float(p.unit_price) if p.unit_price else 0,
-                    "maintenance_group": p.maintenance_group}
+                    "maintenance_group": p.maintenance_group, "daftra_id": p.daftra_id}
         for p in db.scalars(select(Product).where(Product.is_active))
     }
 
@@ -122,6 +122,7 @@ def daftra_lists(form_type: str, db: Session) -> dict:
     """The Daftra lists this form's fields pick from, as {field type: {id: name}}; one that cannot
     be loaded right now is left out, and Daftra checks the id when the request is approved."""
     loaders = {"daftra_order_source": daftra.list_order_sources, "daftra_treasury": daftra.list_treasuries,
+               "daftra_staff": daftra.list_staff_members,
                # Our own copy, so it is always there (an empty table is treated as not loaded)
                "daftra_client_category": lambda: client_category_rows(db) or None}
     lists = {}

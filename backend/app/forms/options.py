@@ -33,6 +33,9 @@ RENEWAL_PRICE = 1680
 NO_INSCRIPTION = ["لا يوجد", "لايوجد", "لا توجد", "لاتوجد"]
 # Names already used for discounts on our Daftra invoices, offered as suggestions
 DISCOUNT_LABELS = ["مبادرة دعم نبع المزن", "مبادرة دعم سقيا الخير", "مبادرة لك ان تشارك", "خصم من قبل الإدارة"]
+# What an initiative takes off, filled into قيمة الخصم when its name is picked and changeable after.
+# A name that is not an initiative («خصم من قبل الإدارة») has no amount of its own, so nothing is filled in.
+DISCOUNT_AMOUNTS = {"مبادرة دعم نبع المزن": 1275, "مبادرة دعم سقيا الخير": 1750, "مبادرة لك ان تشارك": 1150}
 # The treasury a payment usually goes into in Daftra, by payment method; the salesperson can change it
 TREASURY_BY_METHOD = dict(zip(PAYMENT_METHODS, [13, 9, 16, 7, 8, 12]))
 
@@ -138,6 +141,21 @@ DESIGN_VERSIONS = [
     "تصميم قديم مستطيل",
 ]
 BASE_COLORS = ["أسود", "أبيض", "الرصاصي"]
+# اعمال اضافية (قسم الفنيات) offers these services and nothing else. They are named by their Daftra
+# product id, which is the same on every copy of the portal — our own catalog ids are not.
+# 194 «service» is «أخرى»: the work is described and priced on the line, and the invoice carries it
+# as a service line, exactly as الكتابة المطلوبة does.
+OTHER_WORK_DAFTRA_ID = 194
+# What the form calls each of them, in the order it offers them. The names are the portal's own:
+# the invoice carries the product's name as Daftra holds it (Water Connection Service and the rest),
+# since that is what the accounts are kept in.
+TECH_SERVICE_LABELS = {
+    212: "تمديد المياة",                  # Water Connection Service — «Water extension»
+    418: "تمديد الكهرباء",                # Electricity Connection Service — «Electricity extension»
+    433: "اعمال باسكو",                   # interlocking paving Removel $ Breaking Service (code 2016)
+    OTHER_WORK_DAFTRA_ID: "أخرى",         # the catalog's general «service», described on the line
+}
+TECH_SERVICE_DAFTRA_IDS = list(TECH_SERVICE_LABELS)
 # How many days an installation takes, i.e. the work order's delivery date after its start
 # The longest مدة التركيب a work order can be given, in days
 MAX_INSTALLATION_DAYS = 365

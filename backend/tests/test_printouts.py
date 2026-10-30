@@ -50,6 +50,13 @@ def test_each_part_of_the_description_is_its_own_line():
         assert f"<div>■ {row}</div>" in html, row
 
 
+def test_the_extensions_line_is_printed_when_there_are_any():
+    """Daftra's own form leaves «التمديدات» blank for the floor; we print it when the request has it."""
+    assert "التمديدات" in work_order_html()
+    filled = work_order_html(values={**VALUES, "extensions": "تمديد الكهرباء، اعمال الحفر"})
+    assert "تمديد الكهرباء، اعمال الحفر" in filled
+
+
 def test_the_work_order_comes_out_on_one_page():
     """Daftra's own form is one page, and a second page of signatures is no use on the floor."""
     from weasyprint import HTML

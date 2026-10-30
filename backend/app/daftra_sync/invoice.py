@@ -71,6 +71,11 @@ def invoice_items(data: dict, db: Session) -> list[dict]:
         }
         if product.description:
             item["description"] = product.description
+        # What the salesperson wrote about this line stands in for it (اعمال اضافية: «أخرى» is the
+        # catalog's own «service» product, so only the description says what the work was)
+        described = str((line.get("details") or {}).get("work_description") or "").strip()
+        if described:
+            item["description"] = described
         items.append(item)
 
         # A package's details are copied onto each of its lines, so its inscription is invoiced once
@@ -133,12 +138,14 @@ def ensure_invoice(request: Request, items: list[dict], staff_id: int, notes: st
                 # Offline like every invoice on the account: not emailed, so the client needs no email
                 "client_id": request.daftra_client_id, "date": data.get("request_date"), "draft": 0, "is_offline": 1,
                 "currency_code": "AED", "store_id": settings.daftra_store_id, "branch_id": settings.daftra_branch_id,
-                "sales_person_id": staff_id, "order_source_id": data.get("order_source"), "po_number": marker(request),
+                "sales_person_id": staff_id, "po_number": marker(request),
                 "html_notes": WARRANTY_TERMS_HTML,
                 # The address this request is for, printed on the invoice. Without it the invoice
                 # carries whatever the client record holds, which may be another of their addresses
                 # or nothing at all. Sent only when the form has one, so it can never blank it.
                 **invoice_address(data),
+                # Left out rather than sent empty when the form does not ask for it, or does not insist
+                **({"order_source_id": data["order_source"]} if data.get("order_source") else {}),
             }
             if notes:
                 fields["notes"] = notes

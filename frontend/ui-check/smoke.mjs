@@ -38,20 +38,21 @@ async function expectText(page, text, what) {
   }
 }
 
-// The location is picked on a map, and الإحداثيات follow the pin: they are never typed. Returns
-// what the pin wrote, so a later step can tell whether clearing the address really cleared them.
-async function pickOnTheMap(page, problems, prefix, where = [0.5, 0.45]) {
-  const map = page.locator('.fl-map__canvas').first();
-  if (!(await map.count())) { problems.push(`[${prefix}] the location map is not on the form`); return ''; }
-  await map.scrollIntoViewIfNeeded();
-  await page.waitForTimeout(1200);  // the tiles, and Leaflet settling into its box
-  const box = await map.boundingBox();
-  await page.mouse.click(box.x + box.width * where[0], box.y + box.height * where[1]);
-  await page.waitForTimeout(700);
+// The location is a link pasted from خرائط جوجل, and الإحداثيات fill in from it when it carries a
+// point. Returns what was filled in, so a later step can tell whether clearing the address cleared it.
+async function pasteTheLocation(page, problems, prefix, link = 'https://www.google.com/maps?q=25.200000,55.270000') {
+  if (await page.locator('.fl-map__canvas').count()) problems.push(`[${prefix}] the removed map is still on the form`);
+  const box = page.locator('#location_url');
+  if (!(await box.count())) { problems.push(`[${prefix}] موقع العميل is not on the form`); return ''; }
+  await box.scrollIntoViewIfNeeded();
+  await box.fill(link);
+  await page.waitForTimeout(500);
   const field = page.locator('#coordinates');
   const coordinates = await field.inputValue();
-  if (!/-?\d+\.\d+,\s*-?\d+\.\d+/.test(coordinates)) problems.push(`[map] picking a point left الإحداثيات «${coordinates}»`);
-  if (!(await field.evaluate((el) => el.readOnly))) problems.push('[map] الإحداثيات can still be typed into');
+  if (!/-?\d+\.\d+,\s*-?\d+\.\d+/.test(coordinates)) problems.push(`[location] pasting a link left الإحداثيات «${coordinates}»`);
+  if (await field.evaluate((el) => el.readOnly)) problems.push('[location] الإحداثيات cannot be typed into');
+  log(`${prefix} location: pasted a link, الإحداثيات «${coordinates}»`);
+  await shot(page, `${prefix}-address`, false);
   return coordinates;
 }
 
@@ -112,8 +113,8 @@ async function salesForm(page, prefix) {
   // Asking for a new address empties the whole service address, التصنيف and the coordinates included
   const addressPick = page.locator('.fl-lookup__actions .fl-pick').first();
   if (await addressPick.count()) {
-    // الإحداثيات are not typed any more: they are the map pin's own position
-    await pickOnTheMap(page, problems, prefix);
+    // الإحداثيات come from the pasted link
+    await pasteTheLocation(page, problems, prefix);
     await addressPick.click();
     const newAddress = page.getByRole('option', { name: /عنوان جديد/ });
     if (!(await newAddress.count())) problems.push('[address] «عنوان جديد» is not offered');
@@ -254,6 +255,35 @@ async function managerDrafts(page, prefix) {
   if (await page.getByRole('button', { name: 'اعتماد الطلب' }).count()) problems.push('[drafts] a draft offers to be approved');
   await shot(page, `${prefix}-draft-view`, false);
   log(`${prefix} drafts: ${employees} employee(s) with drafts, first «${label}», ${results}`);
+}
+
+// Picking an initiative in «اسم الخصم كما يظهر في الفاتورة» fills قيمة الخصم with its own amount,
+// over anything typed there, and the amount can still be changed afterwards
+async function discountInitiative(page, prefix) {
+  await page.goto(`${BASE}/sales/new_request`);
+  await page.getByText('طلب بيع لعميل جديد').first().click();
+  await page.getByRole('button', { name: 'فتح كل الأقسام' }).click();
+  const amount = page.locator('#discount_amount');
+  await amount.scrollIntoViewIfNeeded();
+  await amount.fill('300');
+  const box = page.locator('#discount_label');
+  await box.click();
+  await page.waitForTimeout(400);
+  const options = page.locator('.fl-suggest__item');
+  const names = await options.allInnerTexts();
+  if (!names.length) { problems.push('[discount] no names are offered for اسم الخصم'); return; }
+  const wanted = names.findIndex((name) => name.includes('سقيا الخير'));
+  if (wanted < 0) { problems.push(`[discount] «مبادرة دعم سقيا الخير» is not offered, only ${names.join(' / ')}`); return; }
+  await options.nth(wanted).click();
+  await page.waitForTimeout(300);
+  const filled = await amount.inputValue();
+  if (filled !== '1750') problems.push(`[discount] picking «${names[wanted].trim()}» left قيمة الخصم «${filled}», not 1750`);
+  // It is a starting point, not a locked value
+  if (await amount.evaluate((el) => el.readOnly)) problems.push('[discount] قيمة الخصم cannot be changed after picking');
+  await amount.fill('900');
+  if (await amount.inputValue() !== '900') problems.push('[discount] قيمة الخصم could not be changed after picking');
+  log(`${prefix} discount: ${names.length} name(s) offered, picking «${names[wanted].trim()}» filled ${filled}`);
+  await shot(page, `${prefix}-discount`, false);
 }
 
 // Every field each visible form defines is on the screen
@@ -398,6 +428,7 @@ try {
     await staffPickers(page, prefix);
     await newClient(page, prefix);
     await installationDays(page, prefix);
+    await discountInitiative(page, prefix);
     await managerDrafts(page, prefix);
     await everyField(page, prefix);
     await pages(page, prefix);

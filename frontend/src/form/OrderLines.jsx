@@ -12,11 +12,17 @@ const COLUMNS = 5;
 // A package's (or a standalone product's) own fields: colours, build details, the inscription.
 // forPackage: a product picked on its own has its own quantity box instead of «الكمية».
 // packageName: the package's (or the product's) name, which decides the cover colours offered.
-function DetailFields({ lineFields, details, errors, keyPrefix, onChange, forPackage, packageName }) {
-  // A colour field with no colours for this package (or for a product picked on its own) would only
-  // render as a disabled box saying so, which is a field's worth of space for nothing
-  const shown = lineFields.filter((dspec) => (forPackage || !dspec.package_only)
+// A colour field with no colours for this package (or for a product picked on its own) would only
+// render as a disabled box saying so, which is a field's worth of space for nothing.
+// only_for: a field belonging to certain products (وصف العمل، سعر الوحدة under «أخرى»)
+function fieldsOfLine(lineFields, { forPackage, packageName, daftraId }) {
+  return lineFields.filter((dspec) => (forPackage || !dspec.package_only)
+    && (!dspec.only_for || dspec.only_for.includes(daftraId))
     && (dspec.type !== 'package_color' || packageColors(dspec, packageName).length > 0));
+}
+
+function DetailFields({ lineFields, details, errors, keyPrefix, onChange, forPackage, packageName, daftraId }) {
+  const shown = fieldsOfLine(lineFields, { forPackage, packageName, daftraId });
   if (!shown.length) return null;
   // A field with a partner (one marked "beside" it) shares a full line with it: two thirds and one third
   const besides = Object.fromEntries(shown.filter((dspec) => dspec.beside).map((dspec) => [dspec.beside, dspec]));
@@ -44,8 +50,8 @@ function DetailFields({ lineFields, details, errors, keyPrefix, onChange, forPac
     } else {
       // A package's details are always drop-downs, however few their options
       control = (
-        <Control spec={{ ...dspec, name: id, dropdown: true }} value={details?.[dspec.name] ?? ''} invalid={Boolean(error)}
-          onChange={(_, value) => onChange(dspec.name, value)} />
+        <Control spec={{ ...dspec, name: id, dropdown: dspec.type === 'select' }} value={details?.[dspec.name] ?? ''}
+          invalid={Boolean(error)} onChange={(_, value) => onChange(dspec.name, value)} />
       );
     }
     return <Field key={dspec.name} label={dspec.label} htmlFor={id} error={error} required={required}>{control}</Field>;
@@ -72,17 +78,39 @@ export default function OrderLines({ spec, value, invalid, catalog, onChange, li
   const [openGroups, setOpenGroups] = useState(() => new Set());
   const lines = value ?? [];
   const lineFields = spec.line_fields || [];
-  // items: "maintenance" offers only the catalog's maintenance items (products with a maintenance group)
+  // items: "maintenance" offers only the catalog's maintenance items (products with a maintenance
+  // group); item_ids names the products outright, by their Daftra id (اعمال اضافية)
   const maintenance = spec.items === 'maintenance';
-  const items = useMemo(
-    () => (maintenance ? catalog.catalogItems?.filter((item) => item.kind === 'product' && item.maintenance_group) : catalog.catalogItems),
-    [catalog.catalogItems, maintenance],
-  );
+  const only = spec.item_ids;
+  const items = useMemo(() => {
+    const products = catalog.catalogItems?.filter((item) => item.kind === 'product');
+    if (only) {
+      return products?.filter((item) => only.includes(item.daftra_id))
+        .sort((a, b) => only.indexOf(a.daftra_id) - only.indexOf(b.daftra_id));
+    }
+    return maintenance ? products?.filter((item) => item.maintenance_group) : catalog.catalogItems;
+  }, [catalog.catalogItems, maintenance, only]);
   const priceById = useMemo(() => new Map((catalog.products || []).map((p) => [p.id, p.price || 0])), [catalog.products]);
+  // Which product a line is, as Daftra numbers it: what only_for on a line field is matched against
+  const daftraById = useMemo(
+    () => new Map((catalog.catalogItems || []).filter((item) => item.kind === 'product').map((item) => [item.id, item.daftra_id])),
+    [catalog.catalogItems],
+  );
+  const daftraOf = (line) => daftraById.get(Number(line.product_id));
+  // Products whose price is typed on the line, not taken from the catalog («أخرى»): they are
+  // offered without a price, and start at nothing rather than at the catalog's stand-in figure
+  const typedPrice = useMemo(
+    () => new Set(lineFields.filter((dspec) => dspec.line_price).flatMap((dspec) => dspec.only_for || [])),
+    [lineFields],
+  );
+  // item_labels: what this form calls a product, by its Daftra id. Only «أخرى» needs one: the rest
+  // are offered under the name Daftra holds them by, which is the name their invoice line carries.
+  const labelOf = (item) => spec.item_labels?.[item?.daftra_id] || item?.name || '';
+  const lineLabel = (line) => spec.item_labels?.[daftraOf(line)] || line.name;
   const matches = useMemo(() => {
     if (!items) return null;
     const words = query.toLowerCase().split(/\s+/).filter(Boolean);
-    const text = (item) => `${item.name} ${item.name_ar || ''} ${item.maintenance_group || ''}`.toLowerCase();
+    const text = (item) => `${item.name} ${item.name_ar || ''} ${item.maintenance_group || ''} ${item.description || ''} ${labelOf(item)}`.toLowerCase();
     return items.filter((item) => words.every((word) => text(item).includes(word))).slice(0, 40);
   }, [items, query]);
   const groups = useMemo(() => groupLines(lines), [lines]);
@@ -116,7 +144,8 @@ export default function OrderLines({ spec, value, invalid, catalog, onChange, li
       setOpenGroups((current) => new Set([...current, groupId]));
     } else {
       set([...lines, {
-        product_id: item.id, name: item.name, quantity: 1, group_id: null, group_name: '', package_id: null, unit_price: item.price ?? 0,
+        product_id: item.id, name: labelOf(item), quantity: 1, group_id: null, group_name: '', package_id: null,
+        unit_price: typedPrice.has(item.daftra_id) ? 0 : (item.price ?? 0),
         details: guessedDetails('', [item.name]),
       }]);
     }
@@ -150,11 +179,11 @@ export default function OrderLines({ spec, value, invalid, catalog, onChange, li
   // One row of the table: the product, its quantity, what one costs and what the row costs.
   // inPackage: a line that came with a package is indented under it and has no fields of its own.
   function row({ line, index }, inPackage = false) {
-    const unit = linePrice(line, priceById);
+    const unit = linePrice(line, priceById, lineFields);
     return (
       <Fragment key={`line-${index}`}>
         <tr className={inPackage ? 'fl-row--child' : undefined}>
-          <td className="fl-cell--wrap fl-cell--title"><bdi>{line.name}</bdi></td>
+          <td className="fl-cell--wrap fl-cell--title"><bdi>{lineLabel(line)}</bdi></td>
           <td className="fl-cell--qty" data-label="الكمية">
             <input
               className="fl-mini fl-order-lines__qty" type="number" min="1" inputMode="numeric"
@@ -169,11 +198,12 @@ export default function OrderLines({ spec, value, invalid, catalog, onChange, li
           </td>
         </tr>
         {/* A line inside a package shows no fields of its own — they belong to the package, above */}
-        {!line.group_id && (
+        {!line.group_id && fieldsOfLine(lineFields, { forPackage: false, packageName: line.name, daftraId: daftraOf(line) }).length > 0 && (
           <tr className="fl-row--detail">
             <td colSpan={COLUMNS}>
               <DetailFields lineFields={lineFields} details={line.details} errors={lineErrors?.[index]} keyPrefix={`${spec.name}-${index}`}
-                onChange={(name, v) => setDetail(index, name, v)} forPackage={false} packageName={line.name} />
+                onChange={(name, v) => setDetail(index, name, v)} forPackage={false} packageName={line.name}
+                daftraId={daftraOf(line)} />
             </td>
           </tr>
         )}
@@ -184,7 +214,7 @@ export default function OrderLines({ spec, value, invalid, catalog, onChange, li
   function packageGroup(group) {
     const first = group.rows[0];
     const count = packageQuantity(first.line);
-    const total = group.rows.reduce((sum, { line }) => sum + linePrice(line, priceById) * (Number(line.quantity) || 0), 0);
+    const total = group.rows.reduce((sum, { line }) => sum + linePrice(line, priceById, lineFields) * (Number(line.quantity) || 0), 0);
     const open = openGroups.has(group.key);
     return (
       <Fragment key={group.key}>
@@ -238,14 +268,17 @@ export default function OrderLines({ spec, value, invalid, catalog, onChange, li
         id={spec.name} value={query} onInput={setQuery} items={matches} invalid={invalid && !lines.length} closeOnPick={false}
         itemKey={(item) => `${item.kind}-${item.id}`} onPick={addItem} emptyText="لا يوجد ما يطابق البحث."
         placeholder={items
-          ? (maintenance ? 'ابحث عن بند (فلتر، قطعة غيار، خدمة…) لإضافته' : 'ابحث عن منتج أو باقة لإضافتها')
+          ? (only ? 'ابحث عن العمل المطلوب لإضافته'
+            : maintenance ? 'ابحث عن بند (فلتر، قطعة غيار، خدمة…) لإضافته' : 'ابحث عن منتج أو باقة لإضافتها')
           : catalog.catalogItemsError ? '' : 'جارٍ تحميل المنتجات والباقات…'}
         renderItem={(item) => (
           <>
-            <bdi>{item.name}</bdi>
+            <bdi>{labelOf(item)}</bdi>
             <small>
-              {maintenance ? [item.name_ar, item.maintenance_group].filter(Boolean).join(' · ') : item.kind === 'package' ? 'باقة' : 'منتج'}
-              {item.price ? ` · ${item.price} درهم` : ''}
+              {only ? [item.name.trim(), item.description].filter(Boolean).join(' · ')
+                : maintenance ? [item.name_ar, item.maintenance_group].filter(Boolean).join(' · ')
+                  : item.kind === 'package' ? 'باقة' : 'منتج'}
+              {item.price && !typedPrice.has(item.daftra_id) ? ` · ${item.price} درهم` : ''}
             </small>
           </>
         )}

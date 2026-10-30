@@ -29,7 +29,7 @@ def submitted_sale(client, db, user, **overrides) -> int:
 def test_form_types_list_hides_the_hidden_forms(client, sales):
     types = client.get("/api/form-types", headers=auth(sales)).json()
     shown = {t["key"] for t in types if not t["hidden"]}
-    assert shown == {"new_sale", "contract_renewal", "balance_payment", "maintenance"}
+    assert shown == {"new_sale", "contract_renewal", "balance_payment", "maintenance", "tech_extra_works"}
 
 
 def test_draft_then_submit(client, db, sales):
@@ -159,9 +159,13 @@ def test_catalog_picker_lists_packages_with_their_prices(client, db, sales):
     package = next(item for item in items if item["kind"] == "package")
     assert package["price"] == 2800
     assert [(i["product_id"], i["unit_price"]) for i in package["items"]] == [(1, 2000.0), (2, 800.0)]
-    assert {item["name"] for item in items if item["kind"] == "product"} == {"WATER COOLER BLACK 3 T", "exchange contract", "RO .PP 10"}
+    assert {item["name"] for item in items if item["kind"] == "product"} == {
+        "WATER COOLER BLACK 3 T", "exchange contract", "RO .PP 10", "Water Connection Service", "service"}
+    # Each product's Daftra id goes too: a form naming the products it offers (اعمال اضافية) picks by it
+    assert {item["name"]: item["daftra_id"] for item in items if item["kind"] == "product"}["Water Connection Service"] == 212
     products = client.get("/api/products", headers=auth(sales)).json()
-    assert [p["name"] for p in products] == ["exchange contract", "RO .PP 10", "WATER COOLER BLACK 3 T"]
+    assert [p["name"] for p in products] == ["exchange contract", "RO .PP 10", "service",
+                                             "Water Connection Service", "WATER COOLER BLACK 3 T"]
 
 
 def test_daftra_lists_for_the_forms(client, db, sales):

@@ -7,8 +7,8 @@ from .fields import (INSCRIPTION, NOTES, address, amounts, attachments, client, 
     original_refs, payment, request_info, section, yes_no)
 from .options import (BASE_COLORS, CASH, CASH_PAYMENT, COLORS, COVER_BACKS, DESIGN_VERSIONS, FRONT_DESIGNS,
     HAS_INSCRIPTION, MAX_INSTALLATION_DAYS, MAINTENANCE_DEVICES, MAINTENANCE_SERVICES, MAX_PACKAGE_QUANTITY,
-    PACKAGE_COLOR_FAMILIES, PAID, PAYMENT_METHODS, REFUND_METHODS, RENEWAL_PRICE, TREASURY_BY_METHOD, W_DIRECTIONS,
-    WANTS_WORK_ORDER, WORK_STARTED, WORK_STATUS)
+    OTHER_WORK_DAFTRA_ID, PACKAGE_COLOR_FAMILIES, PAID, PAYMENT_METHODS, REFUND_METHODS, RENEWAL_PRICE,
+    TECH_SERVICE_DAFTRA_IDS, TECH_SERVICE_LABELS, TREASURY_BY_METHOD, W_DIRECTIONS, WANTS_WORK_ORDER, WORK_STARTED, WORK_STATUS)
 
 
 FORM_TYPES = {
@@ -600,12 +600,44 @@ FORM_TYPES = {
             NOTES,
         ],
     },
+    "tech_extra_works": {
+        "label": "اعمال اضافية (قسم الفنيات)",
+        # Approving it invoices the extra works to a client Daftra already has, and makes the receipt
+        # for whatever was paid now. No address is asked for, so no client can be created here.
+        "invoiced": True,
+        "daftra_note": "وتُنشأ في دفترة فاتورة الأعمال المختارة، وسند القبض إن وُجدت دفعة. العميل يجب أن يكون مسجلًا في دفترة.",
+        "sections": [
+            # The technical department does not always know which source the work came through
+            request_info("تاريخ الطلب", invoiced=True, source_required=False),
+            client(False),
+            section(
+                "تفاصيل الطلب",
+                # Only the technical department's services, by their Daftra product id. «أخرى» is
+                # described and priced on its own line, and can be added more than once.
+                f("order_lines", "الأعمال المطلوبة", "order_lines", True, subtotal_field="total_amount",
+                  items="tech_services", item_ids=TECH_SERVICE_DAFTRA_IDS, item_labels=TECH_SERVICE_LABELS,
+                  line_fields=[
+                      f("work_description", "وصف العمل", "text", True, max_length=500,
+                        only_for=[OTHER_WORK_DAFTRA_ID]),
+                      money("work_price", "سعر الوحدة، شامل الضريبة (درهم)", True, positive=True,
+                            only_for=[OTHER_WORK_DAFTRA_ID], line_price=True),
+                  ]),
+                # Printed on the invoice as «الفني: …», which is how the technical department finds
+                # its own work again in Daftra
+                f("technician", "الفني (الموظف في دفترة)", "daftra_staff", True),
+            ),
+            amounts(total_label="قيمة الأعمال النهائية، شامل الضريبة", auto_total=True, invoiced=False,
+                    paid_label="المبلغ المدفوع فعليًا الآن", discounts=False),
+            payment(when=PAID, invoiced=True),
+            NOTES,
+        ],
+    },
 }
 
 
 # The forms a new request can be made from. The others stay defined (requests already made with
 # them still open, show and can be reviewed) but are hidden; add a key here to bring one back.
-VISIBLE_FORM_TYPES = {"new_sale", "contract_renewal", "balance_payment", "maintenance"}
+VISIBLE_FORM_TYPES = {"new_sale", "contract_renewal", "balance_payment", "maintenance", "tech_extra_works"}
 
 
 def list_form_types() -> list[dict]:

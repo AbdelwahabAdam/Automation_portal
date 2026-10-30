@@ -9,9 +9,12 @@ from app.text import uae_today
 
 PACKAGE = "باقة برادة سقيا الخير - 3 صنابير - أسود"
 PRODUCTS = {
-    "1": {"id": 1, "name": "WATER COOLER BLACK 3 T", "price": 1000, "maintenance_group": None},
-    "2": {"id": 2, "name": "exchange contract", "price": 1200, "maintenance_group": None},
-    "3": {"id": 3, "name": "RO .PP 10", "price": 50, "maintenance_group": "الفلاتر"},
+    "1": {"id": 1, "name": "WATER COOLER BLACK 3 T", "price": 1000, "maintenance_group": None, "daftra_id": 501},
+    "2": {"id": 2, "name": "exchange contract", "price": 1200, "maintenance_group": None, "daftra_id": 37},
+    "3": {"id": 3, "name": "RO .PP 10", "price": 50, "maintenance_group": "الفلاتر", "daftra_id": 625},
+    # اعمال اضافية offers these two by their Daftra id; «أخرى» (194) is priced on the line
+    "4": {"id": 4, "name": "Water Connection Service", "price": 6, "maintenance_group": "الخدمات", "daftra_id": 212},
+    "5": {"id": 5, "name": "service", "price": 300, "maintenance_group": "الخدمات", "daftra_id": 194},
 }
 PACKAGE_PRICES = {("10", "1"): 2000.0, ("10", "2"): 800.0}
 LISTS = {"daftra_order_source": {16: "Sales-جديد"}, "daftra_treasury": {13: "ADIB NEW CURRENT", 9: "خزينه المكتب"},
@@ -150,6 +153,16 @@ def test_an_inscription_the_catalogue_has_not_got_is_still_accepted():
     assert long_errors["order_lines"]["lines"]["0"] == {"inscription": "الحد الأقصى 500 حرفًا"}
 
 
+def test_the_form_no_longer_asks_for_the_extensions():
+    """التمديدات الزيادة were dropped from طلب بيع لعميل جديد; anything still sent is left out."""
+    line = next(s for s in form_fields("new_sale") if s["name"] == "order_lines")
+    assert "extensions" not in {detail["name"] for detail in line["line_fields"]}
+    clean, errors = validate("new_sale", new_sale(
+        order_lines=package_lines(extensions=["تمديد الكهرباء", "اعمال الحفر"])), FILES)
+    assert errors == {}
+    assert "extensions" not in clean["order_lines"][0]["details"]
+
+
 def test_cover_colour_must_be_one_of_the_package_family():
     _, errors = validate("new_sale", new_sale(order_lines=package_lines(cover_color="بنفسجي")), FILES)
     assert errors["order_lines"]["lines"]["0"]["cover_color"] == "اختر من القائمة"
@@ -159,6 +172,75 @@ def test_unknown_products_are_dropped_and_an_empty_order_refused():
     lines = [{"product_id": "999", "name": "gone", "quantity": 1, "details": {}}]
     _, errors = validate("new_sale", new_sale(order_lines=lines), FILES)
     assert errors["order_lines"] == "اختر منتجًا أو باقة واحدة على الأقل"
+
+
+def tech_works(lines=None, **overrides):
+    data = {"request_date": TODAY, "order_source": "16", "phone": "0501234567", "customer_name": "عميل تجريبي",
+            "technician": "40", "paid_amount": "0",
+            "order_lines": lines if lines is not None else [service_line()]}
+    data.update(overrides)
+    return data
+
+
+def service_line(product_id="4", name="Water Connection Service", quantity=2, **details):
+    return {"product_id": product_id, "name": name, "quantity": quantity, "base_quantity": None, "group_id": None,
+            "group_name": "", "package_id": None, "unit_price": 1, "details": details}
+
+
+def test_extra_works_take_only_the_technical_departments_services():
+    """The form offers four products by their Daftra id; the browser sending anything else is ignored."""
+    lines = [service_line(), service_line("1", "WATER COOLER BLACK 3 T")]
+    clean, errors = validate("tech_extra_works", tech_works(lines))
+    assert "order_lines" not in errors
+    # Saved under the name the form gives it; the invoice still carries Daftra's own
+    assert [line["name"] for line in clean["order_lines"]] == ["تمديد المياة"]
+    # 2 x 6, straight from the catalog: the lines' total is the request's total
+    assert clean["total_amount"] == 12
+
+
+def test_an_other_work_is_described_and_priced_on_its_own_line():
+    line = service_line("5", "service", quantity=3, work_description="نقل خزان علوي", work_price="400")
+    clean, errors = validate("tech_extra_works", tech_works([line]))
+    assert errors == {}
+    assert clean["order_lines"][0]["details"] == {"work_description": "نقل خزان علوي", "work_price": 400}
+    # The typed price stands in for the catalog's 300, three times over
+    assert clean["order_lines"][0]["unit_price"] == 400
+    assert clean["total_amount"] == 1200
+
+
+def test_an_other_work_without_its_description_and_price_is_refused():
+    _, errors = validate("tech_extra_works", tech_works([service_line("5", "service")]))
+    assert errors["order_lines"]["lines"]["0"] == {"work_description": "مطلوب", "work_price": "مطلوب"}
+
+
+def test_the_description_and_price_belong_to_other_alone():
+    """A service with a catalog price neither asks for them nor keeps them."""
+    line = service_line(work_description="لا ينبغي حفظه", work_price="999")
+    clean, errors = validate("tech_extra_works", tech_works([line]))
+    assert errors == {}
+    assert clean["order_lines"][0]["details"] == {}
+    assert clean["total_amount"] == 12
+
+
+def test_extra_works_ask_for_no_address_and_no_attachments():
+    names = {spec["name"] for spec in form_fields("tech_extra_works")}
+    assert not names & {"category", "area", "emirate", "location_url", "coordinates", "payment_proof",
+                        "create_work_order", "installation_days", "discount_amount", "discount_approved_by",
+                        "discount_label"}
+    # Nothing in تفاصيل الدفعة is asked for until there is a payment
+    paid = {spec["name"] for spec in form_fields("tech_extra_works") if spec["required"]}
+    # مصدر الطلب is not among them either: the technical department often does not know it
+    assert paid == {"request_date", "phone", "customer_name", "order_lines", "technician", "paid_amount"}
+
+
+def test_a_payment_on_extra_works_needs_what_daftra_asks_for():
+    _, errors = validate("tech_extra_works", tech_works(paid_amount="300"))
+    assert errors["payment_method"] == "مطلوب" and errors["treasury"] == "مطلوب" and errors["payment_date"] == "مطلوب"
+
+
+def test_extra_works_can_be_sent_without_an_order_source():
+    clean, errors = validate("tech_extra_works", tech_works(order_source=""))
+    assert errors == {} and "order_source" not in clean
 
 
 def test_maintenance_only_takes_maintenance_items_and_must_be_paid_in_full():
@@ -309,14 +391,21 @@ def test_the_area_keeps_the_neighbourhood_daftra_holds():
     assert clean["area"] == "الخوانيج 2"
 
 
-def test_the_coordinates_are_the_point_in_the_location_whatever_is_sent():
-    """الإحداثيات are the pin's own position. The field is read-only in the form, which stops a
-    person typing in it but not a browser, so the server takes them from the location itself."""
-    data = new_sale(location_url="https://www.google.com/maps?q=25.200000,55.270000",
-                    coordinates="1.000000, 2.000000")
+def test_the_coordinates_come_from_the_location_link_when_none_were_sent():
+    """Pasting a link that carries a point is enough on its own."""
+    data = new_sale(location_url="https://www.google.com/maps?q=25.200000,55.270000", coordinates="")
     clean, errors = validate("new_sale", data, FILES)
     assert errors == {}
     assert clean["coordinates"] == "25.200000, 55.270000"
+
+
+def test_coordinates_that_were_sent_are_kept_over_the_links_own_point():
+    """What the salesperson has in الإحداثيات is the point they mean; the link may be the area's."""
+    data = new_sale(location_url="https://www.google.com/maps?q=25.200000,55.270000",
+                    coordinates="24.178700, 55.604510")
+    clean, errors = validate("new_sale", data, FILES)
+    assert errors == {}
+    assert clean["coordinates"] == "24.178700, 55.604510"
 
 
 def test_a_request_needs_a_location():
@@ -324,9 +413,17 @@ def test_a_request_needs_a_location():
     assert errors["location_url"] == "مطلوب"
 
 
+def test_the_form_has_no_map():
+    """The location is a link pasted from خرائط جوجل, and الإحداثيات can be typed."""
+    spec = {s["name"]: s for s in form_fields("new_sale")}
+    assert spec["location_url"]["type"] == "text"
+    assert not spec["coordinates"].get("readonly")
+    assert not any(s["type"] == "location" for key in FORM_TYPES for s in form_fields(key))
+
+
 def test_a_location_that_is_not_a_map_link_is_refused():
     _, errors = validate("new_sale", new_sale(location_url="24.1787, 55.6045"), FILES)
-    assert errors["location_url"] == "اختر الموقع على الخريطة"
+    assert errors["location_url"] == "الصق رابط الموقع من خرائط جوجل"
 
 
 def test_coordinates_typed_by_hand_are_kept_when_the_location_has_no_point():
@@ -408,3 +505,21 @@ def test_installation_days_is_any_whole_number_of_days():
                            ("abc", "أدخل رقمًا صحيحًا")):
         _, errors = validate("new_sale", new_sale(installation_days=typed), FILES)
         assert errors["installation_days"] == message, typed
+
+
+def test_an_initiative_carries_the_amount_it_takes_off():
+    """Picking its name in «اسم الخصم كما يظهر في الفاتورة» fills in قيمة الخصم (form/fields.jsx)."""
+    for key in ("new_sale", "contract_renewal"):
+        spec = next(s for s in form_fields(key) if s["name"] == "discount_label")
+        assert spec["fills"] == "discount_amount", key
+        assert spec["fills_by_choice"] == {"مبادرة دعم نبع المزن": 1275, "مبادرة دعم سقيا الخير": 1750,
+                                           "مبادرة لك ان تشارك": 1150}, key
+        # Every initiative is offered, and a name that is no initiative carries no amount
+        assert set(spec["fills_by_choice"]) <= set(spec["suggestions"])
+        assert "خصم من قبل الإدارة" in spec["suggestions"] and "خصم من قبل الإدارة" not in spec["fills_by_choice"]
+
+
+def test_the_discount_amount_is_the_salespersons_whatever_its_name():
+    """The initiative's amount is only where the form starts: what is sent is what is saved."""
+    clean, errors = validate("new_sale", new_sale(discount_amount="900", discount_label="مبادرة دعم سقيا الخير"), FILES)
+    assert errors == {} and clean["discount_amount"] == 900

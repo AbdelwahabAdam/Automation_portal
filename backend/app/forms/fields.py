@@ -1,7 +1,8 @@
 """Building blocks the form definitions are written with: one field, and the sections several forms share."""
 
 from .inscriptions import OTHER_LABEL, inscription_choices
-from .options import (AREAS, AREAS_BY_EMIRATE, CASH_PAYMENT, CUSTOMER_TYPES, DISCOUNT_LABELS, DISCOUNTED, EMIRATES,
+from .options import (AREAS, AREAS_BY_EMIRATE, CASH_PAYMENT, CUSTOMER_TYPES, DISCOUNT_AMOUNTS, DISCOUNT_LABELS,
+    DISCOUNTED, EMIRATES,
     GENDERS, NO_INSCRIPTION, PAYMENT_METHODS, SOURCES, TREASURY_BY_METHOD, YES_NO)
 
 
@@ -31,11 +32,12 @@ def need(condition):
     return {"required": True} if condition is True else {"required_if": condition}
 
 
-def request_info(date_label="تاريخ الاتفاق مع العميل", invoiced=False, source=True):
+def request_info(date_label="تاريخ الاتفاق مع العميل", invoiced=False, source=True, source_required=True):
     # invoiced: approving the request creates a Daftra invoice, so the order source is Daftra's own list
     # source=False: no order source at all (e.g. a payment on an invoice that already has one)
-    source_field = (f("order_source", "مصدر الطلب في دفترة", "daftra_order_source", True) if invoiced
-                    else f("source", "مصدر الطلب", "select", True, options=SOURCES))
+    # source_required=False: it may be left empty, and the invoice is then made without one
+    source_field = (f("order_source", "مصدر الطلب في دفترة", "daftra_order_source", source_required) if invoiced
+                    else f("source", "مصدر الطلب", "select", source_required, options=SOURCES))
     return section(
         "بيانات الطلب",
         f("request_date", date_label, "date", True, default="today", not_future=True),
@@ -80,16 +82,14 @@ def address(title="عنوان الخدمة", required=True):
         f("emirate", "الإمارة", "select", required, options=EMIRATES),
         f("street", "الشارع"),
         f("house", "رقم البيت / اسم الموقع"),
-        # The place itself, picked on a map. The link is written from the pin, so it always holds
-        # the same point as الإحداثيات below — a Google share link holds a place name and no
-        # coordinates at all, which is why they used to be typed in by hand and drift apart.
-        # 255 is as long as Daftra's own field, and the link the picker writes is far shorter.
-        f("location_url", "موقع العميل", "location", required, max_length=255,
-          pattern=r"^https?://\S+$", pattern_message="اختر الموقع على الخريطة"),
-        # Read-only: it is the pin's own position, written whenever the pin moves. Daftra demands
-        # it on every client, so it is still required — the map is what fills it.
-        f("coordinates", "الإحداثيات", required=required, max_length=100,
-          coordinates_from="location_url", readonly=True, locked="من الخريطة"),
+        # A link to the place, as خرائط جوجل shares it. 255 is as long as Daftra's own field.
+        f("location_url", "موقع العميل", "text", required, max_length=255,
+          pattern=r"^https?://\S+$", pattern_message="الصق رابط الموقع من خرائط جوجل",
+          placeholder="https://maps.app.goo.gl/…"),
+        # Daftra demands them on every client. A link carrying a point fills them in; one that does
+        # not — a link shared from a phone keeps the place's name, not where it is — leaves them to type.
+        f("coordinates", "الإحداثيات", required=required, max_length=100, ltr=True,
+          coordinates_from="location_url", placeholder="مثال: 24.178700, 55.604510"),
     )
 
 
@@ -111,17 +111,26 @@ def discount_fields(label="قيمة الخصم، إن وجد"):
 def amounts(total_label="قيمة الطلب النهائية بعد الخصم، شامل الضريبة والإضافات",
             discount_label="قيمة الخصم، إن وجد", paid_label="المبلغ المدفوع فعليًا الآن",
             remaining_label="المبلغ المتبقي", must_pay=False, auto_total=False, invoiced=False,
-            price_label=None, price_default=None):
+            price_label=None, price_default=None, discounts=True):
+    # discounts=False: no discount is given on this form at all, so the three fields it takes
+    # (the amount, who approved it and its name on the invoice) are left out and the total is the subtotal
     # auto_total: the order lines' catalog prices work out the total, instead of the salesperson typing it
     # price_label: the salesperson types the price before discount (starting at price_default) and the total follows
     # invoiced: the discount is printed on the Daftra invoice under a name, e.g. «مبادرة دعم نبع المزن»
     computed_total = auto_total or price_label
-    total_field = (
-        f("total_amount", total_label, "number", money=True, computed=["subtotal_amount", "discount_amount"],
-          negative_message="قيمة الخصم أكبر من قيمة الطلب قبل الخصم")
-        if computed_total else money("total_amount", total_label, True)
-    )
-    if auto_total:
+    if auto_total and not discounts:
+        # Nothing is taken off, so the lines' own total is the total: order_lines fills it in
+        # (its subtotal_field names this field), and there is no second amount to show beside it.
+        total_field = f("total_amount", total_label, "number", money=True, computed=[])
+    elif computed_total:
+        total_field = f("total_amount", total_label, "number", money=True,
+                        computed=["subtotal_amount", "discount_amount"],
+                        negative_message="قيمة الخصم أكبر من قيمة الطلب قبل الخصم")
+    else:
+        total_field = money("total_amount", total_label, True)
+    if auto_total and not discounts:
+        subtotal = []
+    elif auto_total:
         subtotal = [f("subtotal_amount", "قيمة الطلب النهائية قبل الخصم، شامل الضريبة والإضافات", "number",
                       money=True, computed=[])]
     elif price_label:
@@ -133,11 +142,13 @@ def amounts(total_label="قيمة الطلب النهائية بعد الخصم�
         "قيمة الطلب",
         *subtotal,
         total_field,
-        *discount_fields(discount_label),
+        *(discount_fields(discount_label) if discounts else []),
         # Before the discount's name, so the two share a line with the amount paid on the right
         money("paid_amount", paid_label, True, positive=must_pay),
+        # Picking an initiative's name fills قيمة الخصم with what that initiative takes off
         *([f("discount_label", "اسم الخصم كما يظهر في الفاتورة", required_if=DISCOUNTED, max_length=100,
-             suggestions=DISCOUNT_LABELS)] if invoiced else []),
+             suggestions=DISCOUNT_LABELS, fills="discount_amount", fills_by_choice=DISCOUNT_AMOUNTS)]
+          if invoiced and discounts else []),
         f("remaining_amount", remaining_label, "number", money=True, computed=["total_amount", "paid_amount"],
           negative_message="المبلغ المدفوع أكبر من قيمة الطلب"),
         # invoiced: what is left becomes a one-installment agreement in Daftra, due on this date
