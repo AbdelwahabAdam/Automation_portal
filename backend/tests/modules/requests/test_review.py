@@ -47,19 +47,29 @@ def work_order_edits(fake_daftra):
     return [body for method, path, _, body in fake_daftra.calls if method == "PUT" and path.startswith("/api2/work_orders/")]
 
 
-def test_a_new_work_order_starts_at_the_stage_nothing_has_been_manufactured(client, db, fake_daftra, sales, manager):
-    """«لم يدخل التصنيع»: 175 is the work orders' own, 178 of the same name is another kind's."""
+def test_a_new_work_order_leaves_its_status_to_daftra(client, db, fake_daftra, sales, manager):
+    """حالة امر الشغل says which department and area it is with, which the portal does not know."""
     seed.catalog(db)
     request_id = submitted_sale(client, db, sales)
     assert approve(client, manager, request_id).status_code == 200
     [work_order] = fake_daftra.posted("/api2/work_orders.json")
-    assert work_order["WorkOrder"]["follow_up_status_id"] == 175
-    # The edit that fills in the custom fields carries it too, so it cannot be what clears it
+    assert "follow_up_status_id" not in work_order["WorkOrder"]
     [edit] = work_order_edits(fake_daftra)
-    assert edit["WorkOrder"]["follow_up_status_id"] == 175
+    assert "follow_up_status_id" not in edit["WorkOrder"]
 
 
-def test_approving_again_keeps_a_stage_someone_moved_the_work_order_to(client, db, fake_daftra, sales, manager):
+def test_filling_in_a_work_order_keeps_its_number(client, db, fake_daftra, sales, manager):
+    """Daftra numbers a work order again when an edit leaves the number out."""
+    seed.catalog(db)
+    request_id = submitted_sale(client, db, sales)
+    assert approve(client, manager, request_id).status_code == 200
+    [work_order] = fake_daftra.work_orders.values()
+    assert work_order["number"]
+    [edit] = work_order_edits(fake_daftra)
+    assert edit["WorkOrder"]["number"] == work_order["number"]
+
+
+def test_approving_again_keeps_a_status_someone_set_on_the_work_order(client, db, fake_daftra, sales, manager):
     seed.catalog(db)
     request_id = submitted_sale(client, db, sales)
     fake_daftra.fail_once = "/api2/invoices/assign_work_order"
@@ -71,20 +81,6 @@ def test_approving_again_keeps_a_stage_someone_moved_the_work_order_to(client, d
     assert len(fake_daftra.posted("/api2/work_orders.json")) == 1
     [edit] = work_order_edits(fake_daftra)
     assert edit["WorkOrder"]["follow_up_status_id"] == 176
-
-
-def test_a_work_order_with_no_stage_yet_gets_it_when_approving_again(client, db, fake_daftra, sales, manager):
-    """One the first approval made before the stage was set, carried on after the update."""
-    seed.catalog(db)
-    request_id = submitted_sale(client, db, sales)
-    fake_daftra.fail_once = "/api2/invoices/assign_work_order"
-    assert approve(client, manager, request_id).status_code == 502
-    [work_order] = fake_daftra.work_orders.values()
-    del work_order["follow_up_status_id"]
-
-    assert approve(client, manager, request_id).status_code == 200
-    [edit] = work_order_edits(fake_daftra)
-    assert edit["WorkOrder"]["follow_up_status_id"] == 175
 
 
 def test_review_queue_shows_sent_requests_and_the_employees_drafts(client, db, sales, manager):
@@ -469,7 +465,7 @@ def test_balance_payment(client, db, fake_daftra, sales, manager):
 def maintenance_data(**overrides):
     # A business, with an email: what a new client is created with in Daftra
     data = {"request_date": TODAY, "order_source": "12", "phone": "0502222222", "customer_name": "عميل صيانة",
-            "customer_type": "شركة", "gender": "أنثى", "email": "Office@Example.COM",
+            "customer_type": "تجاري", "gender": "أنثى", "email": "Office@Example.COM",
             "category": "5", "area": "منطقة العين", "emirate": "أبوظبي",
             "location_url": "https://www.google.com/maps?q=24.100000,55.600000", "coordinates": "24.100000, 55.600000",
             "devices": ["فلتر RO VIB"], "service": "تبديل فلاتر", "visit_date": TODAY,

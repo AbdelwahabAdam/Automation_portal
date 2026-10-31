@@ -158,8 +158,7 @@ export function useClientLookup(form) {
     try {
       const address = await clientsApi.addClientAddress(client.daftra_id, {
         // The coordinates go too: Daftra will not save a client without them
-        method: 'POST',
-        body: { ...Object.fromEntries(ADDRESS_FIELDS.map((f) => [f, values[f] || ''])), coordinates: values.coordinates || '' },
+        ...Object.fromEntries(ADDRESS_FIELDS.map((f) => [f, values[f] || ''])), coordinates: values.coordinates || '',
       });
       setLookup((current) => ({ ...current, client: { ...current.client, addresses: [...current.client.addresses, address] } }));
       setAddressChoice(String(address.id));
@@ -245,7 +244,7 @@ export function ClientLookupNote({ name, client: found, values }) {
     );
   }
   if (lookup.status === 'none') {
-    return <p className="fl-field__hint">{name === 'phone' ? 'لا يوجد عميل بهذا الرقم (عميل جديد): أكمل نوع العميل والجنس أدناه.' : 'لا يوجد عميل بهذا الكود (عميل جديد): أكمل نوع العميل والجنس أدناه.'}</p>;
+    return <p className="fl-field__hint">{name === 'phone' ? 'لا يوجد عميل بهذا الرقم (عميل جديد).' : 'لا يوجد عميل بهذا الكود (عميل جديد).'}</p>;
   }
   if (lookup.status === 'error') return <Alert tone="warning">{lookup.message}</Alert>;
   return (

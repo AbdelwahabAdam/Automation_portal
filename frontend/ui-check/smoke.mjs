@@ -334,7 +334,17 @@ async function newClient(page, prefix) {
   await page.goto(`${BASE}/forms`);
   await page.getByText('طلب بيع لعميل جديد').first().click();
   await expectText(page, 'بيانات العميل', 'new sale form');
-  const fields = ['customer_type', 'gender', 'email'];
+  // نوع العميل and الجنس are drop-downs that are always there, and neither is required
+  for (const [name, options] of [['customer_type', ['فرد', 'تجاري']], ['gender', ['ذكر', 'أنثى']]]) {
+    const field = page.locator(`#field-${name}`);
+    if (!(await field.isVisible())) { problems.push(`[client kind] ${name} is not on the form`); continue; }
+    if (await field.locator('.fl-field__required').count()) problems.push(`[client kind] ${name} is marked required`);
+    await page.locator(`#${name}`).click();
+    const offered = await page.getByRole('option').allInnerTexts();
+    if (!options.every((option) => offered.some((text) => text.includes(option)))) problems.push(`[client kind] ${name} offers ${offered}`);
+    await page.keyboard.press('Escape');
+  }
+  const fields = ['email'];
   const visible = async () => (await Promise.all(fields.map((name) => page.locator(`#field-${name}`).isVisible()))).filter(Boolean).length;
   if (await visible()) problems.push('[new client] its fields show before any search');
   // A client code nobody has shows them as well

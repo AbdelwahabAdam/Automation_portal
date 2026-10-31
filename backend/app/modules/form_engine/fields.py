@@ -46,22 +46,28 @@ def request_info(date_label="تاريخ الاتفاق مع العميل", invoi
     )
 
 
+def client_kind():
+    # In every بيانات العميل, never required. They reach Daftra only when approving creates a new
+    # client; one Daftra already has keeps what it holds, and they stay on the request.
+    return [
+        f("customer_type", "نوع العميل", "select", options=list(CUSTOMER_TYPES), dropdown=True),
+        f("gender", "الجنس", "select", options=list(GENDERS), dropdown=True),
+    ]
+
+
 def client(code_required, name_label="اسم العميل المطلوب على الفاتورة", creates_client=False):
     # creates_client: approving the form creates the client in Daftra when it is new, so the form also
     # asks what Daftra keeps on a new client. new_client=True: the field is shown, checked and kept
     # only when the phone search finds no client (validation.validate_submission's new_client);
-    # Daftra already has them for one it finds.
-    new_client = [] if not creates_client else [
-        f("customer_type", "نوع العميل", "select", True, options=list(CUSTOMER_TYPES), new_client=True),
-        f("gender", "الجنس", "select", True, options=list(GENDERS), new_client=True),
-        f("email", "البريد الإلكتروني، إن وجد", "email", new_client=True),
-    ]
+    # Daftra already has it for one it finds.
+    new_client = [f("email", "البريد الإلكتروني، إن وجد", "email", new_client=True)] if creates_client else []
     return section(
         "بيانات العميل",
         f("phone", "رقم الهاتف", "phone", True),
         f("client_code", "كود العميل" if code_required else "كود العميل، إن وجد", required=code_required,
           pattern=r"^\d{1,6}$", pattern_message="أرقام فقط، حتى 6 خانات"),
         f("customer_name", name_label, required=True, max_length=150),
+        *client_kind(),
         *new_client,
     )
 

@@ -20,9 +20,11 @@ AREAS = [area for areas in AREAS_BY_EMIRATE.values() for area in areas]
 PAYMENT_METHODS = ["تحويل بنكي", CASH, "ماكينة POS", "تابي", "تمارا", "طلب من الموقع"]
 SOURCES = ["ماركتنج", "عميل شركة", "عميل جديد", "عميل سابق", "مكتب", "الموقع", "أخرى"]
 COLORS = ["أبيض", "أسود", "ذهبي", "أخرى"]
-# A new client's نوع العميل and الجنس, with what Daftra stores for each (Client.type, Client.gender)
-CUSTOMER_TYPES = {"شركة": 3, "فرد": 2}
+# A client's نوع العميل and الجنس, with what Daftra stores for each (Client.type, Client.gender)
+CUSTOMER_TYPES = {"فرد": 2, "تجاري": 3}
 GENDERS = {"ذكر": 1, "أنثى": 2}
+# Daftra's code for every نوع العميل a request can hold: «تجاري» was «شركة» on requests made before
+CUSTOMER_TYPE_CODES = {**CUSTOMER_TYPES, "شركة": 3}
 
 # What an inscription field holds when there is no inscription, so nothing is charged for it
 NO_INSCRIPTION = ["لا يوجد", "لايوجد", "لا توجد", "لاتوجد"]

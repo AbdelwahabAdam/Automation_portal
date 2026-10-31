@@ -171,13 +171,16 @@ def set_work_order_fields(request, row: dict, db: Session) -> bool:
     read decides. A failure here does not stop the approval; the same details are in the description
     and the PDF."""
     fields = work_order_custom_fields(request, db)
+    # An edit needs these again, as the work order has them, and a حالة someone has set in Daftra stays.
+    # Without its number Daftra gives the work order the next one, and the portal's copy falls behind.
+    work_order = {"number": row.get("number"), "title": row.get("title"),
+                  "start_date": str(row.get("start_date") or "")[:10],
+                  "delivery_date": str(row.get("delivery_date") or "")[:10]}
+    if int(row.get("follow_up_status_id") or 0):
+        work_order["follow_up_status_id"] = int(row["follow_up_status_id"])
     try:
         daftra.update_unconfirmed(f"work_orders/{request.daftra_work_order_id}.json", {
-            # An edit needs these again, as the work order has them. A stage someone has since moved
-            # it to in Daftra stays; a work order made before the stage was set gets it now.
-            "WorkOrder": {"title": row.get("title"), "start_date": str(row.get("start_date") or "")[:10],
-                          "delivery_date": str(row.get("delivery_date") or "")[:10],
-                          "follow_up_status_id": int(row.get("follow_up_status_id") or 0) or settings.daftra_work_order_stage_id},
+            "WorkOrder": work_order,
             "CustomModel": {**CONTAINS_CUSTOM_DATA, **fields},
         })
         # The values show up a moment after Daftra answers. Daftra reads an empty field back as the
@@ -298,7 +301,6 @@ def ensure_work_order(request, invoice: dict, reviewer, db: Session):
             "title": work_order_title(data, invoice), "client_id": request.daftra_client_id,
             "start_date": start.isoformat(), "delivery_date": (start + timedelta(days=days)).isoformat(),
             "description": work_order_description(request),
-            "follow_up_status_id": settings.daftra_work_order_stage_id,
         }}))
     row = daftra.get(f"work_orders/{request.daftra_work_order_id}.json").get("data", {}).get("WorkOrder", {})
     request.save_document("work_order", request.daftra_work_order_id, row.get("number") or "")

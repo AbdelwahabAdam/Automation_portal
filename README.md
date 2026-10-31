@@ -233,8 +233,6 @@ Daftra's API has none:
   - with the approving manager written in it as «المسؤول» (Daftra's API cannot set who a work order is
     for: it records the API user as its creator);
   - starting on the approval day and due after «مدة التركيب» days;
-  - at the stage «لم يدخل التصنيع» (`daftra_work_order_stage_id` in `core/config.py`). Only a new work order
-    gets it: approving again keeps a stage someone has since moved it to in Daftra;
   - linked to the invoice;
   - with the custom fields of our work-order form filled from the request (ملحقات التركيب، الألوان المتاحة،
     ظهر الكفر، لون القاعدة، …). These are set by a `CustomModel` edit and read back to confirm, since Daftra

@@ -112,7 +112,7 @@ def quotation(**overrides):
     """طلب عرض سعر: the same order lines as a sale, and nothing paid."""
     data = {
         "request_date": TODAY, "order_source": "16", "phone": "0501234567", "customer_name": "جهة تجريبية",
-        "customer_type": "شركة", "gender": "ذكر",
+        "customer_type": "تجاري", "gender": "ذكر",
         "category": "5", "area": "منطقة العين", "emirate": "أبوظبي", "street": "شارع 1", "house": "فيلا 2",
         "location_url": "https://www.google.com/maps?q=24.178700,55.604510", "coordinates": "24.178700, 55.604510",
         "order_lines": package_lines(), "discount_amount": "200", "discount_approved_by": "Manager One",

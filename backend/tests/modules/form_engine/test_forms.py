@@ -6,7 +6,7 @@ from datetime import date, timedelta
 from app.core.text import uae_today
 
 from ...seed import LISTS, PACKAGE_PRICES, PRODUCTS, TODAY, new_sale, package_lines
-from app.modules.form_engine import (INSCRIPTIONS, INSTALLATION_WORK, form_fields, installation_work, keys,
+from app.modules.form_engine import (CUSTOMER_TYPE_CODES, INSCRIPTIONS, INSTALLATION_WORK, form_fields, installation_work, keys,
                                      package_colors, package_quantity, sanitize_draft, validate_submission,
                                      visible_forms)
 from app.modules.invoicing.work_order import WORK_ORDER_FIELDS
@@ -358,33 +358,44 @@ def new_client(data, **overrides):
                                new_client=True)
 
 
-def test_a_new_client_needs_a_type_and_gender_and_may_give_an_email():
-    spec = {s["name"]: s for s in form_fields("new_sale")}
-    assert spec["customer_type"]["options"] == ["شركة", "فرد"]
-    assert spec["gender"]["options"] == ["ذكر", "أنثى"]
+def test_every_client_section_offers_a_type_and_gender_and_neither_is_required():
+    for key in keys():
+        spec = {s["name"]: s for s in form_fields(key)}
+        if "customer_name" not in spec or "phone" not in spec:
+            continue
+        for name, options in (("customer_type", ["فرد", "تجاري"]), ("gender", ["ذكر", "أنثى"])):
+            assert spec[name]["options"] == options, key
+            assert spec[name]["dropdown"] and not spec[name]["required"] and not spec[name].get("new_client"), key
+
+
+def test_a_new_client_may_give_a_type_gender_and_email():
     _, errors = new_client(new_sale(), customer_type="", gender="")
-    assert errors["customer_type"] == "مطلوب" and errors["gender"] == "مطلوب"
+    assert "customer_type" not in errors and "gender" not in errors
     # Email is optional; one that is given must look like an email
     clean, errors = new_client(new_sale(), email="")
     assert not errors and "email" not in clean
     for bad in ("name@", "name example.com", "name@example", "@example.com"):
         _, errors = new_client(new_sale(), email=bad)
         assert errors["email"].startswith("أدخل بريدًا إلكترونيًا صحيحًا"), bad
-    clean, errors = new_client(new_sale(), customer_type="شركة", gender="أنثى", email=" Office@Example.COM ")
-    assert not errors and (clean["customer_type"], clean["gender"], clean["email"]) == ("شركة", "أنثى", "office@example.com")
+    clean, errors = new_client(new_sale(), customer_type="تجاري", gender="أنثى", email=" Office@Example.COM ")
+    assert not errors and (clean["customer_type"], clean["gender"], clean["email"]) == ("تجاري", "أنثى", "office@example.com")
     _, errors = new_client(new_sale(), customer_type="Business")
     assert errors["customer_type"] == "اختر من القائمة"
 
 
-def test_an_existing_client_is_not_asked_for_type_gender_or_email():
-    # Daftra already has them; anything sent is left out rather than written over theirs
-    clean, errors = validate("new_sale", new_sale(customer_type="", gender="", email="not-an-email"), FILES)
-    assert not any(name in errors or name in clean for name in ("customer_type", "gender", "email"))
+def test_an_existing_client_keeps_a_type_and_gender_on_the_request_but_is_not_asked_for_an_email():
+    clean, errors = validate("new_sale", new_sale(customer_type="فرد", gender="ذكر", email="not-an-email"), FILES)
+    assert "email" not in errors and "email" not in clean
+    assert (clean["customer_type"], clean["gender"]) == ("فرد", "ذكر")
 
 
-def test_only_forms_that_create_a_daftra_client_ask_for_type_gender_and_email():
+def test_a_request_saved_as_a_company_is_still_a_business_to_daftra():
+    assert CUSTOMER_TYPE_CODES["شركة"] == CUSTOMER_TYPE_CODES["تجاري"] == 3 and CUSTOMER_TYPE_CODES["فرد"] == 2
+
+
+def test_only_forms_that_create_a_daftra_client_ask_for_an_email():
     # Only the forms whose approval creates a client in Daftra ask; a renewal is for a client Daftra has
-    asking = {key for key in keys() if {"customer_type", "gender", "email"} <= {s["name"] for s in form_fields(key)}}
+    asking = {key for key in keys() if "email" in {s["name"] for s in form_fields(key)}}
     assert asking == {"new_sale", "maintenance", "quotation"}
 
 

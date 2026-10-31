@@ -30,13 +30,9 @@ function UserDrawer({ user, roles, staff, isSelf, onSaved, onDeleted, onClose })
     run('save', async () => {
       const { email, full_name, role_ids, is_admin, is_active, username, daftra_staff_id } = values;
       if (user) {
-        onSaved(await identityApi.updateUser(user.id, {
-          method: 'PUT', body: { email, full_name, role_ids, is_admin, is_active, daftra_staff_id },
-        }));
+        onSaved(await identityApi.updateUser(user.id, { email, full_name, role_ids, is_admin, is_active, daftra_staff_id }));
       } else {
-        const invite = await identityApi.createUser({
-          method: 'POST', body: { username, email, full_name, role_ids, is_admin, daftra_staff_id },
-        });
+        const invite = await identityApi.createUser({ username, email, full_name, role_ids, is_admin, daftra_staff_id });
         onSaved(invite.user, invite);
       }
     });

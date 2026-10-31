@@ -16,7 +16,7 @@ from ...core.errors import SyncError
 from ...core.text import day_month_year, digits, fold_arabic, local_phone, squash
 from ...integrations import daftra
 from ...integrations.daftra import DaftraError
-from ..form_engine import CUSTOMER_TYPES, GENDERS
+from ..form_engine import CUSTOMER_TYPE_CODES, GENDERS
 from .models import Address, Client
 
 # Each city as Daftra's clients write it (folded with fold_arabic), as the form's (الإمارة, المنطقة)
@@ -272,9 +272,9 @@ def create_client(data: dict, phone: str, db: Session) -> int:
     body = {
         "Client": {
             "business_name": name, "phone1": phone,
-            # نوع العميل and الجنس as Daftra's codes (forms.options); a request from before the form
-            # asked keeps what every client got then: an individual, gender not set
-            "type": CUSTOMER_TYPES.get(data.get("customer_type"), 2),
+            # نوع العميل and الجنس as Daftra's codes (forms.options). Neither is required: one left
+            # empty gets what every client got before the form asked: an individual, gender not set
+            "type": CUSTOMER_TYPE_CODES.get(data.get("customer_type"), 2),
             **({"gender": GENDERS[data["gender"]]} if data.get("gender") in GENDERS else {}),
             **({"email": data["email"]} if data.get("email") else {}),
             "address1": data.get("street") or "", "address2": data.get("house") or "",
