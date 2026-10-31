@@ -351,7 +351,7 @@ input.fl-input[type="date"] { min-block-size: calc(var(--fl-field-height) - 2px)
 /* Five columns cannot fit a phone, and a form is no place to scroll sideways for a price. Below
    this width the table becomes a short stack of cards, one per line, each as small as it can be
    while every number still says what it is. The desktop table above is untouched. */
-@media (max-width: 36rem) {
+@media (max-width: 639px) {
   .fl-order-lines.fl-table-wrap { border: 0; border-radius: 0; background: none; overflow: visible; }
   .fl-order-lines .fl-table-scroll { overflow: visible; }
   .fl-order-lines .fl-table, .fl-order-lines .fl-table tbody, .fl-order-lines .fl-table td { display: block; }
@@ -715,9 +715,98 @@ body.fl-keyboard .fl-toasts { inset-block-end: var(--fl-space-4); }
 /* Which version is running, at the foot of the الإدارة pages */
 .fl-version { margin: 0; padding-block-start: var(--fl-space-4); border-block-start: var(--fl-border-width-default) solid var(--fl-color-border-subtle); color: var(--fl-color-text-secondary); font-size: var(--fl-type-caption-size); text-align: center; }
 
+/* Option cards in a set number of columns: the columns share the width, however narrow it is */
+.fl-choice--cols { grid-template-columns: repeat(var(--fl-choice-columns), minmax(0, 1fr)); }
+.fl-choice__item > span { min-inline-size: 0; overflow-wrap: anywhere; }
+/* A drop-down's text keeps off the box's edge at one end, and off its arrow at the other */
+.fl-box .fl-pick { padding-inline: var(--fl-space-4) calc(var(--fl-space-4) + 20px); }
+/* The products of an order want the whole width of their section, on any screen */
+.fl-dl > div:has(.fl-order-lines) { grid-column: 1 / -1; }
+
+/* ---------- On a phone ---------- */
+@media (max-width: 639px) {
+  :root { --fl-card-padding: 16px; --fl-control-height-sm: 40px; }
+  .fl-section__body { padding-inline: var(--fl-space-4); }
+  /* Under 16px iOS zooms the whole page in when the box is tapped */
+  .fl-mini { font-size: var(--fl-type-input-size); }
+
+  /* A table marked fl-stacked: a card per row, its name on top, the rest in two columns each
+     under its heading (data-label), and its buttons along the bottom. A cell with no data-label
+     is the row's name. Nothing scrolls sideways. Wider screens keep the table. */
+  .fl-stacked.fl-table-wrap { border: 0; border-radius: 0; background: none; overflow: visible; }
+  .fl-stacked > .fl-table-scroll { overflow: visible; }
+  .fl-stacked .fl-table, .fl-stacked .fl-table tbody, .fl-stacked .fl-table tfoot { display: block; }
+  .fl-stacked .fl-table thead { display: none; }
+  .fl-stacked .fl-table tr {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-flow: dense;
+    gap: var(--fl-space-3) var(--fl-space-4); padding: var(--fl-space-4); margin-block-end: var(--fl-space-3);
+    background: var(--fl-color-background-surface); border: var(--fl-border-width-default) solid var(--fl-color-border-default);
+    border-radius: var(--fl-radius-lg);
+  }
+  .fl-stacked .fl-table tr.fl-row--off { background: var(--fl-color-background-sunken); }
+  .fl-stacked .fl-table td, .fl-stacked .fl-table tfoot td {
+    display: block; min-inline-size: 0; block-size: auto; padding: 0; border: 0; background: none;
+    white-space: normal; overflow-wrap: anywhere; font-size: var(--fl-type-body-sm-size);
+  }
+  .fl-stacked .fl-table tbody tr > td, .fl-stacked .fl-table tbody tr:hover > td,
+  .fl-stacked .fl-table tbody tr:hover > td.fl-cell--actions { background: none; }
+  .fl-stacked .fl-table td:empty { display: none; }
+  .fl-stacked .fl-table td[data-label]::before {
+    content: attr(data-label); display: block; margin-block-end: 2px;
+    color: var(--fl-color-text-secondary); font-size: var(--fl-type-caption-size); font-weight: var(--fl-font-weight-regular);
+  }
+  .fl-stacked .fl-table td:not([data-label]) {
+    grid-column: 1 / -1; order: -1; font-size: var(--fl-type-body-size); font-weight: var(--fl-font-weight-semibold);
+  }
+  .fl-stacked .fl-table td.fl-cell--full { grid-column: 1 / -1; }
+  /* Kept for a wide screen and for the row's own page: a phone's list stays short */
+  .fl-stacked .fl-table td.fl-cell--minor { display: none; }
+  .fl-stacked .fl-table td.fl-cell--actions {
+    position: static; order: 1; display: flex; flex-wrap: wrap; gap: var(--fl-space-3); box-shadow: none;
+    padding-block-start: var(--fl-space-3); border-block-start: var(--fl-border-width-default) solid var(--fl-color-border-subtle);
+  }
+  .fl-stacked .fl-table td.fl-cell--actions > * { flex: 1 1 auto; margin: 0; }
+  .fl-stacked .fl-table td.fl-cell--actions > .fl-btn--icon { flex: 0 0 auto; }
+  /* A detail row belongs to the card above it, and is not a card of its own */
+  .fl-stacked .fl-table tr.fl-row--detail { display: block; padding: 0; border: 0; background: none; }
+  .fl-stacked .fl-table tr.fl-row--detail > td { display: block; font-weight: var(--fl-font-weight-regular); }
+
+  /* Rows of tick boxes: the three of a row side by side, each under its own heading */
+  .fl-stacked--checks .fl-table tr { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .fl-stacked--checks .fl-check { min-block-size: var(--fl-touch-target); }
+  .fl-stacked--checks .fl-check input { inline-size: 22px; block-size: 22px; }
+
+  /* A completed request: a label beside its value, a line between them, so it reads like a form
+     already filled in instead of a long column. What needs the width (fl-dl__stacked) keeps it. */
+  .fl-dl { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .fl-dl > div {
+    display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: var(--fl-space-3); align-items: baseline;
+    padding-block: var(--fl-space-3); border-block-end: var(--fl-border-width-default) solid var(--fl-color-border-subtle);
+  }
+  .fl-dl > div:first-child { padding-block-start: 0; }
+  .fl-dl > div:last-child { padding-block-end: 0; border-block-end: 0; }
+  .fl-dl > div.fl-dl__stacked { display: block; }
+  .fl-dl dt { margin: 0; font-size: var(--fl-type-body-sm-size); }
+  .fl-dl > div.fl-dl__stacked > dt { margin-block-end: var(--fl-space-2); }
+
+  /* The request at a glance: who it is for in two columns, its three amounts on one line */
+  .fl-summary .fl-summary__facts { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--fl-space-3) var(--fl-space-4); }
+  .fl-summary .fl-summary__money { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--fl-space-3); }
+  .fl-summary__money dd { font-size: var(--fl-type-subsection-size); }
+  .fl-summary__money .fl-totals__unit { display: block; }
+
+  /* A package's name with its count under it, however long the name is */
+  .fl-order-lines .fl-table td.fl-cell--title { flex-wrap: wrap; }
+  .fl-order-lines .fl-table td.fl-cell--title > * { min-inline-size: 0; overflow-wrap: anywhere; }
+  /* What a package was ordered with: a panel of its own under its products */
+  .fl-order-lines .fl-table tr.fl-row--detail > td { padding: var(--fl-space-3); border-radius: var(--fl-radius-md); }
+  .fl-order-lines .fl-table tr.fl-row--detail > td:has(> .fl-order-lines__details) { padding: 0; }
+}
+
 /* A phone's country code: fixed, shown before what is typed, never part of it */
 .fl-box__code {
-  display: flex; align-items: center; padding-inline-start: var(--fl-space-4);
+  /* Its own direction is left to right, so its inline end is the box's edge on this right-to-left page */
+  display: flex; align-items: center; padding-inline-end: var(--fl-space-4);
   color: var(--fl-color-text-secondary); font-variant-numeric: tabular-nums; white-space: nowrap;
   direction: ltr; unicode-bidi: isolate;
 }

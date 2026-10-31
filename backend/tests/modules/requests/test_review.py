@@ -41,6 +41,50 @@ def test_any_number_of_installation_days_sets_the_work_orders_due_date(client, d
     assert "■ مدة التركيب: 17 يومًا" in work_order["WorkOrder"]["description"]
 
 
+def work_order_edits(fake_daftra):
+    return [body for method, path, _, body in fake_daftra.calls if method == "PUT" and path.startswith("/api2/work_orders/")]
+
+
+def test_a_new_work_order_starts_at_the_stage_nothing_has_been_manufactured(client, db, fake_daftra, sales, manager):
+    """«لم يدخل التصنيع»: 175 is the work orders' own, 178 of the same name is another kind's."""
+    seed.catalog(db)
+    request_id = submitted_sale(client, db, sales)
+    assert approve(client, manager, request_id).status_code == 200
+    [work_order] = fake_daftra.posted("/api2/work_orders.json")
+    assert work_order["WorkOrder"]["follow_up_status_id"] == 175
+    # The edit that fills in the custom fields carries it too, so it cannot be what clears it
+    [edit] = work_order_edits(fake_daftra)
+    assert edit["WorkOrder"]["follow_up_status_id"] == 175
+
+
+def test_approving_again_keeps_a_stage_someone_moved_the_work_order_to(client, db, fake_daftra, sales, manager):
+    seed.catalog(db)
+    request_id = submitted_sale(client, db, sales)
+    fake_daftra.fail_once = "/api2/invoices/assign_work_order"
+    assert approve(client, manager, request_id).status_code == 502
+    [work_order] = fake_daftra.work_orders.values()
+    work_order["follow_up_status_id"] = "176"
+
+    assert approve(client, manager, request_id).status_code == 200
+    assert len(fake_daftra.posted("/api2/work_orders.json")) == 1
+    [edit] = work_order_edits(fake_daftra)
+    assert edit["WorkOrder"]["follow_up_status_id"] == 176
+
+
+def test_a_work_order_with_no_stage_yet_gets_it_when_approving_again(client, db, fake_daftra, sales, manager):
+    """One the first approval made before the stage was set, carried on after the update."""
+    seed.catalog(db)
+    request_id = submitted_sale(client, db, sales)
+    fake_daftra.fail_once = "/api2/invoices/assign_work_order"
+    assert approve(client, manager, request_id).status_code == 502
+    [work_order] = fake_daftra.work_orders.values()
+    del work_order["follow_up_status_id"]
+
+    assert approve(client, manager, request_id).status_code == 200
+    [edit] = work_order_edits(fake_daftra)
+    assert edit["WorkOrder"]["follow_up_status_id"] == 175
+
+
 def test_review_queue_shows_sent_requests_and_the_employees_drafts(client, db, sales, manager):
     seed.catalog(db)
     request_id = submitted_sale(client, db, sales)

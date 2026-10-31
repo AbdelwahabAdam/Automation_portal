@@ -14,6 +14,9 @@ import { DAFTRA_LIST_TYPES, groupLines } from './validation.js';
 const DAFTRA_PDFS = [['daftra_estimate', 'عرض السعر PDF'], ['daftra_invoice', 'الفاتورة PDF'],
   ['daftra_receipt', 'سند القبض PDF'], ['daftra_work_order', 'أمر الشغل PDF']];
 
+// What needs the width of a phone to itself: everything else reads as a label beside its value
+const STACKED_TYPES = ['order_lines', 'files', 'textarea', 'multiselect'];
+
 // One of the documents Daftra made: open it, or hand it to another app — WhatsApp, Mail, Drive.
 // Where the browser cannot share a file (plain HTTP, and most computers) it is saved instead, and
 // the toast says so; the file is then sent from any app by hand.
@@ -40,7 +43,7 @@ function DocRow({ label, file }) {
   }
 
   return (
-    <div>
+    <div className="fl-dl__stacked">
       <dt>{label}</dt>
       <dd className="fl-row fl-doc">
         <button type="button" className="fl-link fl-row" onClick={() => openAttachment(file.id)}>
@@ -264,17 +267,17 @@ export default function RequestView({ requestId, formTypes, onBack, ownerName: g
                             <bdi><strong>{group.groupName}</strong></bdi>
                             <span className="fl-cell__sub">باقة — <span data-fl-num>{group.rows.length}</span> منتجات</span>
                           </td>
-                          <td data-label="عدد الباقات" data-fl-num>{Number(first.details?.package_quantity) || 1}</td>
-                          <td data-label="سعر الوحدة (درهم)" className="fl-muted">—</td>
-                          <td data-label="الإجمالي (درهم)" data-fl-num><strong>{amount(total)}</strong></td>
+                          <td className="fl-cell--qty" data-label="عدد الباقات" data-fl-num>{Number(first.details?.package_quantity) || 1}</td>
+                          <td className="fl-cell--unit fl-muted" data-label="سعر الوحدة">—</td>
+                          <td className="fl-cell--total" data-label="الإجمالي" data-fl-num><strong>{amount(total)}</strong></td>
                         </tr>
                       )}
                       {group.rows.map(({ line, index }) => (
                         <tr key={index} className={group.groupName ? 'fl-row--child' : undefined}>
                           <td className="fl-cell--wrap fl-cell--title"><bdi>{line.name}</bdi></td>
-                          <td data-label="الكمية" data-fl-num>{line.quantity}</td>
-                          <td data-label="سعر الوحدة (درهم)" data-fl-num>{amount(line.unit_price)}</td>
-                          <td data-label="الإجمالي (درهم)" data-fl-num>
+                          <td className="fl-cell--qty" data-label="الكمية" data-fl-num>{line.quantity}</td>
+                          <td className="fl-cell--unit" data-label="سعر الوحدة" data-fl-num>{amount(line.unit_price)}</td>
+                          <td className="fl-cell--total" data-label="الإجمالي" data-fl-num>
                             {amount(typeof line.unit_price === 'number' ? line.unit_price * (Number(line.quantity) || 0) : undefined)}
                           </td>
                         </tr>
@@ -345,7 +348,9 @@ export default function RequestView({ requestId, formTypes, onBack, ownerName: g
           <Card key={section.title} title={section.title}>
             <dl className="fl-dl">
               {rows.map(([spec, shown]) => (
-                <div key={spec.name}><dt>{spec.label}</dt><dd>{shown}</dd></div>
+                <div key={spec.name} className={STACKED_TYPES.includes(spec.type) ? 'fl-dl__stacked' : undefined}>
+                  <dt>{spec.label}</dt><dd>{shown}</dd>
+                </div>
               ))}
             </dl>
           </Card>

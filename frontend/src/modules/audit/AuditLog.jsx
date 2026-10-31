@@ -25,19 +25,21 @@ function Changes({ entry, options }) {
   return (
     <div className="fl-stack fl-stack--sm">
       {keys.length > 0 ? (
-        <div className="fl-table-wrap">
-          <table className="fl-table">
-            <thead><tr><th>الحقل</th><th>قبل</th><th>بعد</th></tr></thead>
-            <tbody>
-              {keys.map((key) => (
-                <tr key={key}>
-                  <td>{options.field_labels[key] || key}</td>
-                  <td className="fl-cell--wrap"><bdi>{show(entry.before?.[key])}</bdi></td>
-                  <td className="fl-cell--wrap"><bdi>{show(entry.after?.[key])}</bdi></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="fl-table-wrap fl-stacked">
+          <div className="fl-table-scroll">
+            <table className="fl-table">
+              <thead><tr><th>الحقل</th><th>قبل</th><th>بعد</th></tr></thead>
+              <tbody>
+                {keys.map((key) => (
+                  <tr key={key}>
+                    <td>{options.field_labels[key] || key}</td>
+                    <td className="fl-cell--wrap" data-label="قبل"><bdi>{show(entry.before?.[key])}</bdi></td>
+                    <td className="fl-cell--wrap" data-label="بعد"><bdi>{show(entry.after?.[key])}</bdi></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       ) : <p className="fl-muted fl-small fl-flush">لا توجد قيم مسجلة لهذا الإجراء.</p>}
       <p className="fl-field__hint fl-flush">المتصفح: <bdi dir="ltr">{entry.user_agent || '—'}</bdi></p>
@@ -139,7 +141,7 @@ export default function AuditLog() {
       ) : !total ? (
         <EmptyState icon="history" title={filtered ? 'لا توجد سجلات مطابقة' : 'لا توجد سجلات بعد'} />
       ) : (
-        <div className="fl-table-wrap">
+        <div className="fl-table-wrap fl-stacked">
           <div className="fl-table-scroll">
             <table className="fl-table">
               <thead>
@@ -149,11 +151,11 @@ export default function AuditLog() {
                 {result.items.map((entry) => (
                   <Fragment key={entry.id}>
                     <tr>
-                      <td className="fl-cell--nowrap" data-fl-num><bdi dir="ltr">{formatDate(entry.at)}</bdi></td>
-                      <td><bdi>{entry.username || '—'}</bdi></td>
-                      <td><Badge tone={actionTone(entry.action)}>{options.actions[entry.action] || entry.action}</Badge></td>
-                      <td className="fl-cell--wrap"><bdi>{entry.entity_label || '—'}</bdi></td>
-                      <td className="fl-cell--nowrap"><bdi dir="ltr">{entry.ip}</bdi></td>
+                      <td className="fl-cell--nowrap" data-label="الوقت" data-fl-num><bdi dir="ltr">{formatDate(entry.at)}</bdi></td>
+                      <td data-label="المستخدم"><bdi>{entry.username || '—'}</bdi></td>
+                      <td data-label="الإجراء"><Badge tone={actionTone(entry.action)}>{options.actions[entry.action] || entry.action}</Badge></td>
+                      <td className="fl-cell--wrap fl-cell--full" data-label="السجل"><bdi>{entry.entity_label || '—'}</bdi></td>
+                      <td className="fl-cell--nowrap" data-label="عنوان IP"><bdi dir="ltr">{entry.ip}</bdi></td>
                       <td className="fl-cell--actions">
                         <Button size="sm" variant="tertiary" iconEnd={openId === entry.id ? 'chevron-up' : 'chevron-down'}
                           aria-expanded={openId === entry.id} onClick={() => setOpenId(openId === entry.id ? null : entry.id)}>

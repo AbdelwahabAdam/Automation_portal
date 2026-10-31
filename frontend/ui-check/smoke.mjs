@@ -29,6 +29,39 @@ async function shot(page, name, full = true) {
   await page.screenshot({ path: `${OUT}/${TAG}-${name}.png`, fullPage: full });
 }
 
+// On a phone nothing may run past the page or its card, and no table may need a sideways scroll: one
+// field too wide drags the whole page with it. Checked at the narrowest phones too, then put back.
+async function fitsThePhone(page, prefix, what) {
+  if (prefix !== 'phone') return;
+  const size = page.viewportSize();
+  for (const width of [size.width, 320]) {
+    await page.setViewportSize({ ...size, width });
+    await page.waitForTimeout(200);
+    const found = await page.evaluate(() => {
+      const edge = document.documentElement.clientWidth;
+      const main = document.querySelector('.fl-main-col');
+      const named = (el) => `${el.tagName.toLowerCase()}.${String(el.className).split(' ')[0]} «${(el.innerText || '').trim().slice(0, 24)}»`;
+      const shown = (el) => el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden' && !el.closest('.fl-sr-only');
+      const problems = [];
+      if (main && main.scrollWidth > main.clientWidth + 1) problems.push(`the page is ${main.scrollWidth - main.clientWidth}px too wide`);
+      for (const el of document.querySelectorAll('.fl-main-col *')) {
+        if (!shown(el) || el.closest('.fl-tabs')) continue;
+        const box = el.getBoundingClientRect();
+        const card = el.parentElement.closest('.fl-card, .fl-section, .fl-rowcard, .fl-summary');
+        const limit = card ? card.getBoundingClientRect() : { left: 0, right: edge };
+        if (box.right > limit.right + 1 || box.left < limit.left - 1) problems.push(`${named(el)} runs past the edge`);
+        const { overflowX } = getComputedStyle(el);
+        if (['auto', 'scroll'].includes(overflowX) && el !== main && el.scrollWidth > el.clientWidth + 1
+          && !['INPUT', 'TEXTAREA'].includes(el.tagName)) problems.push(`${named(el)} scrolls sideways`);
+      }
+      return [...new Set(problems)].slice(0, 3);
+    });
+    for (const problem of found) problems.push(`[phone ${width}px] ${what}: ${problem}`);
+  }
+  await page.setViewportSize(size);
+  log(`${prefix} ${what}: fits the phone`);
+}
+
 async function expectText(page, text, what) {
   try {
     // A visible one: on a phone the sidebar (with every page's name) is hidden
@@ -119,19 +152,22 @@ async function salesForm(page, prefix) {
     const box = page.locator('.fl-picklist__input');
     if (!(await box.count())) problems.push('[dropdown] التصنيف has no search box');
     else {
-      await box.fill('العين');
+      // A word from the list as this client's address narrows it, whichever emirate they are in
+      const word = ((await page.locator('.fl-picklist__option').allInnerTexts())
+        .find((text) => !text.includes('اختر')) || '').trim().split(/\s+/)[0];
+      await box.fill(word);
       await page.waitForTimeout(400);
       await shot(page, `${prefix}-dropdown`, false);
       const matches = page.locator('.fl-picklist__option');
       const found = await matches.count();
       const first = (await matches.first().textContent()) || '';
-      if (!found || !first.includes('العين')) problems.push(`[dropdown] searching «العين» gave ${found} rows, first «${first}»`);
+      if (!found || !first.includes(word)) problems.push(`[dropdown] searching «${word}» gave ${found} rows, first «${first}»`);
       else {
         await matches.first().click();
         await page.waitForTimeout(400);
         const chosen = (await category.textContent()) || '';
-        if (!chosen.includes('العين')) problems.push(`[dropdown] after picking, التصنيف reads «${chosen}»`);
-        // المنطقة is filled by التصنيف only while it is empty; the client's own address keeps it otherwise
+        if (!chosen.includes(word)) problems.push(`[dropdown] after picking, التصنيف reads «${chosen}»`);
+        // Picked by hand, so it sets المنطقة and الإمارة (addressLinks checks them closely)
         const area = await picked('#area');
         if (!area) problems.push('[dropdown] المنطقة is empty after picking a التصنيف');
         log(`${prefix} category search: ${found} match(es), picked «${first.trim()}», area «${area.trim()}»`);
@@ -214,6 +250,86 @@ async function salesForm(page, prefix) {
 }
 
 // نوع العميل, الجنس and البريد appear once the phone search finds nobody, and go again for a known client
+// التصنيف, المنطقة and الإمارة follow and narrow each other, and changing the client empties the address
+async function addressLinks(page, prefix) {
+  const categories = await page.evaluate(async (token) => (await fetch('/api/daftra/client_categories', {
+    headers: { Authorization: `Bearer ${token}` },
+  })).json(), TOKEN);
+  await page.goto(`${BASE}/forms/new_sale`);
+  await expectText(page, 'عنوان الخدمة', 'the address section');
+  await page.locator('#category').waitFor({ timeout: 15000 });
+  await page.waitForTimeout(800);
+  const read = (id) => page.locator(id).evaluate((el) => ((el.tagName === 'INPUT' ? el.value : el.textContent) || '').trim());
+  const expectThat = (holds, what) => { if (!holds) problems.push(`[address links] ${what}`); };
+  const pick = async (id, name) => {
+    await page.locator(id).click();
+    await page.getByRole('option', { name, exact: false }).first().click();
+    await page.waitForTimeout(300);
+  };
+  const offered = async () => {
+    await page.locator('#category').click();
+    await page.waitForTimeout(250);
+    const names = (await page.locator('.fl-picklist__option').allInnerTexts()).filter((text) => !text.includes('اختر'));
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(150);
+    return names;
+  };
+  const inside = (test) => categories.filter(test).length;
+
+  await pick('#emirate', 'الشارقة');
+  const ofEmirate = (await offered()).length;
+  expectThat(ofEmirate === inside((row) => row.emirate === 'الشارقة'), `الشارقة offers ${ofEmirate} categories`);
+
+  await page.locator('#area').fill('منطقة العين');
+  await page.waitForTimeout(300);
+  expectThat((await read('#emirate')).includes('أبوظبي'), 'an area did not set its emirate');
+  const ofArea = await offered();
+  expectThat(ofArea.length === inside((row) => row.area === 'منطقة العين'), `منطقة العين offers ${ofArea.length} categories`);
+
+  await pick('#category', ofArea[0]);
+  await page.locator('#area').fill('مدينة دبي');
+  await page.waitForTimeout(300);
+  expectThat((await read('#emirate')).includes('دبي'), 'moving the area did not move the emirate');
+  expectThat((await read('#category')).includes('اختر'), 'a category of another area was kept');
+
+  // A neighbourhood is replaced when a category is picked by hand
+  const dubai = categories.find((row) => row.area === 'مدينة دبي');
+  await page.locator('#area').fill('الخوانيج 2');
+  await page.waitForTimeout(300);
+  expectThat((await offered()).length === inside((row) => row.emirate === 'دبي'), 'a neighbourhood narrowed the list');
+  await pick('#category', dubai.name);
+  expectThat((await read('#area')) === 'مدينة دبي', `picking a category left المنطقة «${await read('#area')}»`);
+
+  // Another emirate takes the category and the region with it
+  await pick('#emirate', 'عجمان');
+  expectThat((await read('#category')).includes('اختر'), 'a category of another emirate was kept');
+  expectThat(!(await read('#area')), 'a region of another emirate was kept');
+
+  // Changing the client empties everything they brought, by either field they can be found by. The
+  // code goes with the phone because the search filled it in; a phone that was typed stays.
+  for (const [cleared, others] of [['#phone', ['#client_code']], ['#client_code', []]]) {
+    await page.goto(`${BASE}/forms/new_sale`);
+    await page.locator('#phone').waitFor({ timeout: 15000 });
+    await page.locator('#phone').fill(PHONE);
+    await page.locator('#phone').press('Enter');
+    await expectText(page, 'عميل مسجل', 'a client found to change');
+    await page.locator('#category').filter({ hasNotText: 'اختر…' }).waitFor({ timeout: 12000 }).catch(() => {});
+    await page.waitForTimeout(800);
+    const found = { code: await read('#client_code'), area: await read('#area'), name: await read('#customer_name') };
+    expectThat(found.code && found.name, `no client was found to clear (${JSON.stringify(found)})`);
+    await page.locator(cleared).fill('');
+    await page.waitForTimeout(1500);
+    for (const id of ['#area', '#street', '#house', '#location_url', '#coordinates', '#customer_name', ...others]) {
+      expectThat(!(await read(id)), `clearing ${cleared} left ${id} «${await read(id)}»`);
+    }
+    expectThat((await read('#category')).includes('اختر'), `clearing ${cleared} kept التصنيف`);
+    expectThat((await read('#emirate')).includes('بدون تحديد'), `clearing ${cleared} kept الإمارة`);
+    expectThat(!(await page.getByText('عميل مسجل').count()), `clearing ${cleared} left the found client's note`);
+    log(`${prefix} address links: clearing ${cleared} emptied client ${found.code}'s address (${found.area})`);
+  }
+  log(`${prefix} address links: ${ofEmirate} categories in الشارقة, ${ofArea.length} in منطقة العين`);
+}
+
 async function newClient(page, prefix) {
   await page.goto(`${BASE}/forms`);
   await page.getByText('طلب بيع لعميل جديد').first().click();
@@ -334,6 +450,7 @@ async function everyField(page, prefix) {
     log(`${prefix} ${type.key}: ${shown.length} of ${expected.length} fields shown`);
     if (missing.length) problems.push(`[missing fields] ${type.key}: ${missing.join(', ')}`);
     await shot(page, `${prefix}-form-${type.key}`);
+    await fitsThePhone(page, prefix, `the ${type.key} form`);
     // Leave without saving (the form asks first, since nothing was typed it should not)
     await page.getByRole('button', { name: 'رجوع' }).first().click();
   }
@@ -424,6 +541,7 @@ async function pages(page, prefix) {
     await expectText(page, title, path);
     await page.waitForTimeout(1200);
     await shot(page, `${prefix}-${name}`);
+    await fitsThePhone(page, prefix, path);
   }
   // A request opened from the review list
   await page.goto(`${BASE}/review?tab=all`);
@@ -434,6 +552,7 @@ async function pages(page, prefix) {
     await expectText(page, 'سجل الطلب', 'request view history');
     await page.waitForTimeout(800);
     await shot(page, `${prefix}-request-view`);
+    await fitsThePhone(page, prefix, 'a request opened from the review list');
   }
   // A product drawer in the catalog
   await page.goto(`${BASE}/admin/catalog`);
@@ -623,6 +742,7 @@ try {
   for (const [prefix, viewport] of [['desktop', { width: 1440, height: 900 }], ['phone', { width: 390, height: 844 }]]) {
     const page = await newPage(browser, viewport);
     await salesForm(page, prefix);
+    await addressLinks(page, prefix);
     await devicePicker(page, prefix);
     await staffPickers(page, prefix);
     await newClient(page, prefix);

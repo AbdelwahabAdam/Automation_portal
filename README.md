@@ -233,6 +233,8 @@ Daftra's API has none:
   - with the approving manager written in it as «المسؤول» (Daftra's API cannot set who a work order is
     for: it records the API user as its creator);
   - starting on the approval day and due after «مدة التركيب» days;
+  - at the stage «لم يدخل التصنيع» (`daftra_work_order_stage_id` in `core/config.py`). Only a new work order
+    gets it: approving again keeps a stage someone has since moved it to in Daftra;
   - linked to the invoice;
   - with the custom fields of our work-order form filled from the request (ملحقات التركيب، الألوان المتاحة،
     ظهر الكفر، لون القاعدة، …). These are set by a `CustomModel` edit and read back to confirm, since Daftra
@@ -248,6 +250,17 @@ Daftra's API has none:
   - The items are the catalog products with a maintenance group, at their catalog price. Prices and groups
     are edited in الإدارة ← المنتجات والباقات. They came from `Maintenance_Invoice_Items.xlsx`:
     `.venv\Scripts\python -m app.jobs import_maintenance_items`.
+
+In a form's address (`frontend/src/modules/requests/address.js`):
+
+- picking a «التصنيف» replaces المنطقة and الإمارة with its own, a client's neighbourhood included. The
+  التصنيف Daftra holds for a found client only fills them while they are empty;
+- a known «المنطقة» sets its الإمارة;
+- each narrows the lists after it: the الإمارة narrows the areas and the categories, the المنطقة the categories.
+  A typed neighbourhood is on no list, so it narrows nothing and the emirate's categories are offered;
+- what no longer belongs after a change is emptied: a التصنيف or a region of another emirate;
+- changing the phone or client code a client was found by empties the whole address, and what the search
+  filled in, so a new search starts clean.
 
 The forms' «التصنيف» (Daftra's client categories, each with the المنطقة and الإمارة it fills in) is read from
 our own `client_categories` table, never from Daftra on a request. The portal fills the table once, the first

@@ -40,20 +40,22 @@ function ProductsSummary({ summary }) {
         من <b>{summary.linked}</b> منتجًا مربوطًا بدفترة: تغيّر <b>{summary.changed.length}</b>، وبقي <b>{summary.unchanged}</b> كما هو.
       </p>
       {summary.changed.length > 0 && (
-        <div className="fl-table-wrap">
-          <table className="fl-table">
-            <thead><tr><th>المنتج</th><th>الحقل</th><th>قبل</th><th>بعد</th></tr></thead>
-            <tbody>
-              {summary.changed.flatMap((item) => Object.keys(item.after).map((key, index) => (
-                <tr key={`${item.id}-${key}`}>
-                  <td className="fl-cell--wrap">{index === 0 && <bdi>{item.name}</bdi>}</td>
-                  <td>{FIELD_LABELS[key] || key}</td>
-                  <td className="fl-cell--wrap"><bdi>{showValue(key, item.before[key])}</bdi></td>
-                  <td className="fl-cell--wrap"><bdi>{showValue(key, item.after[key])}</bdi></td>
-                </tr>
-              )))}
-            </tbody>
-          </table>
+        <div className="fl-table-wrap fl-stacked">
+          <div className="fl-table-scroll">
+            <table className="fl-table">
+              <thead><tr><th>المنتج</th><th>الحقل</th><th>قبل</th><th>بعد</th></tr></thead>
+              <tbody>
+                {summary.changed.flatMap((item) => Object.keys(item.after).map((key, index) => (
+                  <tr key={`${item.id}-${key}`}>
+                    <td className="fl-cell--wrap">{index === 0 && <bdi>{item.name}</bdi>}</td>
+                    <td className="fl-cell--full" data-label="الحقل">{FIELD_LABELS[key] || key}</td>
+                    <td className="fl-cell--wrap" data-label="قبل"><bdi>{showValue(key, item.before[key])}</bdi></td>
+                    <td className="fl-cell--wrap" data-label="بعد"><bdi>{showValue(key, item.after[key])}</bdi></td>
+                  </tr>
+                )))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
       {summary.missing.length > 0 && (
@@ -169,21 +171,23 @@ export default function DaftraSync() {
       ))}
       {state.history.length > 0 && (
         <Card title="آخر المزامنات">
-          <div className="fl-table-wrap">
-            <table className="fl-table">
-              <thead><tr><th>القائمة</th><th>الحالة</th><th>بواسطة</th><th>البداية</th><th>النهاية</th></tr></thead>
-              <tbody>
-                {state.history.map((run) => (
-                  <tr key={run.id}>
-                    <td>{run.label}</td>
-                    <td><RunStatus run={run} /></td>
-                    <td><bdi>{run.started_by || '—'}</bdi></td>
-                    <td><bdi dir="ltr">{formatDate(run.started_at)}</bdi></td>
-                    <td><bdi dir="ltr">{run.finished_at ? formatDate(run.finished_at) : '—'}</bdi></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="fl-table-wrap fl-stacked">
+            <div className="fl-table-scroll">
+              <table className="fl-table">
+                <thead><tr><th>القائمة</th><th>الحالة</th><th>بواسطة</th><th>البداية</th><th>النهاية</th></tr></thead>
+                <tbody>
+                  {state.history.map((run) => (
+                    <tr key={run.id}>
+                      <td>{run.label}</td>
+                      <td data-label="الحالة"><RunStatus run={run} /></td>
+                      <td data-label="بواسطة"><bdi>{run.started_by || '—'}</bdi></td>
+                      <td data-label="البداية"><bdi dir="ltr">{formatDate(run.started_at)}</bdi></td>
+                      <td data-label="النهاية"><bdi dir="ltr">{run.finished_at ? formatDate(run.finished_at) : '—'}</bdi></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </Card>
       )}

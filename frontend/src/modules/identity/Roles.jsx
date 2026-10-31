@@ -81,7 +81,7 @@ function RoleDrawer({ role, offered, onSaved, onDeleted, onClose }) {
           <TextInput id="role_name" value={name} onChange={(e) => setName(e.target.value)} maxLength={60} />
         </Field>
         <Field label="النماذج">
-          <div className="fl-table-wrap">
+          <div className="fl-table-wrap fl-stacked fl-stacked--checks">
             <div className="fl-table-scroll">
               <table className="fl-table">
                 <thead>
@@ -95,7 +95,7 @@ function RoleDrawer({ role, offered, onSaved, onDeleted, onClose }) {
                     <tr key={form.key}>
                       <td className="fl-cell--id"><bdi>{form.label}</bdi></td>
                       {DOES.map((does) => (
-                        <td key={does}>
+                        <td key={does} data-label={offered.what[does]}>
                           <Checkbox checked={held.has(form.keys[does])}
                             onChange={(on) => toggle(form.keys[does], on)} />
                         </td>
@@ -155,7 +155,7 @@ function FormAccess({ offered, roles, onSaved }) {
         </Select>
       </Field>
       <p className="fl-results">الأدوار: {roles.length}</p>
-      <div className="fl-table-wrap">
+      <div className="fl-table-wrap fl-stacked fl-stacked--checks">
         <div className="fl-table-scroll">
           <table className="fl-table">
             <thead>
@@ -170,13 +170,13 @@ function FormAccess({ offered, roles, onSaved }) {
                 <tr key={role.id}>
                   <td className="fl-cell--id"><bdi>{role.name}</bdi></td>
                   {DOES.map((does) => (
-                    <td key={does}>
+                    <td key={does} data-label={offered.what[does]}>
                       <Checkbox disabled={busy === `${role.id}:${does}`}
                         checked={role.permissions.includes(form.keys[does])}
                         onChange={(on) => grant(role, does, on)} />
                     </td>
                   ))}
-                  <td data-fl-num>{role.user_count}</td>
+                  <td className="fl-cell--full" data-label="عدد المستخدمين" data-fl-num>{role.user_count}</td>
                 </tr>
               ))}
             </tbody>
@@ -255,7 +255,7 @@ export default function Roles() {
             <EmptyState icon="shield" title={roles.length ? 'لا يوجد دور مطابق' : 'لا توجد أدوار بعد'}
               action={!roles.length && <Button icon="plus" onClick={() => open({})}>إضافة دور</Button>} />
           ) : (
-            <div className="fl-table-wrap">
+            <div className="fl-table-wrap fl-stacked">
               <div className="fl-table-scroll">
                 <table className="fl-table">
                   <thead><tr><th>اسم الدور</th><th>الصلاحيات</th><th>عدد المستخدمين</th><th>الإجراء</th></tr></thead>
@@ -263,14 +263,14 @@ export default function Roles() {
                     {shown.map((role) => (
                       <tr key={role.id}>
                         <td className="fl-cell--id"><bdi>{role.name}</bdi></td>
-                        <td className="fl-cell--wrap">
+                        <td className="fl-cell--wrap fl-cell--full" data-label="الصلاحيات">
                           <div className="fl-badges">
                             {role.permissions.length
                               ? role.permissions.map((key) => <Badge key={key} tone="brand">{labels[key] || key}</Badge>)
                               : <span className="fl-muted">بدون صلاحيات</span>}
                           </div>
                         </td>
-                        <td data-fl-num>{role.user_count}</td>
+                        <td className="fl-cell--full" data-label="عدد المستخدمين" data-fl-num>{role.user_count}</td>
                         <td className="fl-cell--actions"><Button size="sm" icon="edit" onClick={() => open({ role })}>تعديل</Button></td>
                       </tr>
                     ))}

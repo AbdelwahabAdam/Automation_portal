@@ -14,6 +14,10 @@ const ADDRESS_ALSO = ['coordinates', 'category', 'category_name'];
 const BLANK_ADDRESS = Object.fromEntries([...ADDRESS_FIELDS, ...ADDRESS_ALSO].map((name) => [name, '']));
 // The fields a client is looked up by
 export const SEARCH_FIELDS = ['phone', 'client_code'];
+// What a search fills in besides the address; these go only if the user has not changed them since
+const FOUND_FIELDS = [...SEARCH_FIELDS, 'customer_name'];
+// The invoice belongs to the client it was picked from
+const OF_THE_CLIENT = { invoice: '', invoice_name: '' };
 
 const addressLabel = (address) => [address.emirate, address.area, address.street, address.house].filter(Boolean).join('، ') || 'بلا عنوان مسجل';
 
@@ -31,11 +35,15 @@ export function useClientLookup(form) {
   // Set while a new address is being typed, so the client's category from Daftra — which may
   // arrive after the user has already asked for a new address — does not fill it back in
   const typingNewAddress = useRef(false);
+  // Whose details Daftra was last asked for: an answer for anyone else came too late
+  const askedFor = useRef(null);
 
   async function loadClientInfo(daftraId, theirLink = "") {
+    askedFor.current = daftraId;
     setClientInfo({ status: 'loading' });
     try {
       const info = await clientsApi.clientInDaftra(daftraId);
+      if (askedFor.current !== daftraId) return;
       setClientInfo({ status: 'ready', ...info });
       // Decided here, not inside the update: an update is run when React next renders, which is
       // after this line, so anything read back out of one is read too early
@@ -77,8 +85,27 @@ export function useClientLookup(form) {
         }
       }
     } catch (err) {
-      setClientInfo({ status: 'error', message: err.message });
+      if (askedFor.current === daftraId) setClientInfo({ status: 'error', message: err.message });
     }
+  }
+
+  // The form is no longer about the found client: the whole address goes, and so does what the
+  // search filled in — left behind, their client code would tie this request to them. changed is
+  // the field being edited, which keeps what is typed. values: the form as it stands, read out here
+  // because an update may run twice, and the first run forgets what was filled in.
+  function forgetClient(changed, values) {
+    const filledIn = FOUND_FIELDS.filter((name) => name !== changed && values[name] && values[name] === form.autoFilled.current[name]);
+    const blank = Object.fromEntries(Object.keys(BLANK_ADDRESS).filter((name) => form.fieldNames.has(name.replace(/_name$/, ''))).map((name) => [name, '']));
+    const gone = { ...blank, ...Object.fromEntries(filledIn.map((name) => [name, ''])), ...(form.fieldNames.has('invoice') ? OF_THE_CLIENT : {}) };
+    for (const name of Object.keys(gone)) delete form.autoFilled.current[name];
+    form.setValues((current) => ({ ...current, ...gone, new_client: false }));
+    form.setErrors((current) => Object.fromEntries(Object.entries(current).filter(([name]) => !(name in gone))));
+    askedFor.current = null;
+    lastLookup.current = '';
+    typingNewAddress.current = false;
+    setLookup(null);
+    setAddressChoice(null);
+    setClientInfo(null);
   }
 
   // What the invoice drop-down says while it has nothing to offer
@@ -178,7 +205,7 @@ export function useClientLookup(form) {
 
   return {
     lookup, addressChoice, addressBusy, clientInfo, invoicesUnavailable, applyClient, chooseAddress, saveNewAddress,
-    lookupClient, searchNow,
+    lookupClient, searchNow, forgetClient,
   };
 }
 

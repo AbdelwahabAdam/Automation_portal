@@ -44,6 +44,9 @@ class Settings(BaseSettings):
     # as a file: text in it makes the save answer 500 and the work order's التفاصيل tab error. The
     # portal cannot upload, so it points every work order at one image uploaded there by hand.
     daftra_work_order_image_id: int = 16412
+    # The stage (follow_up_status_id) a work order starts at: «لم يدخل التصنيع». Work orders' stages are
+    # item_type 8 in Daftra; 178 has the same name but is item_type 23, which is not a work order's.
+    daftra_work_order_stage_id: int = 175
     # Off: the إثبات الدفع is not sent to the invoice in Daftra. Both calls it needs are proven
     # against the live account (see daftra-api.md 4a); set DAFTRA_SEND_PAYMENT_PROOF=true to turn on.
     daftra_send_payment_proof: bool = False

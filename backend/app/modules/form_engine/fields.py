@@ -70,7 +70,7 @@ def address(title="عنوان الخدمة", required=True):
     # Every form asks for the same address as طلب بيع لعميل جديد, where the coordinates are the
     # Coordinates a client created in Daftra needs; they fill in from a location link that has them.
     # التصنيف is the client's category in Daftra (set on the client when a Daftra form is approved);
-    # picking it fills in المنطقة and الإمارة, and picking the area fills in its emirate (RequestForm.jsx)
+    # the three follow and narrow each other as the form is filled in (frontend modules/requests/address.js)
     return section(
         title,
         f("category", "التصنيف", "daftra_client_category", required),

@@ -9,6 +9,7 @@ import { Control, DaftraListSelect, FileField, ProductPicker, guessFromProductNa
 import FormProgress, { Totals, formTotals } from './form/FormProgress.jsx';
 import OrderLines from './form/OrderLines.jsx';
 import { formatAmount } from '../../lib/format.js';
+import { afterArea, afterCategory, afterEmirate, categoriesFor, categoryById } from './address.js';
 import { DAFTRA_LIST_TYPES, allFields, coordinatesFromLink, evaluateForm, fieldApplies, initialValues } from './validation.js';
 
 // Sections open when a form starts; the rest are folded until needed
@@ -58,20 +59,19 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
 
   // Where a التصنيف's clients live
   const categories = catalog.daftraLists?.daftra_client_category;
-  const locationOfCategory = (id) => {
-    const row = categories?.find((option) => String(option.id) === String(id));
-    return row?.area && row?.emirate ? { area: row.area, emirate: row.emirate } : null;
-  };
+  const addressLists = { areasByEmirate: specOf('area')?.areas_by_emirate, categories };
 
-  // التصنيف says where its clients mostly are, which fills المنطقة and الإمارة while they are still
-  // empty — on a new client, or a found one whose address says nothing. It never replaces an address
-  // that is already there: the client's own neighbourhood is the address, التصنيف is not.
+  // A التصنيف the form did not get from the user — the one Daftra holds for a found client, or a
+  // saved draft's — fills المنطقة and الإمارة only while they are empty: the client's own
+  // neighbourhood is their address. One picked by hand replaces them (chooseFromList).
   // Runs again if the list of categories arrives later.
   const placedBy = useRef('');
   useEffect(() => {
     const id = values.category;
+    if (!id) placedBy.current = '';
     if (!id || placedBy.current === String(id)) return;
-    const place = locationOfCategory(id);
+    const { area, emirate } = afterCategory(categoryById(categories, id));
+    const place = area ? { area, emirate } : null;
     if (!place) return;
     // Decided out here, not inside the update: an update may be run more than once, and reading
     // what was auto-filled while also writing it would make the second run change its mind
@@ -196,17 +196,11 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
   }
 
   function chooseFromList(name, rowId, label) {
-    // A client category knows where its clients live: picking it picks المنطقة and الإمارة too
-    const located = specOf(name)?.type === 'daftra_client_category'
-      ? catalog.daftraLists?.daftra_client_category?.find((row) => String(row.id) === String(rowId))
-      : null;
-    const place = located?.area && located?.emirate && fieldNames.has('area') ? { area: located.area, emirate: located.emirate } : {};
-    // Only where there is no address yet: picking a التصنيف must not rewrite the client's own
-    setValues((current) => ({
-      ...current, [name]: rowId, [`${name}_name`]: label,
-      ...(place.area && !current.area ? { area: place.area } : {}),
-      ...(place.emirate && !current.emirate ? { emirate: place.emirate } : {}),
-    }));
+    // A client category knows where its clients live: picking it sets المنطقة and الإمارة, whatever
+    // they held. That is the user's choice, so unlike the effect above it replaces a neighbourhood.
+    const place = specOf(name)?.type === 'daftra_client_category' && fieldNames.has('area')
+      ? afterCategory(categoryById(categories, rowId)) : {};
+    setValues((current) => ({ ...current, [name]: rowId, [`${name}_name`]: label, ...place }));
     autoFilled.current[name] = undefined;
     setMessage(null);
     if (place.area) clearError(name, 'area', 'emirate');
@@ -258,24 +252,23 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
     clearError(name, ...(amount === undefined ? [] : [spec.fills]));
   }
 
-  // الإمارة narrows the areas suggested for المنطقة, and a known area fills in its emirate.
-  // Changing the emirate leaves المنطقة alone: it holds a neighbourhood, which no list knows.
+  // What each of the three changes in the others is in address.js
   function chooseEmirate(value) {
-    setValues((current) => ({ ...current, emirate: value }));
+    setValues((current) => ({ ...current, ...afterEmirate(current, value, addressLists) }));
     setMessage(null);
     clearError('emirate');
   }
 
   function chooseArea(value) {
-    const areasByEmirate = specOf('area')?.areas_by_emirate || {};
-    const matchedEmirate = Object.keys(areasByEmirate).find((emirate) => areasByEmirate[emirate].includes(value));
-    setValues((current) => (
-      matchedEmirate && current.emirate !== matchedEmirate
-        ? { ...current, area: value, emirate: matchedEmirate }
-        : { ...current, area: value }
-    ));
+    setValues((current) => ({ ...current, ...afterArea(current, value, addressLists) }));
     setMessage(null);
     clearError('area', 'emirate');
+  }
+
+  // Changing the number or code a client was found by means another client: what they brought goes
+  function changeSearchField(name, value) {
+    if (client.lookup?.status === 'found' && values[name] && value !== values[name]) client.forgetClient(name, values);
+    change(name, value);
   }
 
   async function save(action) {
@@ -472,9 +465,11 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
     }
     if (DAFTRA_LIST_TYPES.includes(spec.type)) {
       const perClient = spec.type === 'daftra_client_invoice';
+      const rows = spec.type === 'daftra_client_category'
+        ? categoriesFor(categories, values, values[spec.name]) : catalog.daftraLists?.[spec.type];
       return {
         control: <DaftraListSelect spec={spec} value={values[spec.name]} invalid={invalid}
-          rows={perClient ? client.clientInfo?.open_invoices || [] : catalog.daftraLists?.[spec.type]}
+          rows={perClient ? client.clientInfo?.open_invoices || [] : rows}
           unavailable={perClient ? client.invoicesUnavailable() : null}
           onChange={(rowId, label) => chooseFromList(spec.name, rowId, label)} />,
       };
@@ -520,7 +515,7 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
     const searchable = SEARCH_FIELDS.includes(spec.name);
     return {
       hint: searchable ? 'يُبحث عن العميل بعد الكتابة، أو اضغط أيقونة البحث.' : null,
-      control: <Control spec={spec} value={values[spec.name]} invalid={invalid} onChange={change}
+      control: <Control spec={spec} value={values[spec.name]} invalid={invalid} onChange={searchable ? changeSearchField : change}
         onBlur={searchable ? client.lookupClient : undefined} onSearch={searchable ? client.searchNow : undefined} />,
     };
   }

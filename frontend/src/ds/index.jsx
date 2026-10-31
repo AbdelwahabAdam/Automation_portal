@@ -333,7 +333,7 @@ export function Choice({ name, options, value, multiple, onChange, invalid, colu
   const chosen = multiple ? (Array.isArray(value) ? value : []) : value;
   return (
     // label: what the group is for, when it stands on its own without a <Field> above it
-    <div className={cx('fl-choice', invalid && 'fl-choice--invalid')} role={multiple ? 'group' : 'radiogroup'}
+    <div className={cx('fl-choice', columns && 'fl-choice--cols', invalid && 'fl-choice--invalid')} role={multiple ? 'group' : 'radiogroup'}
       aria-label={label} style={columns ? { '--fl-choice-columns': columns } : undefined}>
       {options.map((option) => {
         const optionValue = typeof option === 'string' ? option : option.value;

@@ -80,29 +80,31 @@ export default function OrderSources() {
       <Card title={rows ? `المصادر في دفترة (${active} مفعّل من ${rows.length})` : 'المصادر في دفترة'}>
         {!rows ? (!error && <Loading />) : (
           <div className="fl-stack fl-stack--sm">
-            <div className="fl-table-wrap">
-              <table className="fl-table">
-                <thead><tr><th>الاسم</th><th>الحالة</th><th>الترتيب</th><th>رقم دفترة</th><th></th></tr></thead>
-                <tbody>
-                  {shown.map((row) => (
-                    <tr key={row.id}>
-                      <td><bdi>{row.name}</bdi></td>
-                      <td>{row.active
-                        ? <Badge tone="success" icon="check-circle">مفعّل — يظهر في النماذج</Badge>
-                        : <Badge tone="neutral">غير مفعّل</Badge>}
-                      </td>
-                      <td><bdi dir="ltr">{row.display_order}</bdi></td>
-                      <td><bdi dir="ltr">{row.id}</bdi></td>
-                      <td>
-                        <Button size="sm" variant={row.active ? 'secondary' : 'primary'} icon={row.active ? 'x-circle' : 'check-circle'}
-                          loading={switching === row.id} disabled={switching !== null} onClick={() => setActive(row, !row.active)}>
-                          {row.active ? 'إيقاف' : 'تفعيل'}
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="fl-table-wrap fl-stacked">
+              <div className="fl-table-scroll">
+                <table className="fl-table">
+                  <thead><tr><th>الاسم</th><th>الحالة</th><th>الترتيب</th><th>رقم دفترة</th><th></th></tr></thead>
+                  <tbody>
+                    {shown.map((row) => (
+                      <tr key={row.id}>
+                        <td><bdi>{row.name}</bdi></td>
+                        <td className="fl-cell--full" data-label="الحالة">{row.active
+                          ? <Badge tone="success" icon="check-circle">مفعّل — يظهر في النماذج</Badge>
+                          : <Badge tone="neutral">غير مفعّل</Badge>}
+                        </td>
+                        <td data-label="الترتيب"><bdi dir="ltr">{row.display_order}</bdi></td>
+                        <td data-label="رقم دفترة"><bdi dir="ltr">{row.id}</bdi></td>
+                        <td className="fl-cell--actions">
+                          <Button size="sm" variant={row.active ? 'secondary' : 'primary'} icon={row.active ? 'x-circle' : 'check-circle'}
+                            loading={switching === row.id} disabled={switching !== null} onClick={() => setActive(row, !row.active)}>
+                            {row.active ? 'إيقاف' : 'تفعيل'}
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
             <p className="fl-field__hint fl-flush">تغيير اسم مصدر أو حذفه يتم من دفترة نفسها؛ لا تسمح دفترة بالحذف من خارجها.</p>
           </div>

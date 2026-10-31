@@ -166,7 +166,7 @@ function Products({ products, onChange, toast }) {
       {!shown.length ? (
         <EmptyState icon="package" title={products.length ? 'لا توجد منتجات مطابقة' : 'لا توجد منتجات بعد'} />
       ) : (
-        <div className="fl-table-wrap">
+        <div className="fl-table-wrap fl-stacked">
           <div className="fl-table-scroll">
             <table className="fl-table">
               <thead>
@@ -179,21 +179,21 @@ function Products({ products, onChange, toast }) {
               <tbody>
                 {shown.slice((page - 1) * pageSize, page * pageSize).map((product) => (
                   <tr key={product.id} className={product.is_active ? undefined : 'fl-row--off'}>
-                    {withSku && <td className="fl-cell--id"><bdi dir="ltr">{product.sku || '—'}</bdi></td>}
+                    {withSku && <td className="fl-cell--id" data-label="SKU"><bdi dir="ltr">{product.sku || '—'}</bdi></td>}
                     <td className="fl-cell--wrap">
                       <strong><bdi>{product.name}</bdi></strong>
                       {product.name_ar && <span className="fl-cell__sub">{product.name_ar}</span>}
                     </td>
-                    <td className="fl-cell--id"><bdi dir="ltr">{product.product_code || '—'}</bdi></td>
-                    <td className="fl-cell--wrap">{product.category || '—'}</td>
-                    <td className="fl-cell--wrap">{product.maintenance_group || '—'}</td>
-                    <td className="fl-cell--nowrap" data-fl-num>
+                    <td className="fl-cell--id" data-label="كود المنتج"><bdi dir="ltr">{product.product_code || '—'}</bdi></td>
+                    <td className="fl-cell--wrap fl-cell--minor" data-label="التصنيف">{product.category || '—'}</td>
+                    <td className="fl-cell--wrap fl-cell--minor" data-label="بند صيانة">{product.maintenance_group || '—'}</td>
+                    <td className="fl-cell--nowrap" data-label="سعر الوحدة" data-fl-num>
                       <bdi dir="ltr">{money(product.unit_price)}</bdi>
                       <span className="fl-cell__sub">{product.price_includes_tax ? 'شامل' : 'غير شامل'} <bdi dir="ltr">{money(product.tax_rate * 100)}%</bdi></span>
                     </td>
-                    <td data-fl-num>{product.stock_balance ?? '—'}</td>
-                    <td data-fl-num>{product.package_count}</td>
-                    <td>{product.is_active ? <Badge tone="success">مفعّل</Badge> : <Badge>موقوف</Badge>}</td>
+                    <td data-label="المخزون" data-fl-num>{product.stock_balance ?? '—'}</td>
+                    <td className="fl-cell--minor" data-label="في كم باقة" data-fl-num>{product.package_count}</td>
+                    <td data-label="الحالة">{product.is_active ? <Badge tone="success">مفعّل</Badge> : <Badge>موقوف</Badge>}</td>
                     <td className="fl-cell--actions"><Button size="sm" icon="edit" onClick={() => setPanel({ product })}>تعديل</Button></td>
                   </tr>
                 ))}
@@ -313,7 +313,7 @@ function PackageDrawer({ pack, products, onSaved, onDeleted, onClose }) {
         <Checkbox checked={values.is_active} onChange={(v) => set('is_active', v)}>مفعّلة</Checkbox>
         <Field label="المنتجات داخل الباقة">
           {lines.length > 0 && (
-            <div className="fl-table-wrap fl-lines">
+            <div className="fl-table-wrap fl-lines fl-stacked">
               <div className="fl-table-scroll">
                 <table className="fl-table">
                   <thead><tr><th>المنتج</th><th>الكمية</th><th>سعر الوحدة</th><th>شامل الضريبة</th><th>خصم البند</th><th>الإجمالي</th><th /></tr></thead>
@@ -324,12 +324,12 @@ function PackageDrawer({ pack, products, onSaved, onDeleted, onClose }) {
                       return (
                         <tr key={line.key}>
                           <td className="fl-cell--wrap"><bdi>{label}</bdi>{product?.name_ar && <span className="fl-cell__sub">{product.name_ar}</span>}</td>
-                          <td><input className="fl-mini" type="number" min="1" max="9999" step="1" value={line.quantity} onChange={(e) => setLine(line.key, 'quantity', e.target.value)} aria-label={`كمية ${label}`} /></td>
-                          <td><input className="fl-mini" type="number" min="0" step="0.01" value={line.unit_price} onChange={(e) => setLine(line.key, 'unit_price', e.target.value)} aria-label={`سعر ${label}`} /></td>
-                          <td><input type="checkbox" className="fl-mini-check" checked={line.price_includes_tax} onChange={(e) => setLine(line.key, 'price_includes_tax', e.target.checked)} aria-label={`سعر ${label} شامل الضريبة`} /></td>
-                          <td><input className="fl-mini" type="number" min="0" step="0.01" value={line.discount} onChange={(e) => setLine(line.key, 'discount', e.target.value)} aria-label={`خصم ${label}`} /></td>
-                          <td data-fl-num><bdi dir="ltr">{money(lineTotal(line, product))}</bdi></td>
-                          <td><Button size="sm" variant="ghost" icon="trash" iconOnly label={`إزالة ${label}`} onClick={() => setLines((current) => current.filter((l) => l.key !== line.key))} /></td>
+                          <td data-label="الكمية"><input className="fl-mini" type="number" min="1" max="9999" step="1" value={line.quantity} onChange={(e) => setLine(line.key, 'quantity', e.target.value)} aria-label={`كمية ${label}`} /></td>
+                          <td data-label="سعر الوحدة"><input className="fl-mini" type="number" min="0" step="0.01" value={line.unit_price} onChange={(e) => setLine(line.key, 'unit_price', e.target.value)} aria-label={`سعر ${label}`} /></td>
+                          <td data-label="شامل الضريبة"><input type="checkbox" className="fl-mini-check" checked={line.price_includes_tax} onChange={(e) => setLine(line.key, 'price_includes_tax', e.target.checked)} aria-label={`سعر ${label} شامل الضريبة`} /></td>
+                          <td data-label="خصم البند"><input className="fl-mini" type="number" min="0" step="0.01" value={line.discount} onChange={(e) => setLine(line.key, 'discount', e.target.value)} aria-label={`خصم ${label}`} /></td>
+                          <td data-label="الإجمالي" data-fl-num><bdi dir="ltr">{money(lineTotal(line, product))}</bdi></td>
+                          <td className="fl-cell--actions"><Button size="sm" variant="ghost" icon="trash" iconOnly label={`إزالة ${label}`} onClick={() => setLines((current) => current.filter((l) => l.key !== line.key))} /></td>
                         </tr>
                       );
                     })}
@@ -358,12 +358,12 @@ function PackageRow({ pack, open, onToggle, onEdit }) {
   return (
     <>
       <tr className={pack.is_active ? undefined : 'fl-row--off'}>
-        <td className="fl-cell--id"><bdi dir="ltr">{pack.code || '—'}</bdi></td>
+        <td className="fl-cell--id" data-label="الكود"><bdi dir="ltr">{pack.code || '—'}</bdi></td>
         <td className="fl-cell--wrap"><strong><bdi>{pack.name}</bdi></strong></td>
-        <td>{pack.color || '—'}</td>
-        <td data-fl-num>{pack.items.length}</td>
-        <td data-fl-num><bdi dir="ltr">{money(pack.total)}</bdi></td>
-        <td>{pack.is_active ? <Badge tone="success">مفعّلة</Badge> : <Badge>موقوفة</Badge>}</td>
+        <td data-label="اللون">{pack.color || '—'}</td>
+        <td data-label="عدد المنتجات" data-fl-num>{pack.items.length}</td>
+        <td data-label="الإجمالي شامل الضريبة" data-fl-num><bdi dir="ltr">{money(pack.total)}</bdi></td>
+        <td data-label="الحالة">{pack.is_active ? <Badge tone="success">مفعّلة</Badge> : <Badge>موقوفة</Badge>}</td>
         <td className="fl-cell--actions">
           <Button size="sm" variant="tertiary" iconEnd={open ? 'chevron-up' : 'chevron-down'} aria-expanded={open} onClick={onToggle}>{open ? 'إخفاء' : 'المنتجات'}</Button>
           <Button size="sm" icon="edit" onClick={onEdit}>تعديل</Button>
@@ -372,22 +372,24 @@ function PackageRow({ pack, open, onToggle, onEdit }) {
       {open && (
         <tr className="fl-row--detail">
           <td colSpan={7}>
-            <div className="fl-table-wrap">
-              <table className="fl-table">
-                <thead><tr><th>المنتج</th><th>بالعربية</th><th>الكمية</th><th>سعر الوحدة</th><th>خصم البند</th><th>الإجمالي</th></tr></thead>
-                <tbody>
-                  {pack.items.map((item) => (
-                    <tr key={item.product_id}>
-                      <td className="fl-cell--wrap"><bdi>{item.product_name}</bdi></td>
-                      <td>{item.product_name_ar || '—'}</td>
-                      <td data-fl-num>{item.quantity}</td>
-                      <td><bdi dir="ltr">{money(item.unit_price)}</bdi> {item.price_includes_tax ? '' : '+ ضريبة'}</td>
-                      <td><bdi dir="ltr">{item.discount ? money(item.discount) : '—'}</bdi></td>
-                      <td data-fl-num><bdi dir="ltr">{money(item.total)}</bdi></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="fl-table-wrap fl-stacked">
+              <div className="fl-table-scroll">
+                <table className="fl-table">
+                  <thead><tr><th>المنتج</th><th>بالعربية</th><th>الكمية</th><th>سعر الوحدة</th><th>خصم البند</th><th>الإجمالي</th></tr></thead>
+                  <tbody>
+                    {pack.items.map((item) => (
+                      <tr key={item.product_id}>
+                        <td className="fl-cell--wrap"><bdi>{item.product_name}</bdi></td>
+                        <td className="fl-cell--full" data-label="بالعربية">{item.product_name_ar || '—'}</td>
+                        <td data-label="الكمية" data-fl-num>{item.quantity}</td>
+                        <td data-label="سعر الوحدة"><bdi dir="ltr">{money(item.unit_price)}</bdi> {item.price_includes_tax ? '' : '+ ضريبة'}</td>
+                        <td data-label="خصم البند"><bdi dir="ltr">{item.discount ? money(item.discount) : '—'}</bdi></td>
+                        <td data-label="الإجمالي" data-fl-num><bdi dir="ltr">{money(item.total)}</bdi></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </td>
         </tr>
@@ -420,7 +422,7 @@ function Packages({ packages, products, onChange, toast }) {
       {!shown.length ? (
         <EmptyState icon="layers" title={packages.length ? 'لا توجد باقات مطابقة' : 'لا توجد باقات بعد'} />
       ) : (
-        <div className="fl-table-wrap">
+        <div className="fl-table-wrap fl-stacked">
           <div className="fl-table-scroll">
             <table className="fl-table">
               <thead><tr><th>الكود</th><th>الباقة</th><th>اللون</th><th>عدد المنتجات</th><th>الإجمالي شامل الضريبة</th><th>الحالة</th><th>الإجراء</th></tr></thead>
