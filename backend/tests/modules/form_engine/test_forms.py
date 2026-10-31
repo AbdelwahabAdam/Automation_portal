@@ -527,9 +527,26 @@ def test_the_form_has_no_map():
     assert not any(s["type"] == "location" for key in keys() for s in form_fields(key))
 
 
+def discount_order(key):
+    names = ("discount_label", "discount_amount", "paid_amount", "discount_approved_by")
+    return [spec["name"] for spec in form_fields(key) if spec["name"] in names]
+
+
+def test_a_named_discount_reads_name_amount_then_who_approved_it():
+    for key in ("new_sale", "contract_renewal", "maintenance"):
+        assert discount_order(key) == ["discount_label", "discount_amount", "paid_amount", "discount_approved_by"], key
+    # Nothing is paid against an offer
+    assert discount_order("quotation") == ["discount_label", "discount_amount", "discount_approved_by"]
+
+
+def test_a_discount_with_no_name_keeps_its_order():
+    assert discount_order("order_addition") == ["discount_amount", "discount_approved_by", "paid_amount"]
+    assert discount_order("quote_to_invoice") == ["discount_amount", "discount_approved_by", "paid_amount"]
+
+
 def test_an_initiative_carries_the_amount_it_takes_off():
     """Picking its name in «اسم الخصم كما يظهر في الفاتورة» fills in قيمة الخصم (form/fields.jsx)."""
-    for key in ("new_sale", "contract_renewal"):
+    for key in ("new_sale", "contract_renewal", "maintenance"):
         spec = next(s for s in form_fields(key) if s["name"] == "discount_label")
         assert spec["fills"] == "discount_amount", key
         assert spec["fills_by_choice"] == {"مبادرة دعم نبع المزن": 1275, "مبادرة دعم سقيا الخير": 1750,

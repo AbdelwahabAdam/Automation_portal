@@ -10,7 +10,7 @@ from . import printouts
 from ...integrations import daftra
 from ...core.config import settings
 from ...integrations.daftra import DaftraError
-from ..form_engine import NO_INSCRIPTION, package_colors, package_quantity
+from ..form_engine import INSCRIPTIONS, NO_INSCRIPTION, package_colors, package_quantity
 from ..catalog import Product
 from ...core.text import UAE, day_month_year, display_name, squash
 from .common import WORK_ORDER_ATTACHMENT_FIELD, attach_pdf, marker
@@ -43,6 +43,25 @@ CONTAINS_CUSTOM_DATA = {"CONTAINE_CUSTOM_DATA": "1"}  # Daftra's own spelling; r
 COLOR_TEXT = {"أبيض": "اللون الابيض", "أسود": "اللون الاسود", "ذهبي": "اللون الدهبي"}
 BASE_TEXT = {"أسود": "لون القاعده ( الاسود)", "أبيض": "لون القاعده ( الابيض )",
              "الرصاصي": "لون القاعده ( الرصاصي )"}
+# Several of the custom fields are lists in Daftra, one choice each. A save in Daftra's own screens
+# empties a value that is not exactly one of the list's entries, so these are the entries to the
+# letter, taken from the values saved on the account. The trailing spaces are the list's own.
+COOLER_ENTRIES = {"أبيض": "اللون الابيض ", "أسود": "اللون الاسود ", "ذهبي": "اللون الدهبي "}
+STAINLESS_ENTRY = "ستانلس ستيل"
+WHITE, BLACK, GOLD, WOOD, AINAWI = "اللون الابيض", "اللون الاسود", "اللون الدهبي", "اللون الخشبي", "اللون العيناوي"
+# لون اللوحه of each cover colour on the form. No rule gives it: «الابيض» alone has a wooden plate on
+# سقيا الخير مدمجه, and «الاسود مقاس طبيعي» a golden one. Those staff have used are as they used them.
+PLATE_ENTRIES = {
+    "الابيض": WOOD, "الاسود": GOLD, "الابيض * الابيض": WHITE, "الابيض * الذهبى": GOLD,
+    "الابيض * خشابي مقاس طبيعي": WOOD, "الاسود مقاس طبيعي": GOLD, "الابيض * ابيض مقاس طبيعي": WHITE,
+    "الابيض * ذهبي مقاس طبيعي": GOLD, "الاسود * الخشبي مقاس طبيعي": WOOD, "الاسود * الاسود مقاس طبيعي": BLACK,
+    "البني والأسود": BLACK, "الأبيض والذهبي المطفي": GOLD, "الرصاصي والأبيض": WHITE, "البني والأبيض": WHITE,
+    "الرصاصي والأسود": BLACK, "الأبيض والذهبي لامع": GOLD, "الأبيض والعيناوي": AINAWI, "الأبيض * الابيض": WHITE,
+    "الرصاصي* الذهبي مط": GOLD, "البني * الذهبي مط": GOLD, "الأبيض *  اللون الاسود": BLACK, "الرصاصي* الخشبي": WOOD,
+    "6 ولف ابيض": WHITE,
+}
+# The list writes a verse with its code: «001 - …», and from 100 on «104- …»
+INSCRIPTION_ENTRIES = {text: f"{code}- {text}" if int(code) >= 100 else f"{code} - {text}" for code, text in INSCRIPTIONS}
 
 
 def package_lines(data: dict) -> list[dict]:
@@ -113,10 +132,37 @@ def work_order_values(request, db: Session) -> dict:
     return values
 
 
+def listed_values(data: dict, values: dict) -> dict:
+    """What goes in the fields that are lists in Daftra, in place of the readable values the PDF
+    prints. A list takes one entry, so it is the order's first package (or, with none, its first
+    line); the rest stay on the PDF. values: work_order_values, for what is the same either way."""
+    owners = package_lines(data)
+    line = next((owner for owner in owners if owner.get("group_id")), owners[0] if owners else {})
+    details = line.get("details") or {}
+    name = line.get("group_name") or line.get("name") or ""
+    written = dict(package_colors(name)).get(details.get("cover_color"))
+    cooler = COOLER_ENTRIES.get(details.get("cooler_color")) or (STAINLESS_ENTRY if "ستانلس" in name else "")
+    return {
+        # A colour the form's list gives is the entry; a package it has none for keeps the words
+        "available_colors": written or values.get("available_colors", "").split(" / ")[0],
+        "cooler_color": cooler,
+        "plate_color": PLATE_ENTRIES.get(details.get("cover_color"), ""),
+        # A verse typed under «أخرى» is on no list; the PDF still carries it
+        "inscription": INSCRIPTION_ENTRIES.get(str(details.get("inscription") or "").strip(), ""),
+        "cover_back": details.get("cover_back") or "",
+        "base_color": BASE_TEXT.get(details.get("base_color"), details.get("base_color") or ""),
+        "design_version": details.get("design_version") or "",
+        "w_direction": details.get("w_direction") or "",
+        "front_design": details.get("front_design") or "",
+    }
+
+
 def work_order_custom_fields(request, db: Session) -> dict:
-    """The same values under the field ids Daftra knows them by."""
+    """The values under the field ids Daftra knows them by."""
+    values = work_order_values(request, db)
+    values.update(listed_values(request.data, values))
     # Every field, blank ones included: Daftra empties any field the body leaves out
-    return {WORK_ORDER_FIELDS[name]: value or "" for name, value in work_order_values(request, db).items()}
+    return {WORK_ORDER_FIELDS[name]: value or "" for name, value in values.items()}
 
 
 def set_work_order_fields(request, row: dict, db: Session) -> bool:
@@ -161,8 +207,11 @@ def work_order_title(data: dict, invoice: dict) -> str:
 
 
 def work_order_rows(request, reviewer) -> list[str]:
-    """What the technicians need, one line each: in the Daftra description and on the PDF.
-    Daftra's API cannot set who a work order is for, so the approving manager is written in it."""
+    """What the technicians need, one line each, printed under «وصف» on the PDF the portal draws.
+
+    Not the Daftra description any more — that holds ملاحظات خاصة للتصنيع alone — so the PDF is
+    where the approving manager's name appears, Daftra's API having no field of its own for it.
+    """
     data = request.data
     rows = []
     for line in package_lines(data):
@@ -207,9 +256,26 @@ def work_order_rows(request, reviewer) -> list[str]:
     return [row for row in rows if row]
 
 
-def work_order_description(request, reviewer) -> str:
-    """The rows, ending with the marker that finds the work order again on a retry."""
-    return "\n".join([f"■ {row}" for row in work_order_rows(request, reviewer)] + [marker(request)])
+def manufacturing_notes(data: dict) -> str:
+    """ملاحظات خاصة للتصنيع of every product in the order, one under the other.
+
+    The same note written against two packages is printed once: it is a note for the floor, not a
+    list of lines.
+    """
+    written = (str((line.get("details") or {}).get("manufacturing_notes") or "").strip()
+               for line in package_lines(data))
+    return "\n".join(dict.fromkeys(note for note in written if note))
+
+
+def work_order_description(request) -> str:
+    """ملاحظات خاصة للتصنيع alone, then the marker that finds the work order again on a retry.
+
+    Nothing else goes here: the client is the work order's own, the location and the colours are
+    its custom fields, the invoice is linked to it, its title carries the emirate, the area and
+    the client's code, and the PDF the portal attaches carries the rest for the floor.
+    """
+    notes = manufacturing_notes(request.data)
+    return "\n".join(([notes] if notes else []) + [marker(request)])
 
 
 def find_work_order(request) -> int | None:
@@ -231,7 +297,7 @@ def ensure_work_order(request, invoice: dict, reviewer, db: Session):
         request.save_document("work_order", daftra.create("work_orders.json", {"WorkOrder": {
             "title": work_order_title(data, invoice), "client_id": request.daftra_client_id,
             "start_date": start.isoformat(), "delivery_date": (start + timedelta(days=days)).isoformat(),
-            "description": work_order_description(request, reviewer),
+            "description": work_order_description(request),
             "follow_up_status_id": settings.daftra_work_order_stage_id,
         }}))
     row = daftra.get(f"work_orders/{request.daftra_work_order_id}.json").get("data", {}).get("WorkOrder", {})

@@ -75,10 +75,11 @@ SECTIONS = [
         f("subtotal_amount", "قيمة البنود قبل الخصم، شامل الضريبة", "number", money=True, computed=[]),
         f("total_amount", "قيمة الطلب النهائية بعد الخصم، شامل الضريبة", "number", money=True,
           computed=["subtotal_amount", "discount_amount"], negative_message="قيمة الخصم أكبر من قيمة البنود"),
-        *discount_fields(),
-        # A maintenance visit is paid in full (or is free: 0)
-        money("paid_amount", "المبلغ المدفوع فعليًا الآن", True, must_equal="total_amount",
-              must_equal_message="يجب دفع قيمة الطلب كاملة"),
+        *discount_fields(named=True, between=[
+            # A maintenance visit is paid in full (or is free: 0)
+            money("paid_amount", "المبلغ المدفوع فعليًا الآن", True, must_equal="total_amount",
+                  must_equal_message="يجب دفع قيمة الطلب كاملة"),
+        ]),
     ),
     section(
         "تفاصيل الدفعة",

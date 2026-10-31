@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from app.integrations import daftra
 from app.core.config import UPLOAD_DIR, settings
 from app.modules.invoicing.invoice import WARRANTY_TERMS_HTML
-from app.modules.invoicing.work_order import WORK_ORDER_FIELDS
+from app.modules.invoicing.work_order import WORK_ORDER_FIELDS, manufacturing_notes, work_order_rows
 from app.jobs.redraw_work_orders import redraw
 from app.modules.models import Attachment, Client, Product, Request
 
@@ -38,7 +38,9 @@ def test_any_number_of_installation_days_sets_the_work_orders_due_date(client, d
     [work_order] = fake_daftra.posted("/api2/work_orders.json")
     start = datetime.now(UAE).date()
     assert work_order["WorkOrder"]["delivery_date"] == (start + timedelta(days=17)).isoformat()
-    assert "■ مدة التركيب: 17 يومًا" in work_order["WorkOrder"]["description"]
+    # The floor reads مدة التركيب on the PDF; the description carries the notes and the mark alone
+    assert work_order["WorkOrder"]["description"] == f"PORTAL-{request_id}"
+    assert "مدة التركيب: 17 يومًا" in work_order_rows(db.get(Request, request_id), manager)
 
 
 def work_order_edits(fake_daftra):
@@ -160,9 +162,8 @@ def test_approving_a_new_sale_creates_everything_in_daftra(client, db, fake_daft
     assert fields["client_id"] == client_id
     assert (fields["start_date"], fields["delivery_date"]) == (start.isoformat(), (start + timedelta(days=20)).isoformat())
     assert fields["title"].startswith("باقة برادة سقيا الخير - 3 صنابير - أسود أبوظبي منطقة العين")
-    assert fields["description"].endswith(f"PORTAL-{request_id}")
-    assert "■ المسؤول: Manager One" in fields["description"]
-    assert "■ مدة التركيب: 20 يومًا" in fields["description"]
+    # The description is ملاحظات خاصة للتصنيع and nothing else, then the mark that finds it again
+    assert fields["description"] == f"PORTAL-{request_id}"   # nothing was written for the floor
     saved = next(iter(fake_daftra.work_orders.values()))
     # Every field goes, blank ones included: Daftra empties any field the body leaves out. The flag is
     # Daftra's own (its spelling), and صورة المنتج carries a file id — text in it makes the save 500.
@@ -172,8 +173,9 @@ def test_approving_a_new_sale_creates_everything_in_daftra(client, db, fake_daft
         "field_8": "", "field_30": "7809", "field_32": "سقيا الخير-  اللون الاسود مقاس طبيعي",
         "field_33": "", "field_34": "", "field_36": "",
         "field_37": "https://www.google.com/maps?q=24.178700,55.604510",
-        "field_38": "", "field_39": "Sales One", "field_44": "اللون الاسود", "field_45": "", "field_46": "",
-        "field_47": "بسم الله", "field_49": "اللون الاسود مقاس طبيعي",
+        # field_47 is empty: «بسم الله» was typed, so it is on the PDF and on no list of Daftra's
+        "field_38": "", "field_39": "Sales One", "field_44": "اللون الاسود ", "field_45": "", "field_46": "",
+        "field_47": "", "field_49": "اللون الدهبي",
     }
     assert fake_daftra.invoices[invoice_id]["work_order_id"] == saved["id"]
 
@@ -194,6 +196,26 @@ def test_approving_a_new_sale_creates_everything_in_daftra(client, db, fake_daft
     found = client.get("/api/clients/lookup", params={"phone": "0501234567"}, headers=auth(sales)).json()["matches"]
     assert [m["daftra_id"] for m in found] == [client_id]
     assert any(mail["to"] == "sales1@test.local" for mail in outbox)
+
+
+def test_the_work_orders_description_is_the_notes_for_the_floor_and_nothing_else(client, db, fake_daftra,
+                                                                                   sales, manager):
+    """ملاحظات خاصة للتصنيع of every product, one under the other, then the mark that finds it again."""
+    seed.catalog(db)
+    first = seed.package_lines(manufacturing_notes="بدون ثقوب على الجانب الأيسر")
+    second = [{**line, "group_id": "g2", "details": {**line["details"],
+                                                     "manufacturing_notes": "اللوحة تركب بعد الدهان"}}
+              for line in seed.package_lines()]
+    request_id = submitted_sale(client, db, sales, order_lines=first + second)
+    assert approve(client, manager, request_id).status_code == 200
+    [work_order] = fake_daftra.posted("/api2/work_orders.json")
+    assert work_order["WorkOrder"]["description"] == (
+        "بدون ثقوب على الجانب الأيسر" + "\n" + "اللوحة تركب بعد الدهان" + "\n" + f"PORTAL-{request_id}")
+    # The same note on two packages is written once, and the floor's own sheet still says the rest
+    same = [{**line, "group_id": "g2"} for line in first]
+    rows = work_order_rows(db.get(Request, request_id), manager)
+    assert any(row.startswith("العميل:") for row in rows) and any(row.startswith("المسؤول:") for row in rows)
+    assert manufacturing_notes({"order_lines": first + same}) == "بدون ثقوب على الجانب الأيسر"
 
 
 def test_a_failed_step_is_resumed_without_duplicates(client, db, fake_daftra, sales, manager):
@@ -444,8 +466,7 @@ def test_balance_payment(client, db, fake_daftra, sales, manager):
     assert fake_daftra.posted("/api2/invoices.json") == []
 
 
-def test_maintenance(client, db, fake_daftra, sales, manager):
-    seed.catalog(db)
+def maintenance_data(**overrides):
     # A business, with an email: what a new client is created with in Daftra
     data = {"request_date": TODAY, "order_source": "12", "phone": "0502222222", "customer_name": "عميل صيانة",
             "customer_type": "شركة", "gender": "أنثى", "email": "Office@Example.COM",
@@ -455,6 +476,37 @@ def test_maintenance(client, db, fake_daftra, sales, manager):
             # صيانة وتبديل prices each line itself: 65 a piece, not the catalog's 50
             "order_lines": [{"product_id": "3", "name": "RO .PP 10", "quantity": 2, "details": {"item_price": "65"}}],
             "paid_amount": "130", "payment_method": "تحويل بنكي", "treasury": "13", "payment_date": TODAY}
+    data.update(overrides)
+    return data
+
+
+def test_a_maintenance_discount_is_printed_on_the_invoice_under_its_name(client, db, fake_daftra, sales, manager):
+    seed.catalog(db)
+    data = maintenance_data(discount_amount="30", discount_approved_by="Manager One",
+                            discount_label="خصم من قبل الإدارة", paid_amount="100")
+    request_id = create(client, sales, data, form_type="maintenance").json()["id"]
+    upload(client, sales, request_id, "payment_proof")
+    sent = client.put(f"/api/requests/{request_id}", json={"data": data, "action": "submit"}, headers=auth(sales))
+    assert sent.status_code == 200, sent.json()
+    assert approve(client, manager, request_id).status_code == 200
+    [invoice] = fake_daftra.posted("/api2/invoices.json")
+    assert invoice["Invoice"]["adjustment_label"] == "خصم من قبل الإدارة"
+    assert invoice["Invoice"]["adjustment_value"] == -30.0
+
+
+def test_a_maintenance_discount_needs_its_name(client, db, sales):
+    seed.catalog(db)
+    data = maintenance_data(discount_amount="30", discount_approved_by="Manager One", paid_amount="100")
+    request_id = create(client, sales, data, form_type="maintenance").json()["id"]
+    upload(client, sales, request_id, "payment_proof")
+    sent = client.put(f"/api/requests/{request_id}", json={"data": data, "action": "submit"}, headers=auth(sales))
+    assert sent.status_code == 422
+    assert "discount_label" in sent.json()["detail"]["errors"]
+
+
+def test_maintenance(client, db, fake_daftra, sales, manager):
+    seed.catalog(db)
+    data = maintenance_data()
     request_id = create(client, sales, data, form_type="maintenance").json()["id"]
     upload(client, sales, request_id, "payment_proof")
     sent = client.put(f"/api/requests/{request_id}", json={"data": data, "action": "submit"}, headers=auth(sales))
@@ -742,7 +794,7 @@ def test_the_extensions_of_an_older_request_still_reach_the_work_order(client, d
     db.commit()
     assert approve(client, manager, request_id).status_code == 200
     [work_order] = fake_daftra.posted("/api2/work_orders.json")
-    assert "■ التمديدات الزيادة: تمديد الكهرباء، اعمال الحفر" in work_order["WorkOrder"]["description"]
+    assert "التمديدات الزيادة: تمديد الكهرباء، اعمال الحفر" in work_order_rows(db.get(Request, request_id), manager)
     saved = next(iter(fake_daftra.work_orders.values()))
     assert saved["custom"]["field_34"] == "تمديد الكهرباء، اعمال الحفر"
     assert [key for key in saved["custom"] if key not in KNOWN_WORK_ORDER_FIELDS] == []

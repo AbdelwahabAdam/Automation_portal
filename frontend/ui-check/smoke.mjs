@@ -679,6 +679,28 @@ async function maintenancePrices(page, prefix) {
   await shot(page, `${prefix}-maintenance-prices`, false);
 }
 
+// The discount reads name, amount, then who approved it, on every form that names one, and picking
+// an initiative on طلب صيانة وتبديل fills the amount as it does on a sale
+async function discountOrder(page, prefix) {
+  for (const form of ['new_sale', 'contract_renewal', 'maintenance']) {
+    await page.goto(`${BASE}/forms/${form}`);
+    await page.getByRole('button', { name: 'فتح كل الأقسام' }).click();
+    await page.waitForTimeout(500);
+    const order = await page.$$eval('[id^="field-"]', (els) => els.filter((el) => el.offsetParent !== null).map((el) => el.id.slice(6)));
+    const seen = ['discount_label', 'discount_amount', 'paid_amount', 'discount_approved_by'].map((name) => order.indexOf(name));
+    if (seen.includes(-1) || seen.some((at, i) => i && at <= seen[i - 1])) problems.push(`[discount order] ${form}: ${seen}`);
+  }
+  await page.locator('#discount_label').scrollIntoViewIfNeeded();
+  await page.locator('#discount_label').click();
+  await page.waitForTimeout(300);
+  await page.getByRole('option', { name: 'مبادرة دعم سقيا الخير' }).first().click();
+  await page.waitForTimeout(300);
+  const filled = await page.locator('#discount_amount').inputValue();
+  if (filled !== '1750') problems.push(`[discount order] the maintenance form filled قيمة الخصم with «${filled}»`);
+  await shot(page, `${prefix}-maintenance-discount`, false);
+  log(`${prefix} discount order: name, amount, paid, approver on 3 forms; maintenance filled ${filled}`);
+}
+
 // اعمال اضافية offers its four works at the form's own prices. The catalog is answered at 150 here,
 // so a price of 6 on the line can only have come from the form.
 async function techWorks(page, prefix) {
@@ -822,6 +844,7 @@ try {
     await maintenancePrices(page, prefix);
     await installationWork(page, prefix);
     await techWorks(page, prefix);
+    await discountOrder(page, prefix);
     await page.context().close();
   }
 } finally {

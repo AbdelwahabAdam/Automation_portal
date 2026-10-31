@@ -101,9 +101,16 @@ def original_refs():
     ]
 
 
-def discount_fields(label="قيمة الخصم، إن وجد"):
+def discount_fields(label="قيمة الخصم، إن وجد", named=False, between=()):
+    # named: the discount is printed on the Daftra invoice under a name, e.g. «مبادرة دعم نبع المزن».
+    # The name comes first: picking an initiative's fills قيمة الخصم, beside it, with what it takes off.
+    # between: the fields that sit before who approved it (the amount paid, on a form that has one)
+    name = f("discount_label", "اسم الخصم كما يظهر في الفاتورة", required_if=DISCOUNTED, max_length=100,
+             suggestions=DISCOUNT_LABELS, fills="discount_amount", fills_by_choice=DISCOUNT_AMOUNTS)
     return [
+        *([name] if named else []),
         money("discount_amount", label),
+        *between,
         f("discount_approved_by", "اسم الشخص الذي اعتمد الخصم", "staff", required_if=DISCOUNTED),
     ]
 
@@ -140,17 +147,16 @@ def amounts(total_label="قيمة الطلب النهائية بعد الخصم�
                           **({"default": str(price_default)} if price_default else {}))]
     else:
         subtotal = []
+    paid_field = [money("paid_amount", paid_label, True, positive=must_pay)] if paid else []
+    if discounts and invoiced:
+        discount_and_paid = discount_fields(discount_label, named=True, between=paid_field)
+    else:
+        discount_and_paid = [*(discount_fields(discount_label) if discounts else []), *paid_field]
     return section(
         "قيمة الطلب",
         *subtotal,
         total_field,
-        *(discount_fields(discount_label) if discounts else []),
-        # Before the discount's name, so the two share a line with the amount paid on the right
-        *([money("paid_amount", paid_label, True, positive=must_pay)] if paid else []),
-        # Picking an initiative's name fills قيمة الخصم with what that initiative takes off
-        *([f("discount_label", "اسم الخصم كما يظهر في الفاتورة", required_if=DISCOUNTED, max_length=100,
-             suggestions=DISCOUNT_LABELS, fills="discount_amount", fills_by_choice=DISCOUNT_AMOUNTS)]
-          if invoiced and discounts else []),
+        *discount_and_paid,
         *([] if not paid else [
             f("remaining_amount", remaining_label, "number", money=True, computed=["total_amount", "paid_amount"],
               negative_message="المبلغ المدفوع أكبر من قيمة الطلب"),

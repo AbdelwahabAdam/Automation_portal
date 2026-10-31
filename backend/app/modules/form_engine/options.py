@@ -44,7 +44,8 @@ CASH_PAYMENT = {"field": "payment_method", "equals": CASH}
 # that matches none has no colours to pick.
 PACKAGE_COLOR_FAMILIES = [
     {"match": ["سقيا الخير مدمجة"], "exclude": [], "colors": [
-        ("الابيض", "سقيا الخير مدمجه - اللون الابيض"),
+        # The trailing space is the Daftra list's own, and an entry must match it to the letter
+        ("الابيض", "سقيا الخير مدمجه - اللون الابيض "),
         ("الاسود", "سقيا الخير مدمجه - اللون الاسود"),
         ("الابيض * الابيض", "سقيا الخير مدمجه - اللون الابيض * الابيض"),
         ("الابيض * الذهبى", "سقيا الخير مدمجه - اللون الابيض * الذهبى"),
