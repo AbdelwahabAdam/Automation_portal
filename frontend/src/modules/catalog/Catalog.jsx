@@ -10,18 +10,12 @@ import { useAction } from '../../lib/hooks.js';
 
 // ---------- Products ----------
 
-const NEW_PRODUCT = {
-  name: '', name_ar: '', description: '', unit_price: '', price_includes_tax: true, tax_rate: 0.05, is_active: true,
-  product_code: '', barcode: '', buy_price: '', stock_balance: '', category: '', brand: '', daftra_id: '', maintenance_group: '',
-};
+const NEW_PRODUCT = { name: '', name_ar: '', description: '', unit_price: '', is_active: true, maintenance_group: '' };
 // The groups طلب صيانة وتبديل lists its items under (Maintenance_Invoice_Items.xlsx)
 const MAINTENANCE_GROUPS = ['الفلاتر', 'قطع الغيار', 'الهيد والميديا', 'الخدمات'];
 
 function ProductDrawer({ product, onSaved, onDeleted, onClose }) {
-  const [values, setValues] = useState(product ? {
-    ...product, tax_percent: product.tax_rate * 100,
-    buy_price: product.buy_price ?? '', stock_balance: product.stock_balance ?? '', daftra_id: product.daftra_id ?? '',
-  } : { ...NEW_PRODUCT, tax_percent: 5 });
+  const [values, setValues] = useState(product || NEW_PRODUCT);
   const { error, busy, run } = useAction();
   const [confirmDialog, confirm] = useConfirm();
   // What is missing before the product can be saved, said here rather than by the server
@@ -36,13 +30,7 @@ function ProductDrawer({ product, onSaved, onDeleted, onClose }) {
     run('save', async () => {
       const body = {
         name: values.name, name_ar: values.name_ar, description: values.description, unit_price: Number(values.unit_price),
-        price_includes_tax: values.price_includes_tax, tax_rate: Number(values.tax_percent) / 100, is_active: values.is_active,
-        product_code: values.product_code, barcode: values.barcode,
-        buy_price: values.buy_price === '' ? null : Number(values.buy_price),
-        stock_balance: values.stock_balance === '' ? null : Number(values.stock_balance),
-        category: values.category, brand: values.brand,
-        daftra_id: values.daftra_id === '' || values.daftra_id == null ? null : Number(values.daftra_id),
-        maintenance_group: values.maintenance_group || '',
+        is_active: values.is_active, maintenance_group: values.maintenance_group || '',
       };
       onSaved(product ? await catalogApi.updateProduct(product.id, body) : await catalogApi.createProduct(body));
     });
@@ -62,7 +50,7 @@ function ProductDrawer({ product, onSaved, onDeleted, onClose }) {
     {confirmDialog}
     <Drawer
       title={product ? 'تعديل منتج' : 'إضافة منتج'}
-      subtitle="المنتج وحدة واحدة لا يدخل فيها شيء آخر."
+      subtitle={product ? 'المنتج وحدة واحدة لا يدخل فيها شيء آخر.' : 'المنتج وحدة واحدة لا يدخل فيها شيء آخر، ويُنشأ في دفترة عند الحفظ.'}
       onClose={onClose}
       footer={(
         <>
@@ -88,45 +76,6 @@ function ProductDrawer({ product, onSaved, onDeleted, onClose }) {
           <Field label="سعر الوحدة (درهم)" htmlFor="p_price" required>
             <TextInput id="p_price" type="number" min="0" step="0.01" value={values.unit_price} onChange={(e) => set('unit_price', e.target.value)} />
           </Field>
-          <Field label="نسبة الضريبة %" htmlFor="p_tax">
-            <TextInput id="p_tax" type="number" min="0" max="100" step="0.01" value={values.tax_percent} onChange={(e) => set('tax_percent', e.target.value)} />
-          </Field>
-        </div>
-        <Field label="الوصف" htmlFor="p_description">
-          <TextArea id="p_description" rows={2} value={values.description} onChange={(e) => set('description', e.target.value)} maxLength={2000} />
-        </Field>
-        <div className="fl-stack fl-stack--sm">
-          <Checkbox checked={values.price_includes_tax} onChange={(v) => set('price_includes_tax', v)}>السعر شامل الضريبة</Checkbox>
-          <Checkbox checked={values.is_active} onChange={(v) => set('is_active', v)}>مفعّل</Checkbox>
-        </div>
-        <div className="fl-grid">
-          <Field label="كود المنتج (دفترة)" htmlFor="p_code">
-            <TextInput id="p_code" value={values.product_code} onChange={(e) => set('product_code', e.target.value)} maxLength={50} />
-          </Field>
-          <Field label="الباركود" htmlFor="p_barcode">
-            <TextInput id="p_barcode" value={values.barcode} onChange={(e) => set('barcode', e.target.value)} maxLength={50} />
-          </Field>
-        </div>
-        <div className="fl-grid">
-          <Field label="سعر الشراء (درهم)" htmlFor="p_buy_price">
-            <TextInput id="p_buy_price" type="number" min="0" step="0.01" value={values.buy_price} onChange={(e) => set('buy_price', e.target.value)} />
-          </Field>
-          <Field label="رصيد المخزون" htmlFor="p_stock">
-            <TextInput id="p_stock" type="number" min="0" step="1" value={values.stock_balance} onChange={(e) => set('stock_balance', e.target.value)} />
-          </Field>
-        </div>
-        <div className="fl-grid">
-          <Field label="التصنيف" htmlFor="p_category">
-            <TextInput id="p_category" value={values.category} onChange={(e) => set('category', e.target.value)} maxLength={200} />
-          </Field>
-          <Field label="الماركة" htmlFor="p_brand">
-            <TextInput id="p_brand" value={values.brand} onChange={(e) => set('brand', e.target.value)} maxLength={100} />
-          </Field>
-        </div>
-        <div className="fl-grid">
-          <Field label="رقم دفترة" htmlFor="p_daftra_id" hint="رقم المنتج في دفترة؛ تستخدمه الفواتير التي تُنشأ عند اعتماد الطلبات.">
-            <TextInput id="p_daftra_id" type="number" min="1" step="1" value={values.daftra_id ?? ''} onChange={(e) => set('daftra_id', e.target.value)} />
-          </Field>
           <Field label="بند صيانة — المجموعة" htmlFor="p_maintenance_group" hint="يظهر في «إضافة بند» بطلب الصيانة والتبديل تحت هذه المجموعة.">
             <Select id="p_maintenance_group" value={values.maintenance_group || ''} onChange={(e) => set('maintenance_group', e.target.value)}>
               <option value="">ليس بند صيانة</option>
@@ -134,6 +83,19 @@ function ProductDrawer({ product, onSaved, onDeleted, onClose }) {
             </Select>
           </Field>
         </div>
+        <Field label="الوصف" htmlFor="p_description" hint="يظهر مع البند في الفاتورة.">
+          <TextArea id="p_description" rows={2} value={values.description} onChange={(e) => set('description', e.target.value)} maxLength={2000} />
+        </Field>
+        {product && (
+          <>
+            <Checkbox checked={values.is_active} onChange={(v) => set('is_active', v)}>مفعّل</Checkbox>
+            <p className="fl-field__hint">
+              {product.daftra_id
+                ? <>في دفترة: رقم <bdi dir="ltr">{product.daftra_id}</bdi>{product.product_code && <>، كود <bdi dir="ltr">{product.product_code}</bdi></>}</>
+                : 'غير مربوط بمنتج في دفترة.'}
+            </p>
+          </>
+        )}
       </form>
     </Drawer>
     </>
@@ -222,7 +184,7 @@ function lineTotal(line, product) {
 }
 
 function PackageDrawer({ pack, products, onSaved, onDeleted, onClose }) {
-  const [values, setValues] = useState(pack ? { name: pack.name, code: pack.code, color: pack.color, is_active: pack.is_active } : { name: '', code: '', color: '', is_active: true });
+  const [values, setValues] = useState(pack ? { name: pack.name, color: pack.color, is_active: pack.is_active } : { name: '', color: '', is_active: true });
   // Each line gets a key of its own so React keeps the right inputs when one is removed
   const [lines, setLines] = useState(() => (pack ? pack.items.map((item, index) => ({ ...item, key: index })) : []));
   const [nextKey, setNextKey] = useState(pack ? pack.items.length : 0);
@@ -302,9 +264,6 @@ function PackageDrawer({ pack, products, onSaved, onDeleted, onClose }) {
         <div className="fl-grid">
           <Field label="اسم الباقة" htmlFor="k_name" required>
             <TextInput id="k_name" value={values.name} onChange={(e) => set('name', e.target.value)} maxLength={200} />
-          </Field>
-          <Field label="الكود" htmlFor="k_code">
-            <TextInput id="k_code" value={values.code} onChange={(e) => set('code', e.target.value)} maxLength={30} placeholder="FLP-043" />
           </Field>
           <Field label="اللون" htmlFor="k_color">
             <TextInput id="k_color" value={values.color} onChange={(e) => set('color', e.target.value)} maxLength={40} />

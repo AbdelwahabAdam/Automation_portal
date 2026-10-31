@@ -15,6 +15,12 @@ from ...core.text import fold_arabic, squash
 from . import cache, client
 from .errors import DaftraError
 
+# A product's `type` in Daftra: 1 is a product with stock, 2 a service
+PRODUCT_SERVICE = 2
+# What an assignment (item_staff) is of. Daftra keeps every kind of them in one list.
+WORK_ORDER_ITEM = 8
+
+
 # ---------- The verbs ----------
 
 
@@ -68,6 +74,22 @@ def attach_invoice_document(invoice_id: int, file_id: int):
     client.call("POST", "/v2/api/entity/invoice_document", None, {"invoice_id": invoice_id, "document_id": file_id})
 
 
+def work_order_staff(work_order_id: int) -> list[int]:
+    """Who a work order is assigned to (معلومات الموظفين المعينين). The work order's own
+    assigned_users stays empty; these are only in the entity they are kept in."""
+    body = client.call("GET", "/v2/api/entity/item_staff/list/1",
+                       {"filter[item_id]": work_order_id, "filter[item_type]": WORK_ORDER_ITEM, "limit": 100})
+    return [int(row["staff_id"]) for row in body.get("data", [])]
+
+
+def assign_work_order(work_order_id: int, staff_id: int, assigned_by: int):
+    """Adds someone to those who hold a work order. Not in Daftra's docs: a POST to the v2 entity
+    path, proven on our account (daftra-api.md 3a). The API cannot take an assignment off again."""
+    client.call("POST", "/v2/api/entity/item_staff", None,
+                {"item_id": work_order_id, "item_type": WORK_ORDER_ITEM, "staff_id": staff_id,
+                 "assigned_by": assigned_by})
+
+
 def all_records(resource: str, model: str, workers: int = 4) -> list[dict]:
     """Every page of a list, e.g. all_records("clients", "Client")."""
     first = get(f"{resource}.json", {"limit": 100, "page": 1})
@@ -110,6 +132,15 @@ def list_products() -> list[dict]:
     """Every Daftra product, raw and including deactivated ones, for refreshing the catalog's
     linked products."""
     return all_records("products", "Product")
+
+
+def products_named(name: str) -> list[dict]:
+    """Daftra's active services of this name, raw. Its search also finds parts of a name, codes and
+    tags, so the names are compared here; a stock-tracked product of the same name does not count."""
+    wanted = same_name(name)
+    rows = (row["Product"] for row in get("products.json", {"keywords": name, "limit": 100}).get("data", []))
+    return [row for row in rows if same_name(row.get("name") or "") == wanted
+            and str(row.get("type")) == str(PRODUCT_SERVICE) and str(row.get("status") or "0") == "0"]
 
 
 def list_treasuries() -> list[dict]:

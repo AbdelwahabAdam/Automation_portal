@@ -68,6 +68,8 @@ class FakeDaftra:
         self.estimates = {}
         self.payments = {}
         self.work_orders = {}
+        # Who holds what (item_staff), as Daftra lists them
+        self.assignments = []
         # Files uploaded to the account's file store, and the next id one gets
         self.uploads = []
         self.staff = [{"id": "71", "full_name": "Sales One", "active": "1"},
@@ -92,8 +94,8 @@ class FakeDaftra:
 
     # ---------- keeping it across restarts ----------
 
-    KEPT = ("clients", "invoices", "estimates", "payments", "work_orders", "uploads", "staff", "treasuries",
-            "order_sources", "products", "categories", "next_id", "next_client_number", "calls")
+    KEPT = ("clients", "invoices", "estimates", "payments", "work_orders", "assignments", "uploads", "staff",
+            "treasuries", "order_sources", "products", "categories", "next_id", "next_client_number", "calls")
 
     def load(self):
         """Reads the file back, if it is there and readable. A broken file starts afresh."""
@@ -297,6 +299,8 @@ class FakeDaftra:
         return [
             (r"GET /api2/staff\.json", lambda **kw: self._page([{"Staff": s} for s in self.staff])),
             (r"GET /api2/products\.json", lambda **kw: self._page([{"Product": p} for p in self.products])),
+            (r"POST /api2/products\.json", self.create_product),
+            (r"GET /api2/products/(\d+)\.json", self.get_product),
             (r"GET /api2/treasuries\.json", lambda **kw: self._page([{"Treasury": t} for t in self.treasuries])),
             (r"GET /v2/api/entity/order_source/list/1", lambda **kw: {"data": self.order_sources}),
             (r"POST /v2/api/entity/order_source", self.create_order_source),
@@ -323,6 +327,8 @@ class FakeDaftra:
             (r"GET /v2/api/entity/work_order/(\d+)/3", self.read_work_order_v2),
             (r"GET /v2/api/entity/client/(\d+)/3", self.read_client_v2),
             (r"POST /v2/api/entity/invoice_document", self.attach_document),
+            (r"GET /v2/api/entity/item_staff/list/1", self.list_assignments),
+            (r"POST /v2/api/entity/item_staff", self.create_assignment),
         ]
 
     @staticmethod
@@ -360,6 +366,15 @@ class FakeDaftra:
         rows = [c for c in self.clients.values()
                 if words in (c.get("phone1") or "", c.get("phone2") or "", c.get("business_name") or "")]
         return {"data": [{"Client": c} for c in rows]}
+
+    def create_product(self, params, body):
+        product_id = self._new_id()
+        self.products.append({**body["Product"], "id": str(product_id), "product_code": str(product_id),
+                              "status": "0"})
+        return {"id": product_id}
+
+    def get_product(self, product_id, params, body):
+        return {"data": {"Product": next(row for row in self.products if str(row["id"]) == product_id)}}
 
     def create_client(self, params, body):
         client_id = self._new_id()
@@ -501,6 +516,19 @@ class FakeDaftra:
 
     def read_work_order_v2(self, work_order_id, params, body):
         return {"custom_data": self.work_orders[int(work_order_id)]["custom"]}
+
+    def list_assignments(self, params, body):
+        rows = [row for row in self.assignments if str(row["item_id"]) == str(params.get("filter[item_id]"))
+                and str(row["item_type"]) == str(params.get("filter[item_type]"))]
+        return {"data": rows}
+
+    def create_assignment(self, params, body):
+        # As Daftra does: the column takes no empty value
+        if not body.get("assigned_by"):
+            raise DaftraError("HTTP 400: Entity not saved — Column 'assigned_by' cannot be null")
+        assignment_id = self._new_id()
+        self.assignments.append({**body, "id": assignment_id})
+        return {"message": "added", "id": assignment_id}
 
     # ---------- helpers for assertions ----------
 

@@ -23,7 +23,7 @@ def on_approve(ctx) -> dict:
     invoice = ensure_invoice(request, items, staff_id)
     summary = finish(request, invoice, paid, method, reviewer, db)
     if data.get("create_work_order") == "نعم":
-        summary["work_order_pdf_saved"], summary["work_order_fields_saved"] = ensure_work_order(
-            request, invoice, reviewer, db)
+        (summary["work_order_pdf_saved"], summary["work_order_fields_saved"],
+         summary["work_order_sales_assigned"]) = ensure_work_order(request, invoice, reviewer, db)
         summary["daftra_work_order_no"] = request.daftra_work_order_no
     return summary

@@ -199,6 +199,19 @@ def set_work_order_fields(request, row: dict, db: Session) -> bool:
     return False
 
 
+def assign_sales_person(request, reviewer) -> bool:
+    """Puts whoever sent the request under معلومات الموظفين المعينين on the work order, unless a
+    retry finds them there already: Daftra keeps one row per call and the API cannot remove any.
+    Those it is assigned to as well stay. A failure here does not stop the approval."""
+    staff_id = request.created_by.daftra_staff_id
+    try:
+        if staff_id not in daftra.work_order_staff(request.daftra_work_order_id):
+            daftra.assign_work_order(request.daftra_work_order_id, staff_id, reviewer.daftra_staff_id or staff_id)
+    except DaftraError:
+        return False
+    return True
+
+
 def work_order_title(data: dict, invoice: dict) -> str:
     """Like the ones staff write: what is installed, where, and the client code, e.g.
     «باقة برادة سقيا الخير - 3 صنابير - أسود أبوظبي منطقة العين 4092»."""
@@ -308,7 +321,8 @@ def ensure_work_order(request, invoice: dict, reviewer, db: Session):
         daftra.post(f"invoices/assign_work_order/{request.daftra_invoice_id}.json",
                     {"Invoice": {"work_order_id": request.daftra_work_order_id}})
     fields_saved = set_work_order_fields(request, row, db)
-    return save_work_order_pdf(request, row, invoice, reviewer, db), fields_saved
+    sales_assigned = assign_sales_person(request, reviewer)
+    return save_work_order_pdf(request, row, invoice, reviewer, db), fields_saved, sales_assigned
 
 
 def draw_work_order(request, row: dict, invoice: dict, reviewer, db: Session) -> bytes:

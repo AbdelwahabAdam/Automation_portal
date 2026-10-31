@@ -30,7 +30,7 @@ class Product(Base):
     price_includes_tax: Mapped[bool] = mapped_column(default=True, server_default="true")
     tax_rate: Mapped[Decimal] = mapped_column(Numeric(5, 4), default=Decimal("0.05"), server_default="0.05")
     is_active: Mapped[bool] = mapped_column(default=True, server_default="true")
-    # Daftra reference fields, kept for traceability; filled by the Daftra import, editable by admins
+    # Daftra reference fields, kept for traceability; filled from Daftra, not typed in
     product_code: Mapped[str | None] = mapped_column(String(50))
     barcode: Mapped[str | None] = mapped_column(String(50))
     buy_price: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))

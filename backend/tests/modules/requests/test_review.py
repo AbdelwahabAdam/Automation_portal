@@ -83,6 +83,65 @@ def test_approving_again_keeps_a_status_someone_set_on_the_work_order(client, db
     assert edit["WorkOrder"]["follow_up_status_id"] == 176
 
 
+def test_the_work_order_is_assigned_to_the_salesperson_who_sent_the_request(client, db, fake_daftra, sales, manager):
+    seed.catalog(db)
+    request_id = submitted_sale(client, db, sales)
+    assert approve(client, manager, request_id).status_code == 200
+    [work_order_id] = fake_daftra.work_orders
+    [assignment] = fake_daftra.posted("/v2/api/entity/item_staff")
+    assert assignment == {"item_id": work_order_id, "item_type": 8, "staff_id": sales.daftra_staff_id,
+                          "assigned_by": manager.daftra_staff_id}
+
+
+def test_a_manager_with_no_daftra_staff_still_gets_the_work_order_assigned(client, db, fake_daftra, sales, manager):
+    """Daftra refuses an assignment that does not say who made it."""
+    seed.catalog(db)
+    manager.daftra_staff_id = None
+    db.commit()
+    request_id = submitted_sale(client, db, sales)
+    assert approve(client, manager, request_id).status_code == 200
+    [assignment] = fake_daftra.posted("/v2/api/entity/item_staff")
+    assert assignment["assigned_by"] == sales.daftra_staff_id
+
+
+def test_approving_again_does_not_assign_the_work_order_twice(client, db, fake_daftra, sales, manager):
+    """The API cannot take a second row off again. Someone else assigned in Daftra stays."""
+    seed.catalog(db)
+    request_id = submitted_sale(client, db, sales)
+    fake_daftra.fail_once = "/api2/invoices/assign_work_order"
+    assert approve(client, manager, request_id).status_code == 502
+    [work_order_id] = fake_daftra.work_orders
+    fake_daftra.assignments += [{"id": 1, "item_id": work_order_id, "item_type": 8, "staff_id": 2, "assigned_by": 40},
+                                {"id": 2, "item_id": work_order_id, "item_type": 8,
+                                 "staff_id": sales.daftra_staff_id, "assigned_by": 40}]
+
+    assert approve(client, manager, request_id).status_code == 200
+    assert fake_daftra.posted("/v2/api/entity/item_staff") == []
+
+
+def test_an_assignment_on_another_record_does_not_count(client, db, fake_daftra, sales, manager):
+    """Daftra keeps every kind of assignment in one list, and a client can share a work order's id."""
+    seed.catalog(db)
+    request_id = submitted_sale(client, db, sales)
+    fake_daftra.fail_once = "/api2/invoices/assign_work_order"
+    assert approve(client, manager, request_id).status_code == 502
+    [work_order_id] = fake_daftra.work_orders
+    fake_daftra.assignments.append({"id": 1, "item_id": work_order_id, "item_type": 1,
+                                    "staff_id": sales.daftra_staff_id, "assigned_by": 40})
+
+    assert approve(client, manager, request_id).status_code == 200
+    assert len(fake_daftra.posted("/v2/api/entity/item_staff")) == 1
+
+
+def test_an_assignment_daftra_refuses_does_not_stop_the_approval(client, db, fake_daftra, sales, manager):
+    seed.catalog(db)
+    request_id = submitted_sale(client, db, sales)
+    fake_daftra.fail_once = "/v2/api/entity/item_staff"
+    assert approve(client, manager, request_id).status_code == 200
+    assert db.get(Request, request_id).status == "approved"
+    assert fake_daftra.assignments == []
+
+
 def test_review_queue_shows_sent_requests_and_the_employees_drafts(client, db, sales, manager):
     seed.catalog(db)
     request_id = submitted_sale(client, db, sales)

@@ -13,6 +13,7 @@ from ...core.errors import Conflict, Invalid, NotFound
 from ..audit import changes
 from ..audit import log as audit_log
 from . import repo
+from .in_daftra import place_in_daftra
 from .models import Package, PackageItem, Product
 from .schemas import PackageIn, ProductIn
 
@@ -112,20 +113,7 @@ def apply_product(db: Session, product: Product, body: ProductIn):
     product.name_ar = body.name_ar.strip()
     product.description = body.description.strip()
     product.unit_price = body.unit_price
-    product.price_includes_tax = body.price_includes_tax
-    product.tax_rate = body.tax_rate
     product.is_active = body.is_active
-    product.product_code = body.product_code.strip()
-    product.barcode = body.barcode.strip()
-    product.buy_price = body.buy_price
-    product.stock_balance = body.stock_balance
-    product.category = body.category.strip()
-    product.brand = body.brand.strip()
-    if body.daftra_id is not None:
-        taken = repo.product_with_daftra_id(db, body.daftra_id)
-        if taken is not None and taken is not product:
-            raise Conflict(f"رقم دفترة {body.daftra_id} مربوط بمنتج آخر: «{taken.name}»")
-    product.daftra_id = body.daftra_id
     product.maintenance_group = body.maintenance_group.strip() or None
 
 
@@ -137,6 +125,7 @@ def listed_products(db: Session) -> list[dict]:
 def create_product(db: Session, who: Actor, body: ProductIn) -> dict:
     product = Product()
     apply_product(db, product, body)
+    place_in_daftra(db, product)
     db.add(product)
     db.flush()
     audit_log(db, who, "product.create", "product", product.id, product.name, after=product_snapshot(product))
@@ -202,16 +191,11 @@ def package_by_id(db: Session, package_id: int) -> Package:
 
 def apply_package(db: Session, package: Package, body: PackageIn):
     name = " ".join(body.name.split())
-    code = body.code.strip() or None
     if not name:
         raise Invalid("اكتب اسم الباقة")
     taken = repo.package_named(db, name)
     if taken is not None and taken is not package:
         raise Conflict("توجد باقة بنفس الاسم")
-    if code:
-        taken = repo.package_coded(db, code)
-        if taken is not None and taken is not package:
-            raise Conflict("الكود مستخدم لباقة أخرى")
     product_ids = [item.product_id for item in body.items]
     if len(set(product_ids)) != len(product_ids):
         raise Invalid("المنتج مكرر في الباقة؛ زِد الكمية بدل تكراره")
@@ -222,7 +206,6 @@ def apply_package(db: Session, package: Package, body: PackageIn):
         if item.discount > item.unit_price * item.quantity * (1 + products[item.product_id].tax_rate):
             raise Invalid(f"خصم «{products[item.product_id].name}» أكبر من قيمة البند")
     package.name = name
-    package.code = code
     package.color = body.color.strip()
     package.is_active = body.is_active
     set_items(package, [

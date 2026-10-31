@@ -14,8 +14,10 @@ from .cache import CACHE_SECONDS, cached, clear, forget
 from .client import call, invoice_pdf, upload_file
 from .errors import DaftraError, NotFound
 from .resources import (
+    PRODUCT_SERVICE,
     all_order_sources,
     all_records,
+    assign_work_order,
     attach_invoice_document,
     client_category,
     client_invoices,
@@ -30,19 +32,21 @@ from .resources import (
     list_staff_members,
     list_treasuries,
     post,
+    products_named,
     read_v2,
     same_name,
     set_order_source_active,
     update,
     update_unconfirmed,
+    work_order_staff,
 )
 
 __all__ = [
-    "CACHE_SECONDS", "DaftraError", "NotFound", "all_order_sources", "all_records",
+    "CACHE_SECONDS", "DaftraError", "NotFound", "PRODUCT_SERVICE", "all_order_sources", "all_records",
     "cache", "client", "fake", "live",
-    "attach_invoice_document", "cached", "call", "clear", "client_category",
+    "assign_work_order", "attach_invoice_document", "cached", "call", "clear", "client_category",
     "client_invoices", "create", "create_order_source", "forget", "get", "invoice_pdf",
     "list_client_categories", "list_clients", "list_order_sources", "list_products", "list_staff",
-    "list_staff_members", "list_treasuries", "post", "read_v2", "same_name",
-    "set_order_source_active", "update", "update_unconfirmed", "upload_file",
+    "list_staff_members", "list_treasuries", "post", "products_named", "read_v2", "same_name",
+    "set_order_source_active", "update", "update_unconfirmed", "upload_file", "work_order_staff",
 ]

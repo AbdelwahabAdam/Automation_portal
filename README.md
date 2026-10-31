@@ -230,8 +230,8 @@ Daftra's API has none:
 - **طلب بيع لعميل جديد**: the client when new, the invoice, and the receipt (سند قبض) for the amount paid.
   When «إنشاء أمر الشغل» is نعم, it also creates the installation work order, and attaches a PDF of it
   drawn by the portal:
-  - with the approving manager written in it as «المسؤول» (Daftra's API cannot set who a work order is
-    for: it records the API user as its creator);
+  - with the approving manager written in it as «المسؤول» (Daftra records the API user as its creator);
+  - assigned to the salesperson who sent the request, under «معلومات الموظفين المعينين»;
   - starting on the approval day and due after «مدة التركيب» days;
   - linked to the invoice;
   - with the custom fields of our work-order form filled from the request (ملحقات التركيب، الألوان المتاحة،
@@ -279,7 +279,7 @@ Other form types are not sent to Daftra yet. Before it works for a salesperson:
 
 - Link their portal user to their Daftra staff member (الإدارة → المستخدمون → الموظف في دفترة); it is the
   sales person on the invoice.
-- Every product in the order needs its Daftra id (`daftra_id`, set by `import_packages_from_proposals`).
+- Every product in the order needs its Daftra id (`daftra_id`). Saving a new product on the catalog page creates it in Daftra as an untracked service and keeps its id and code; editing one changes the portal only.
 
 If Daftra refuses or cannot be reached, the request is not approved and the manager sees why. Approving
 again continues from the step that failed. The invoice's `po_number` and the payment's notes carry

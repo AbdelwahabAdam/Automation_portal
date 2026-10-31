@@ -104,6 +104,7 @@ _OWN_FIELD_LABELS = {
     "payment_proof_sent": "تم إرفاق إثبات الدفع بالفاتورة في دفترة",
     "work_order_pdf_saved": "تم حفظ PDF أمر الشغل",
     "work_order_fields_saved": "تم ملء حقول أمر الشغل في دفترة",
+    "work_order_sales_assigned": "تم تعيين موظف المبيعات على أمر الشغل في دفترة",
     "error": "الخطأ",
     "is_default": "العنوان الأساسي",
     "daftra_staff_id": "رقم الموظف في دفترة",

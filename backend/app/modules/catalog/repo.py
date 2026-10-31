@@ -49,10 +49,6 @@ def package_named(db: Session, name: str) -> Package | None:
     return db.scalar(select(Package).where(func.lower(Package.name) == name.lower()))
 
 
-def package_coded(db: Session, code: str) -> Package | None:
-    return db.scalar(select(Package).where(func.lower(Package.code) == code.lower()))
-
-
 def products_by_id(db: Session, ids: list[int]) -> dict[int, Product]:
     return {p.id: p for p in db.scalars(select(Product).where(Product.id.in_(ids)))}
 
