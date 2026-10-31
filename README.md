@@ -250,6 +250,12 @@ Daftra's API has none:
   - The items are the catalog products with a maintenance group, at their catalog price. Prices and groups
     are edited in الإدارة ← المنتجات والباقات. They came from `Maintenance_Invoice_Items.xlsx`:
     `.venv\Scripts\python -m app.jobs import_maintenance_items`.
+- **اعمال اضافية (قسم الفنيات)**: an invoice of the works picked for a client Daftra already has, and a receipt
+  when something was paid. Its four works are named by their Daftra id, and each must be in the catalog:
+  - تمديد المياة 6, تمديد الكهرباء 7 and اعمال باسكو 10 are the form's own prices (`TECH_SERVICE_PRICES` in
+    `app/forms/tech_extra_works/definition.py`). The server applies them over the catalog's, on this form only:
+    the same products keep the catalog's price sold alone elsewhere, and their own price in a package.
+  - «أخرى» is described and priced on its line.
 
 In a form's address (`frontend/src/modules/requests/address.js`):
 

@@ -428,8 +428,33 @@ def test_extra_works_take_only_the_technical_departments_services():
     assert "order_lines" not in errors
     # Saved under the name the form gives it; the invoice still carries Daftra's own
     assert [line["name"] for line in clean["order_lines"]] == ["تمديد المياة"]
-    # 2 x 6, straight from the catalog: the lines' total is the request's total
+    # 2 x 6: the lines' total is the request's total
     assert clean["total_amount"] == 12
+
+
+def test_extra_works_cost_what_the_form_says_whatever_the_catalog_and_the_browser_say():
+    products = {
+        **PRODUCTS,
+        "4": {**PRODUCTS["4"], "price": 150},
+        "8": {"id": 8, "name": "Electricity Connection Service", "price": 150, "maintenance_group": None, "daftra_id": 418},
+        "9": {"id": 9, "name": "interlocking paving Removel $ Breaking Service", "price": 0, "maintenance_group": None,
+              "daftra_id": 433},
+    }
+    lines = [service_line(), service_line("8", "Electricity Connection Service"), service_line("9", "paving")]
+    clean, errors = validate_submission("tech_extra_works", tech_works(lines), {}, "Sales One", products,
+                                        PACKAGE_PRICES, LISTS)
+    assert "order_lines" not in errors
+    assert [(line["name"], line["unit_price"]) for line in clean["order_lines"]] == [
+        ("تمديد المياة", 6), ("تمديد الكهرباء", 7), ("اعمال باسكو", 10)]
+    assert clean["total_amount"] == 46
+
+
+def test_the_prices_of_extra_works_belong_to_that_form_alone():
+    """Sold alone on another form, the same product still costs the catalog's price."""
+    products = {**PRODUCTS, "4": {**PRODUCTS["4"], "price": 150}}
+    clean, _ = validate_submission("new_sale", new_sale(order_lines=[service_line()]), FILES, "Sales One", products,
+                                   PACKAGE_PRICES, LISTS)
+    assert clean["order_lines"][0]["unit_price"] == 150
 
 
 def test_an_other_work_is_described_and_priced_on_its_own_line():

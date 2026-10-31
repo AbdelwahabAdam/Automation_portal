@@ -679,6 +679,38 @@ async function maintenancePrices(page, prefix) {
   await shot(page, `${prefix}-maintenance-prices`, false);
 }
 
+// اعمال اضافية offers its four works at the form's own prices. The catalog is answered at 150 here,
+// so a price of 6 on the line can only have come from the form.
+async function techWorks(page, prefix) {
+  await page.route('**/api/catalog/picker', async (route) => {
+    const response = await route.fetch();
+    const rows = (await response.json()).map((row) => (row.daftra_id === 212 ? { ...row, price: 150 } : row));
+    await route.fulfill({ response, json: rows });
+  });
+  await page.goto(`${BASE}/forms/tech_extra_works`);
+  await expectText(page, 'الأعمال المطلوبة', 'the works of اعمال اضافية');
+  const search = page.locator('#order_lines');
+  await search.waitFor({ timeout: 15000 });
+  await page.waitForFunction(() => !(document.getElementById('order_lines')?.placeholder || '').includes('جارٍ تحميل'),
+    null, { timeout: 15000 });
+  await search.scrollIntoViewIfNeeded();
+  await search.click();
+  await page.waitForTimeout(400);
+  const offered = (await page.locator('.fl-suggest__item').allInnerTexts()).map((text) => text.replace(/\s+/g, ' ').trim());
+  for (const [work, price] of [['تمديد المياة', '6 درهم'], ['تمديد الكهرباء', '7 درهم'], ['اعمال باسكو', '10 درهم']]) {
+    const row = offered.find((text) => text.includes(work));
+    if (!row) problems.push(`[tech works] «${work}» is not offered`);
+    else if (!row.includes(price)) problems.push(`[tech works] «${work}» reads «${row}», not ${price}`);
+  }
+  if (offered.length !== 4) problems.push(`[tech works] ${offered.length} works offered, not 4`);
+  await page.locator('.fl-suggest__item', { hasText: 'تمديد المياة' }).first().click({ force: true });
+  await page.waitForTimeout(300);
+  const unit = ((await page.locator('.fl-order-lines .fl-cell--unit').first().textContent()) || '').trim();
+  if (!unit.includes('6') || unit.includes('150')) problems.push(`[tech works] a line reads «${unit}», not 6`);
+  await page.unroute('**/api/catalog/picker');
+  log(`${prefix} tech works: ${offered.length} offered, a line priced «${unit}» with the catalog at 150`);
+}
+
 // ملحقات التركيب comes filled in from the package picked, and stays a box the salesperson can
 // change or empty. A package nothing is written for leaves it empty.
 async function installationWork(page, prefix) {
@@ -728,6 +760,38 @@ async function installationWork(page, prefix) {
   await shot(page, `${prefix}-installation-work`, false);
 }
 
+// «استكمال» in طلباتي opens the draft in its own form, and so does the bare URL of that page:
+// the form is never guessed from the URL alone.
+async function continuingADraft(page, prefix) {
+  await page.goto(`${BASE}/requests/mine?tab=draft`);
+  await expectText(page, 'طلباتي', 'my requests');
+  await page.waitForTimeout(1500);
+  const carry = page.getByRole('button', { name: 'استكمال' }).first();
+  if (!(await carry.count())) {
+    console.log(`${prefix} drafts of my own: none to carry on with`);
+    return;
+  }
+  await carry.click();
+  await page.waitForTimeout(1200);
+  const shown = await page.locator('.fl-alert, .fl-empty').allInnerTexts().catch(() => []);
+  const refused = shown.find((text) => text.includes('لم يعد متاحًا') || text.includes('غير متاح'));
+  if (refused) problems.push(`[${prefix}] استكمال said «${refused.slice(0, 60).trim()}»`);
+  await expectText(page, 'إرسال للمراجعة', 'the draft opened in its form');
+  const url = new URL(page.url());
+  if (!url.pathname.endsWith('/edit')) problems.push(`[${prefix}] استكمال went to ${url.pathname}`);
+  log(`${prefix} استكمال: opened ${url.pathname}${url.search}`);
+  await shot(page, `${prefix}-draft-edit`, false);
+
+  // The same page without the hint the button adds: the request itself says which form it is
+  await page.goto(`${BASE}${url.pathname}`);
+  await expectText(page, 'إرسال للمراجعة', 'the draft opened from its bare URL');
+  const bare = await page.locator('.fl-alert, .fl-empty').allInnerTexts().catch(() => []);
+  if (bare.some((text) => text.includes('لم يعد متاحًا'))) {
+    problems.push(`[${prefix}] ${url.pathname} without ?form could not tell which form it is`);
+  }
+  console.log(`${prefix} استكمال: the bare URL opens the same form`);
+}
+
 const browser = await chromium.launch();
 try {
   for (const [prefix, viewport] of [['desktop', { width: 1440, height: 900 }], ['phone', { width: 390, height: 844 }]]) {
@@ -749,6 +813,7 @@ try {
     await installationDays(page, prefix);
     await discountInitiative(page, prefix);
     await managerDrafts(page, prefix);
+    await continuingADraft(page, prefix);
     await everyField(page, prefix);
     await pages(page, prefix);
     await urls(page, prefix);
@@ -756,6 +821,7 @@ try {
     await packagesOrProducts(page, prefix);
     await maintenancePrices(page, prefix);
     await installationWork(page, prefix);
+    await techWorks(page, prefix);
     await page.context().close();
   }
 } finally {

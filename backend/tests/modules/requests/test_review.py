@@ -10,7 +10,7 @@ from app.core.config import UPLOAD_DIR, settings
 from app.modules.invoicing.invoice import WARRANTY_TERMS_HTML
 from app.modules.invoicing.work_order import WORK_ORDER_FIELDS
 from app.jobs.redraw_work_orders import redraw
-from app.modules.models import Attachment, Client, Request
+from app.modules.models import Attachment, Client, Product, Request
 
 from ... import seed
 from ...conftest import VISIBLE_FORMS, auth, make_user, may_fill, may_review
@@ -784,6 +784,21 @@ def test_extra_works_are_invoiced_to_an_existing_client(client, db, fake_daftra,
     ]
     # No payment was taken, so there is no receipt
     assert fake_daftra.posted("/api2/invoice_payments.json") == []
+
+
+def test_extra_works_are_invoiced_at_the_forms_price_not_the_catalogs(client, db, fake_daftra, sales, manager):
+    seed.catalog(db)
+    seed.existing_client(db)
+    fake_daftra.add_client(4053, "0509999999")
+    db.query(Product).filter_by(daftra_id=212).update({"unit_price": 150})
+    db.commit()
+    request_id = create(client, sales, tech_works_data(), form_type="tech_extra_works").json()["id"]
+    assert client.put(f"/api/requests/{request_id}", json={"data": tech_works_data(), "action": "submit"},
+                      headers=auth(sales)).status_code == 200
+    assert approve(client, manager, request_id).status_code == 200
+    [invoice] = fake_daftra.posted("/api2/invoices.json")
+    assert invoice["InvoiceItem"][0]["product_id"] == 212
+    assert invoice["InvoiceItem"][0]["unit_price"] == 6.0
 
 
 def test_extra_works_print_the_technician_and_the_notes_on_the_invoice(client, db, fake_daftra, sales, manager):

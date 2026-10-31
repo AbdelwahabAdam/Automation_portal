@@ -17,6 +17,9 @@ TECH_SERVICE_LABELS = {
     OTHER_WORK_DAFTRA_ID: "أخرى",         # the catalog's general «service», described on the line
 }
 TECH_SERVICE_DAFTRA_IDS = list(TECH_SERVICE_LABELS)
+# What each costs on this form, whatever the catalog says: the catalog's price is what they cost
+# sold alone on the other forms, and a package has its own (150). «أخرى» is priced on its line.
+TECH_SERVICE_PRICES = {212: 6, 418: 7, 433: 10}
 
 SECTIONS = [
     # The technical department does not always know which source the work came through
@@ -28,7 +31,7 @@ SECTIONS = [
         # described and priced on its own line, and can be added more than once.
         f("order_lines", "الأعمال المطلوبة", "order_lines", True, subtotal_field="total_amount",
           items="tech_services", item_ids=TECH_SERVICE_DAFTRA_IDS, item_labels=TECH_SERVICE_LABELS,
-          line_fields=[
+          fixed_prices=TECH_SERVICE_PRICES, line_fields=[
               f("work_description", "وصف العمل", "text", True, max_length=500,
                 only_for=[OTHER_WORK_DAFTRA_ID]),
               money("work_price", "سعر الوحدة، شامل الضريبة (درهم)", True, positive=True,

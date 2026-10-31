@@ -198,6 +198,8 @@ def validate_submission(form_type: str, data: dict, file_counts: dict, employee_
             # A line field belonging to certain products only (وصف العمل under «أخرى») is neither
             # asked for nor kept on a line of any other product
             daftra_id = product.get("daftra_id") if product else None
+            # A price the form fixes for a product stands over the catalog's, on this form alone
+            price = spec.get("fixed_prices", {}).get(daftra_id, price)
             own_fields = [dspec for dspec in line_fields
                           if not dspec.get("only_for") or daftra_id in dspec["only_for"]]
             for dspec in filter(is_input, own_fields):

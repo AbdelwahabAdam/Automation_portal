@@ -3,7 +3,9 @@
 //
 // The screens themselves are the components beside this file; these wrappers read the URL and
 // hand them what they need.
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import * as requestsApi from '../../api/requests.js';
 import { Alert, EmptyState, Loading } from '../../ds/index.jsx';
 import { FormsCatalog } from './FormsCatalog.jsx';
 import MyRequestsList from './MyRequests.jsx';
@@ -57,7 +59,7 @@ export function MyRequestsScreen({ sales }) {
     <MyRequestsList
       formTypes={sales.formTypes}
       onNew={() => navigate('/forms')}
-      onEdit={(request) => navigate(`/requests/${request.id}/edit`)}
+      onEdit={(request) => navigate(`/requests/${request.id}/edit?form=${request.form_type}`)}
       onView={(request) => navigate(`/requests/${request.id}`)}
     />
   );
@@ -78,10 +80,33 @@ export function EditRequestScreen({ user, sales }) {
   const { requestId } = useParams();
   const navigate = useNavigate();
   const [params] = useSearchParams();
+  // «استكمال» puts the form in the URL, so it shows at once without waiting for the request.
+  // Opened from a bookmark or a typed URL there is no hint, and then the request says which
+  // form it is — the form must never be guessed from the URL alone.
+  const hinted = params.get('form');
+  const [loadedKey, setLoadedKey] = useState('');
+  const [error, setError] = useState('');
+  useEffect(() => {
+    if (hinted) return;
+    requestsApi.getRequest(Number(requestId))
+      .then((request) => setLoadedKey(request.form_type))
+      .catch((err) => setError(err.message));
+  }, [requestId, hinted]);
+
   const waiting = notReady(sales);
   if (waiting) return waiting;
-  // RequestForm loads the request and then knows its form; the hint in the URL saves a guess
-  const form = formOf(sales, params.get('form'));
+  if (error) return <Alert tone="error">{error}</Alert>;
+  const formKey = hinted || loadedKey;
+  if (!formKey) return <Loading />;
+  const form = formOf(sales, formKey);
+  // A request of a form this user may not fill (one taken away since they wrote it)
+  if (!form) {
+    return (
+      <EmptyState icon="shield" title="هذا النموذج غير متاح لك">
+        تواصل مع مدير النظام إن كنت تحتاج صلاحية تعبئته.
+      </EmptyState>
+    );
+  }
   return (
     <RequestForm
       key={requestId} formType={form} requestId={Number(requestId)} user={user} catalog={sales}

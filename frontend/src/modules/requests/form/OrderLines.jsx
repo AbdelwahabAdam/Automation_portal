@@ -118,9 +118,12 @@ export default function OrderLines({ spec, value, invalid, catalog, onChange, li
   const everyLineTyped = priceFields.some((dspec) => !dspec.only_for);
   const typedPrice = useMemo(() => new Set(priceFields.flatMap((dspec) => dspec.only_for || [])), [priceFields]);
   const priceIsTyped = (daftraId) => everyLineTyped || typedPrice.has(daftraId);
+  // fixed_prices: what an item costs on this form, by Daftra id, over the catalog's price. The server
+  // applies the same; here it is what the line shows and the total adds up.
+  const fixedPrice = (item) => spec.fixed_prices?.[item?.daftra_id];
   // item_prices: what the form starts an item's price at, by Daftra id. An item it does not name
   // is offered with no price at all, for the salesperson to fill in.
-  const startingPrice = (item) => spec.item_prices?.[item?.daftra_id]
+  const startingPrice = (item) => fixedPrice(item) ?? spec.item_prices?.[item?.daftra_id]
     ?? (priceIsTyped(item?.daftra_id) ? undefined : item?.price);
   // The price field that lives in the table's سعر الوحدة column, for a line of this product
   const columnPrice = (daftraId) => priceFields.find(
@@ -174,7 +177,7 @@ export default function OrderLines({ spec, value, invalid, catalog, onChange, li
         (dspec) => !dspec.only_for || dspec.only_for.includes(item.daftra_id));
       set([...lines, {
         product_id: item.id, name: labelOf(item), quantity: 1, group_id: null, group_name: '', package_id: null,
-        unit_price: priceIsTyped(item.daftra_id) ? 0 : (item.price ?? 0),
+        unit_price: fixedPrice(item) ?? (priceIsTyped(item.daftra_id) ? 0 : (item.price ?? 0)),
         details: {
           ...guessedDetails('', [item.name]),
           // Its price, where the form has one to start from; typed on the line otherwise
