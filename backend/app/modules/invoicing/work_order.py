@@ -129,7 +129,7 @@ def work_order_values(request, db: Session) -> dict:
         # لون اللوحه: what the form was asked for, else the cover's colour as it always was
         "plate_color": joined(lambda d, _: d.get("plate_color") or COLOR_TEXT.get(d.get("cover_color"))
                               or (f"اللون {d['cover_color']}" if d.get("cover_color") else "")),
-        # "product_image": product_image_id(data, db),
+        "product_image": product_image_id(data, db),
     }
     return values
 
