@@ -163,7 +163,7 @@ def test_daftra_lists_for_the_forms(client, db, sales):
     assert [t["id"] for t in client.get("/api/daftra/treasuries", headers=auth(sales)).json()] == [13, 9]
     assert [s["id"] for s in client.get("/api/daftra/order_sources", headers=auth(sales)).json()] == [12, 16]
     categories = client.get("/api/daftra/client_categories", headers=auth(sales)).json()
-    assert categories == [{"id": 5, "name": "العين العامره", "emirate": "أبوظبي", "area": "منطقة العين"}]
+    assert categories == [{"id": 5, "name": "العين العامره", "emirate": "العين", "area": "منطقة العين"}]
 
 
 def test_an_uploaded_file_keeps_only_its_own_name(client, sales):

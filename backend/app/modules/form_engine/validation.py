@@ -217,8 +217,10 @@ def validate_submission(form_type: str, data: dict, file_counts: dict, employee_
                 dname = dspec["name"]
                 required = dspec["required"] or ("required_if" in dspec and _condition_met(dspec["required_if"], details))
                 if dspec["type"] == "package_color":
-                    # The package (or the product picked on its own) decides the choices, and whether there are any
-                    allowed = [shown for shown, _ in package_colors(line.get("group_name") or line.get("name"))]
+                    # The package (or the product picked on its own) decides the choices; one with none
+                    # of its own offers the field's default_colors (لون الغطاء is asked on every package)
+                    allowed = ([shown for shown, _ in package_colors(line.get("group_name") or line.get("name"))]
+                               or list(dspec.get("default_colors") or []))
                     required = bool(allowed) and not dspec.get("optional")
                     if dname in details and details[dname] not in allowed:
                         if allowed:
@@ -288,6 +290,14 @@ def validate_submission(form_type: str, data: dict, file_counts: dict, employee_
     for spec in fields:
         if spec.get("blank_value") and not clean.get(spec["name"]):
             clean[spec["name"]] = spec["blank_value"]
+
+    # المنطقة is the التصنيف picked, never what was typed: the client reaches Daftra with the two
+    # saying the same thing. A form with no التصنيف chosen leaves it as it came.
+    for spec in fields:
+        source = spec.get("from_category")
+        if source and clean.get(source + "_name"):
+            clean[spec["name"]] = clean[source + "_name"]
+            errors.pop(spec["name"], None)
 
     # الإحداثيات come from the location link when it carries a point and none were sent, so a
     # pasted link is enough on its own. What was typed is kept: a link shared from a phone keeps

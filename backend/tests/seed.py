@@ -31,7 +31,7 @@ def catalog(db) -> dict:
         PackageItem(product=contract, quantity=1, unit_price=Decimal("800"), sort_order=2),
     ])
     db.add_all([cooler, contract, filter_, water, other, package,
-                ClientCategory(id=5, name="العين العامره", emirate="أبوظبي", area="منطقة العين")])
+                ClientCategory(id=5, name="العين العامره", emirate="العين", area="منطقة العين")])
     db.commit()
     # Rows added later get ids after these
     for table in ("products", "packages"):
@@ -55,7 +55,7 @@ def sale_data(**overrides) -> dict:
 
 def renewal_data(**overrides) -> dict:
     data = {"request_date": TODAY, "order_source": "16", "phone": "0509999999", "client_code": "4089",
-            "customer_name": "عميل قديم", "category": "5", "area": "منطقة العين", "emirate": "أبوظبي",
+            "customer_name": "عميل قديم", "category": "5", "area": "العين العامره", "emirate": "العين",
             "location_url": "https://www.google.com/maps?q=24.100000,55.600000", "coordinates": "24.100000, 55.600000",
             "cooler_type": "سقيا", "subtotal_amount": "1680", "discount_amount": "",
             "paid_amount": "1680", "payment_method": "تحويل بنكي", "treasury": "13", "payment_date": TODAY,
@@ -98,7 +98,7 @@ def new_sale(**overrides):
     data = {
         "request_date": TODAY, "order_source": "16", "phone": "0501234567", "customer_name": "عميل تجريبي",
         "customer_type": "فرد", "gender": "ذكر",
-        "category": "5", "area": "منطقة العين", "emirate": "أبوظبي", "street": "شارع 1", "house": "فيلا 2",
+        "category": "5", "area": "العين العامره", "emirate": "العين", "street": "شارع 1", "house": "فيلا 2",
         "location_url": "https://www.google.com/maps?q=24.178700,55.604510", "coordinates": "24.178700, 55.604510",
         "order_lines": package_lines(), "discount_amount": "200", "discount_approved_by": "Manager One",
         "discount_label": "مبادرة لك ان تشارك", "paid_amount": "1000", "remaining_due_date": TODAY,
@@ -113,7 +113,7 @@ def quotation(**overrides):
     data = {
         "request_date": TODAY, "order_source": "16", "phone": "0501234567", "customer_name": "جهة تجريبية",
         "customer_type": "تجاري", "gender": "ذكر",
-        "category": "5", "area": "منطقة العين", "emirate": "أبوظبي", "street": "شارع 1", "house": "فيلا 2",
+        "category": "5", "area": "العين العامره", "emirate": "العين", "street": "شارع 1", "house": "فيلا 2",
         "location_url": "https://www.google.com/maps?q=24.178700,55.604510", "coordinates": "24.178700, 55.604510",
         "order_lines": package_lines(), "discount_amount": "200", "discount_approved_by": "Manager One",
         "discount_label": "مبادرة لك ان تشارك", "payment_method": "تحويل بنكي",

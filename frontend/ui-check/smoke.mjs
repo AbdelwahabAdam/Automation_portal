@@ -276,34 +276,30 @@ async function addressLinks(page, prefix) {
   };
   const inside = (test) => categories.filter(test).length;
 
+  // The الإمارة narrows the categories, and العين is one of its own
   await pick('#emirate', 'الشارقة');
   const ofEmirate = (await offered()).length;
   expectThat(ofEmirate === inside((row) => row.emirate === 'الشارقة'), `الشارقة offers ${ofEmirate} categories`);
+  await pick('#emirate', 'العين');
+  const ofAin = (await offered()).length;
+  expectThat(ofAin > 0 && ofAin === inside((row) => row.emirate === 'العين'), `العين offers ${ofAin} categories`);
 
-  await page.locator('#area').fill('منطقة العين');
-  await page.waitForTimeout(300);
-  expectThat((await read('#emirate')).includes('أبوظبي'), 'an area did not set its emirate');
-  const ofArea = await offered();
-  expectThat(ofArea.length === inside((row) => row.area === 'منطقة العين'), `منطقة العين offers ${ofArea.length} categories`);
+  // المنطقة is the التصنيف picked, and nothing can be typed into it
+  const ain = categories.find((row) => row.emirate === 'العين');
+  await pick('#category', ain.name);
+  expectThat((await read('#area')) === ain.name, `picking a category left المنطقة «${await read('#area')}»`);
+  expectThat(await page.locator('#area').evaluate((el) => el.readOnly), 'المنطقة can be typed into');
+  expectThat((await read('#emirate')).includes('العين'), 'a category of العين did not keep its emirate');
 
-  await pick('#category', ofArea[0]);
-  await page.locator('#area').fill('مدينة دبي');
-  await page.waitForTimeout(300);
-  expectThat((await read('#emirate')).includes('دبي'), 'moving the area did not move the emirate');
-  expectThat((await read('#category')).includes('اختر'), 'a category of another area was kept');
-
-  // A neighbourhood is replaced when a category is picked by hand
-  const dubai = categories.find((row) => row.area === 'مدينة دبي');
-  await page.locator('#area').fill('الخوانيج 2');
-  await page.waitForTimeout(300);
-  expectThat((await offered()).length === inside((row) => row.emirate === 'دبي'), 'a neighbourhood narrowed the list');
-  await pick('#category', dubai.name);
-  expectThat((await read('#area')) === 'مدينة دبي', `picking a category left المنطقة «${await read('#area')}»`);
-
-  // Another emirate takes the category and the region with it
-  await pick('#emirate', 'عجمان');
+  // Changing the الإمارة drops a التصنيف that is somewhere else, and المنطقة goes with it
+  await pick('#emirate', 'دبي');
   expectThat((await read('#category')).includes('اختر'), 'a category of another emirate was kept');
-  expectThat(!(await read('#area')), 'a region of another emirate was kept');
+  expectThat(!(await read('#area')), 'المنطقة of another emirate was kept');
+  // And the التصنيف of the الإمارة now chosen names المنطقة in its turn
+  const dubai = categories.find((row) => row.emirate === 'دبي');
+  await pick('#category', dubai.name);
+  expectThat((await read('#area')) === dubai.name, `the second category left المنطقة «${await read('#area')}»`);
+  expectThat((await read('#emirate')).includes('دبي'), 'a category of دبي did not keep its emirate')
 
   // Changing the client empties everything they brought, by either field they can be found by. The
   // code goes with the phone because the search filled it in; a phone that was typed stays.
@@ -327,7 +323,7 @@ async function addressLinks(page, prefix) {
     expectThat(!(await page.getByText('عميل مسجل').count()), `clearing ${cleared} left the found client's note`);
     log(`${prefix} address links: clearing ${cleared} emptied client ${found.code}'s address (${found.area})`);
   }
-  log(`${prefix} address links: ${ofEmirate} categories in الشارقة, ${ofArea.length} in منطقة العين`);
+  log(`${prefix} address links: ${ofEmirate} categories in الشارقة, ${ofAin} in العين; المنطقة follows التصنيف`);
 }
 
 async function newClient(page, prefix) {

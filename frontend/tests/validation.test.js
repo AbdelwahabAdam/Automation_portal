@@ -6,9 +6,10 @@ import { test } from 'node:test';
 import { matchesQuery, normalize } from '../src/ds/match.js';
 import { formatAmount, formatDay, localDay } from '../src/lib/format.js';
 import {
-  coordinatesFromLink, evaluateForm, groupLines, initialValues, linePrice, normalizePhone, packageColors,
+  changedDetails, coordinatesFromLink, evaluateForm, groupLines, initialValues, linePrice, normalizePhone, packageColors,
   packageDefault, packageQuantity, today,
 } from '../src/modules/requests/validation.js';
+import { afterCategory, afterEmirate, categoriesFor } from '../src/modules/requests/address.js';
 
 const families = [
   { match: ['سقيا الخير مدمجة'], exclude: [], colors: ['الابيض', 'الاسود'] },
@@ -81,10 +82,90 @@ test('the package picked fills in what installing it involves', () => {
   assert.equal(packageDefault({}, 'باقة برادة نبع المزن - 3 صنابير - أبيض'), '');
 });
 
+// The inscription a package starts with, as the form's field carries it (PACKAGE_INSCRIPTIONS)
+const VERSE = 'وجعلنا من الماء';
+const NAMED = `104 - ${VERSE}`;
+const inscribing = [
+  { name: 'inscription', work_field: 'work', price_field: 'price',
+    default_by_package: [{ match: ['سقيا الخير'], exclude: [], text: VERSE, price: '0', work: NAMED }] },
+  { name: 'work' }, { name: 'price' },
+];
+const SAQYA = 'باقة برادة سقيا الخير - 2 صنبور - أبيض';
+const change = (details, value, name = 'inscription', pack = SAQYA) => changedDetails(inscribing, pack, name, details, value);
+
+test('a package starting with an inscription prices it and names it in ملحقات التركيب', () => {
+  const picked = change({ work: 'تمديد • فلتر' }, VERSE);
+  assert.deepEqual(picked, { work: `تمديد • فلتر • ${NAMED}`, inscription: VERSE, price: '0' });
+  assert.equal(change({}, VERSE).work, NAMED);
+});
+
+test('another inscription takes it out of ملحقات التركيب, and picking it again puts it back', () => {
+  const picked = change({ work: 'تمديد • فلتر' }, VERSE);
+  const other = change(picked, 'نص آخر');
+  assert.equal(other.work, 'تمديد • فلتر');
+  const none = change(picked, '');
+  assert.equal(none.work, 'تمديد • فلتر');
+  const again = change(other, VERSE);
+  assert.deepEqual(again, picked);
+});
+
+test('what the salesperson wrote around it stays when it goes', () => {
+  assert.equal(change({ inscription: VERSE, work: `تمديد • ${NAMED} • زيادة`, price: '0' }, 'نص آخر').work, 'تمديد • زيادة');
+  assert.equal(change({ inscription: VERSE, work: NAMED, price: '0' }, 'نص آخر').work, '');
+});
+
+test('the free price does not follow another inscription, and a typed one is kept', () => {
+  assert.equal(change({ inscription: VERSE, work: NAMED, price: '0' }, 'نص آخر').price, '');
+  assert.equal(change({ inscription: VERSE, work: NAMED, price: '150' }, 'نص آخر').price, '150');
+});
+
+test('changing one other inscription for another leaves ملحقات التركيب and the price alone', () => {
+  assert.deepEqual(change({ inscription: 'نص', work: 'تمديد', price: '50' }, 'نص ثان'),
+    { inscription: 'نص ثان', work: 'تمديد', price: '50' });
+});
+
+test('other fields, and a package with no inscription of its own, change only themselves', () => {
+  assert.deepEqual(change({ inscription: VERSE, work: NAMED, price: '0' }, 'نص', 'other'),
+    { inscription: VERSE, work: NAMED, price: '0', other: 'نص' });
+  assert.deepEqual(change({ work: 'تمديد', price: '50' }, VERSE, 'inscription', 'باقة برادة نبع المزن - 3 صنابير'),
+    { work: 'تمديد', price: '50', inscription: VERSE });
+});
+
+// التصنيف, المنطقة and الإمارة: the only link left is between the first and the last
+const CATEGORIES = [
+  { id: 1, name: 'البطين العين', area: 'منطقة العين', emirate: 'العين' },
+  { id: 2, name: 'الخوانيج', area: 'مدينة دبي', emirate: 'دبي' },
+  { id: 3, name: 'تصنيف بلا مكان', area: null, emirate: null },
+];
+
+test('المنطقة is the التصنيف, and الإمارة follows it', () => {
+  // Picking a التصنيف: المنطقة is its own name, never its area
+  assert.deepEqual(afterCategory(CATEGORIES[0]), { area: 'البطين العين', emirate: 'العين' });
+  // One that says nothing about where its clients are still names المنطقة
+  assert.deepEqual(afterCategory(CATEGORIES[2]), { area: 'تصنيف بلا مكان' });
+  assert.deepEqual(afterCategory(undefined), {});
+  // Picking an الإمارة keeps a التصنيف of that الإمارة and drops one of another, المنطقة with it
+  assert.deepEqual(afterEmirate({ category: 1, area: 'البطين العين' }, 'العين', { categories: CATEGORIES }),
+    { emirate: 'العين' });
+  assert.deepEqual(afterEmirate({ category: 1, area: 'البطين العين' }, 'دبي', { categories: CATEGORIES }),
+    { emirate: 'دبي', category: '', category_name: '', area: '' });
+  // The categories offered are those of the الإمارة, and all of them until one is chosen
+  assert.deepEqual(categoriesFor(CATEGORIES, { emirate: 'العين' }).map((c) => c.id), [1]);
+  assert.deepEqual(categoriesFor(CATEGORIES, {}).map((c) => c.id), [1, 2, 3]);
+  // The one already chosen is always in the list, even when it belongs elsewhere
+  assert.deepEqual(categoriesFor(CATEGORIES, { emirate: 'دبي' }, 1).map((c) => c.id), [1, 2]);
+});
+
 test('package helpers', () => {
   assert.deepEqual(packageColors({ families }, 'باقة سقيا الخير مدمجة - ذهبي'), ['الابيض', 'الاسود']);
   assert.deepEqual(packageColors({ families }, 'سقيا الخير  3 صنابير'), ['الاسود مقاس طبيعي']);
   assert.deepEqual(packageColors({ families }, 'سقيا الخير ستانلس'), []);
+  // لون الغطاء is asked on every package: one no family matches offers the field's own six
+  const six = ['اللون الابيض', 'اللون الاسود', 'اللون الدهبي', 'اللون الخشبي', 'اللون العيناوي', 'اللون الازرق'];
+  assert.deepEqual(packageColors({ families, default_colors: six }, 'سقيا الخير ستانلس'), six);
+  assert.deepEqual(packageColors({ families, default_colors: six }, 'باب خلفي جرار لبرادة مدمجة'), six);
+  // A package with its own list keeps it, the six are only the fallback
+  assert.deepEqual(packageColors({ families, default_colors: six }, 'سقيا الخير  3 صنابير'), ['الاسود مقاس طبيعي']);
   assert.equal(packageQuantity({ group_id: 'g', details: { package_quantity: '3' } }), 3);
   assert.equal(packageQuantity({ group_id: null, details: { package_quantity: '3' } }), 1);
   assert.equal(linePrice({ unit_price: 5 }, new Map()), 5);

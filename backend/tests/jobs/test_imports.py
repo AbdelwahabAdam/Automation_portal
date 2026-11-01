@@ -51,7 +51,7 @@ def test_clients_import_keeps_clients_with_a_phone(db, tmp_path, monkeypatch):
     assert [(a.emirate, a.street, a.link, a.is_default) for a in first.addresses] == [("دبي", "x", "https://m", True)]
     assert second.customer_name == "B C" and second.phone == "0522222222"
     # With no neighbourhood of its own, العين gives the region it is in, which the form offers
-    assert (second.addresses[0].emirate, second.addresses[0].area) == ("أبوظبي", "منطقة العين")
+    assert (second.addresses[0].emirate, second.addresses[0].area) == ("العين", "منطقة العين")
 
 
 def test_the_import_brings_back_an_address_the_portal_put_in_the_spare_block(db, tmp_path, monkeypatch):

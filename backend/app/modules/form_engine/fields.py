@@ -1,7 +1,7 @@
 """Building blocks the form definitions are written with: one field, and the sections several forms share."""
 
 from .inscriptions import OTHER_LABEL, inscription_choices
-from .options import (AREAS, AREAS_BY_EMIRATE, CASH_PAYMENT, CUSTOMER_TYPES, DISCOUNT_AMOUNTS, DISCOUNT_LABELS,
+from .options import (CASH_PAYMENT, CUSTOMER_TYPES, DISCOUNT_AMOUNTS, DISCOUNT_LABELS,
     DISCOUNTED, EMIRATES,
     GENDERS, NO_INSCRIPTION, PAYMENT_METHODS, SOURCES, TREASURY_BY_METHOD, YES_NO)
 
@@ -80,11 +80,10 @@ def address(title="عنوان الخدمة", required=True):
     return section(
         title,
         f("category", "التصنيف", "daftra_client_category", required),
-        # Not a list to pick from: Daftra holds a neighbourhood here («الخوانيج 2»), which is what
-        # the installation team needs on the work order, and only 28 of our 3,931 client addresses
-        # hold one of the regions below. They are offered as suggestions instead.
-        f("area", "المنطقة", "text", required, max_length=100, suggestions=AREAS,
-          areas_by_emirate=AREAS_BY_EMIRATE),
+        # Never typed and never a list: it is the التصنيف itself, so the client reaches Daftra with
+        # its category and its المنطقة saying the same thing. from_category fills it in — in the
+        # browser as the التصنيف is picked, and again here, so what is sent decides it either way.
+        f("area", "المنطقة", "text", required, max_length=100, readonly=True, from_category="category"),
         f("emirate", "الإمارة", "select", required, options=EMIRATES),
         f("street", "الشارع"),
         f("house", "رقم البيت / اسم الموقع"),

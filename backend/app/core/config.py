@@ -44,6 +44,11 @@ class Settings(BaseSettings):
     # as a file: text in it makes the save answer 500 and the work order's التفاصيل tab error. The
     # portal cannot upload, so it points every work order at one image uploaded there by hand.
     daftra_work_order_image_id: int = 16412
+    # Who every work order is assigned to under معلومات الموظفين المعينين: «السيد محمد حسان #2», the
+    # staff member the installations are held by. The same one whoever sent the request, so the
+    # technical department always finds its work in one place. A setting, not a constant: the
+    # person changes without the portal changing.
+    daftra_work_order_staff_id: int = 2
     # Off: the إثبات الدفع is not sent to the invoice in Daftra. Both calls it needs are proven
     # against the live account (see daftra-api.md 4a); set DAFTRA_SEND_PAYMENT_PROOF=true to turn on.
     daftra_send_payment_proof: bool = False
@@ -52,6 +57,9 @@ class Settings(BaseSettings):
     # The اسم الجهاز every new client gets (Nabaa + food cooler); the form does not ask for it
     daftra_default_device_name: str = "N + F"
     daftra_client_coordinates_field: str = "coordinates_text"
+    # Empty: a map link shared from a phone's own position leaves الإحداثيات to be typed in. Set: Google's
+    # Places API is asked where the place it names is, which Google bills per call (clients/location.py).
+    google_maps_api_key: str = ""
     # Which version is running, written into the image when it is built (see backend/Dockerfile).
     # app_version is the number in the VERSION file; app_build counts the commits behind it.
     app_version: str = "dev"

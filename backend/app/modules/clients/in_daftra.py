@@ -23,7 +23,8 @@ from .models import Address, Client
 CITY_LOCATIONS = {
     fold_arabic(city): location
     for cities, location in [
-        (["العين", "alain", "al ain"], ("أبوظبي", "منطقة العين")),
+        # العين is an الإمارة of the forms' own (options.EMIRATES), not أبوظبي as Daftra files it
+        (["العين", "alain", "al ain"], ("العين", "منطقة العين")),
         (["ابو ظبى", "ابوظبى", "ابو ظبي", "أبو ظبي", "أبوظبي", "ابوظبي", "ابو طبى", "ابوطبى", "abu dhabi"],
          ("أبوظبي", "منطقة أبوظبي")),
         (["الظفرة", "الظفره"], ("أبوظبي", "منطقة الظفرة")),

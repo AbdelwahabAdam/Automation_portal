@@ -91,22 +91,60 @@ function cleanValue(spec, raw) {
   return [value, null];
 }
 
-// The cooler colours a package's name allows (a "package_color" field's families, from backend/app/forms/options.py
-// PACKAGE_COLOR_FAMILIES): the first family whose words the name contains; [] when none matches
+// The colours a package's name allows (a "package_color" field's families, from the backend's
+// PACKAGE_COLOR_FAMILIES): the first family whose words the name contains. A package no family
+// matches offers the field's default_colors instead — لون الغطاء is asked on every package — and
+// [] only when the field has none either. Mirrors package_colors() in the backend's options.py.
 export function packageColors(spec, packageName) {
   const name = String(packageName ?? '').split(/\s+/).filter(Boolean).join(' ');
   const family = (spec.families || []).find((f) => f.match.some((w) => name.includes(w)) && !f.exclude.some((w) => name.includes(w)));
-  return family ? family.colors : [];
+  return family ? family.colors : (spec.default_colors || []);
+}
+
+function packageFamily(spec, packageName) {
+  const name = String(packageName ?? '').split(/\s+/).filter(Boolean).join(' ');
+  return (spec.default_by_package || []).find(
+    (f) => f.match.some((w) => name.includes(w)) && !f.exclude.some((w) => name.includes(w)));
 }
 
 // The text a package fills a field with (a field's default_by_package, from the backend's
 // INSTALLATION_WORK): the first family whose words the package's name contains, '' when none does.
 // Mirrors installation_work() in backend/app/modules/form_engine/options.py.
 export function packageDefault(spec, packageName) {
-  const name = String(packageName ?? '').split(/\s+/).filter(Boolean).join(' ');
-  const family = (spec.default_by_package || []).find(
-    (f) => f.match.some((w) => name.includes(w)) && !f.exclude.some((w) => name.includes(w)));
-  return family ? family.text : '';
+  return packageFamily(spec, packageName)?.text ?? '';
+}
+
+// How ملحقات التركيب separates what it lists
+const WORK_SEPARATOR = ' • ';
+
+function withWork(text, work) {
+  const written = String(text ?? '').trim();
+  return written.includes(work) ? written : [written, work].filter(Boolean).join(WORK_SEPARATOR);
+}
+
+function withoutWork(text, work) {
+  return String(text ?? '').replace(`${WORK_SEPARATOR}${work}`, '').replace(work, '').trim();
+}
+
+// A package's details after one of them changes. The inscription a package starts with (a field
+// with a work_field, from the backend's PACKAGE_INSCRIPTIONS) brings its price and its mention in
+// ملحقات التركيب, and takes the mention away when another one replaces it. A price still at the
+// default goes with it: left at 0 it would make the new inscription free without anyone choosing that.
+export function changedDetails(lineFields, packageName, name, details, value) {
+  const next = { ...details, [name]: value };
+  const spec = lineFields.find((dspec) => dspec.name === name && dspec.work_field);
+  const family = spec && packageFamily(spec, packageName);
+  if (!family) return next;
+  const chosen = value === family.text;
+  if (chosen === (details?.[name] === family.text)) return next;
+  if (chosen) {
+    next[spec.price_field] = family.price;
+    next[spec.work_field] = withWork(next[spec.work_field], family.work);
+  } else {
+    next[spec.work_field] = withoutWork(next[spec.work_field], family.work);
+    if (Number(next[spec.price_field]) === Number(family.price)) next[spec.price_field] = '';
+  }
+  return next;
 }
 
 // How many of the package a line was picked from (its «الكمية»); 1 for a product picked on its own

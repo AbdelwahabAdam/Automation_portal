@@ -9,6 +9,9 @@ vault_jwt_secret: ""
 vault_daftra_subdomain: "futurelifehome"
 vault_daftra_api_key: ""
 
+# Optional. Places API (New) only; finds الإحداثيات for a map link holding just a place's name.
+vault_google_maps_api_key: ""
+
 vault_smtp_host: ""
 vault_smtp_port: 587
 vault_smtp_user: ""

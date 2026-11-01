@@ -126,8 +126,10 @@ def work_order_values(request, db: Session) -> dict:
         "w_direction": joined(lambda d, _: d.get("w_direction")),
         "front_design": joined(lambda d, _: d.get("front_design")),
         "inscription": joined(inscription),
-        "plate_color": joined(lambda d, _: COLOR_TEXT.get(d.get("cover_color")) or (f"اللون {d['cover_color']}" if d.get("cover_color") else "")),
-        "product_image": product_image_id(data, db),
+        # لون اللوحه: what the form was asked for, else the cover's colour as it always was
+        "plate_color": joined(lambda d, _: d.get("plate_color") or COLOR_TEXT.get(d.get("cover_color"))
+                              or (f"اللون {d['cover_color']}" if d.get("cover_color") else "")),
+        # "product_image": product_image_id(data, db),
     }
     return values
 
@@ -146,7 +148,9 @@ def listed_values(data: dict, values: dict) -> dict:
         # A colour the form's list gives is the entry; a package it has none for keeps the words
         "available_colors": written or values.get("available_colors", "").split(" / ")[0],
         "cooler_color": cooler,
-        "plate_color": PLATE_ENTRIES.get(details.get("cover_color"), ""),
+        # The form asks for لون اللوحه الاماميه in Daftra's own words, so it is the entry as typed;
+        # left empty, the cover's colour decides it as it always did
+        "plate_color": details.get("plate_color") or PLATE_ENTRIES.get(details.get("cover_color"), ""),
         # A verse typed under «أخرى» is on no list; the PDF still carries it
         "inscription": INSCRIPTION_ENTRIES.get(str(details.get("inscription") or "").strip(), ""),
         "cover_back": details.get("cover_back") or "",
@@ -199,14 +203,20 @@ def set_work_order_fields(request, row: dict, db: Session) -> bool:
     return False
 
 
-def assign_sales_person(request, reviewer) -> bool:
-    """Puts whoever sent the request under معلومات الموظفين المعينين on the work order, unless a
-    retry finds them there already: Daftra keeps one row per call and the API cannot remove any.
-    Those it is assigned to as well stay. A failure here does not stop the approval."""
-    staff_id = request.created_by.daftra_staff_id
+def assign_work_order_staff(request, reviewer) -> bool:
+    """Puts the installations' own staff member under معلومات الموظفين المعينين on the work order.
+
+    Always the same one (DAFTRA_WORK_ORDER_STAFF_ID, «السيد محمد حسان #2»), whoever sent the
+    request, so the technical department finds every installation in one place. Nothing is added
+    twice when an approval is retried, and anyone a person assigned by hand stays: Daftra keeps
+    one row per call and its API cannot take an assignment off again. A failure here does not
+    stop the approval — the work order exists, and it can be assigned in Daftra.
+    """
+    staff_id = settings.daftra_work_order_staff_id
     try:
         if staff_id not in daftra.work_order_staff(request.daftra_work_order_id):
-            daftra.assign_work_order(request.daftra_work_order_id, staff_id, reviewer.daftra_staff_id or staff_id)
+            daftra.assign_work_order(request.daftra_work_order_id, staff_id,
+                                     reviewer.daftra_staff_id or staff_id)
     except DaftraError:
         return False
     return True
@@ -243,7 +253,7 @@ def work_order_rows(request, reviewer) -> list[str]:
             rows.append(f"التصميم: {details['design']}")
         build = [f"القطعة الأمامية: {details['front_design']}" if details.get("front_design") else "",
                  f"اتجاه الدبليو: {details['w_direction']}" if details.get("w_direction") else "",
-                 f"ظهر الكفر: {details['cover_back']}" if details.get("cover_back") else "",
+                 f"ظهر الكفر: {details['cover_back']}" if details.get("cover_back") else "بدون ظهر",
                  details.get("design_version") or ""]
         if any(build):
             rows.append(" — ".join(b for b in build if b))
@@ -321,8 +331,8 @@ def ensure_work_order(request, invoice: dict, reviewer, db: Session):
         daftra.post(f"invoices/assign_work_order/{request.daftra_invoice_id}.json",
                     {"Invoice": {"work_order_id": request.daftra_work_order_id}})
     fields_saved = set_work_order_fields(request, row, db)
-    sales_assigned = assign_sales_person(request, reviewer)
-    return save_work_order_pdf(request, row, invoice, reviewer, db), fields_saved, sales_assigned
+    staff_assigned = assign_work_order_staff(request, reviewer)
+    return save_work_order_pdf(request, row, invoice, reviewer, db), fields_saved, staff_assigned
 
 
 def draw_work_order(request, row: dict, invoice: dict, reviewer, db: Session) -> bytes:

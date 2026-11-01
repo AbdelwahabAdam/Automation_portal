@@ -8,6 +8,8 @@ from ...modules.form_engine import (
     MAX_PACKAGE_QUANTITY,
     NOTES,
     PACKAGE_COLOR_FAMILIES,
+    PACKAGE_INSCRIPTIONS,
+    PLATE_COLORS,
     address,
     amounts,
     attachments,
@@ -67,24 +69,30 @@ SECTIONS = [
             f("package_quantity", "الكمية (عدد الباقات)", "number", integer=True, min=1, max=MAX_PACKAGE_QUANTITY,
               package_only=True, stepper=True),
             f("cooler_color", "لون البرادة", "select", True, options=COLORS),
-            # Its choices depend on the package (PACKAGE_COLOR_FAMILIES); optional, as its label says
-            f("cover_color", "لون الغطاء، إن يوجد", "package_color", optional=True,
+            # Asked for on every package: its own colours where it has them (PACKAGE_COLOR_FAMILIES),
+            # the six plain ones where it has none. Optional, as its label says.
+            f("cover_color", "لون الغطاء، إن يوجد", "package_color", optional=True, default_colors=PLATE_COLORS,
               families=[{**family, "colors": [shown for shown, _ in family["colors"]]} for family in PACKAGE_COLOR_FAMILIES]),
+            # Fills لون اللوحه (field_49) on the work order; left empty it is copied from لون الغطاء
+            f("plate_color", "لون اللوحه الاماميه، إن ينطبق", "select", options=PLATE_COLORS),
             # The build details the work order's form in Daftra asks for
             f("front_design", "تصميم القطعة الأمامية، إن ينطبق", "select", options=FRONT_DESIGNS),
             f("w_direction", "اتجاه الدبليو، إن ينطبق", "select", options=W_DIRECTIONS),
             f("cover_back", "ظهر الكفر، إن ينطبق", "select", options=COVER_BACKS),
             f("design_version", "التصميم قديم أم جديد، إن ينطبق", "select", options=DESIGN_VERSIONS),
             f("base_color", "لون القاعدة، إن ينطبق", "select", options=BASE_COLORS),
-            # What installing it involves, printed on the work order as ملحقات التركيب. The package
-            # picked fills it in (default_by_package); the salesperson may add to it or empty it.
-            f("installation_accessories", "ملحقات التركيب والأعمال المطلوبة", "textarea",
-              default_by_package=INSTALLATION_WORK),
-            INSCRIPTION[0],
+            # The package picked may start it off (PACKAGE_INSCRIPTIONS). While that one stays chosen it
+            # carries its price in price_field and is named in work_field; the browser keeps them in step.
+            {**INSCRIPTION[0], "default_by_package": PACKAGE_INSCRIPTIONS, "price_field": "inscription_price",
+             "work_field": "installation_accessories"},
             # beside: shown on the same line as that field, taking a third of it
             money("inscription_price", "سعر الكتابة، شامل الضريبة (درهم)", required_if=HAS_INSCRIPTION,
                   charge=True, beside="inscription"),
             f("manufacturing_notes", "ملاحظات خاصة للتصنيع", "textarea"),
+            # What installing it involves, printed on the work order as ملحقات التركيب. The package
+            # picked fills it in (default_by_package); the salesperson may add to it or empty it.
+            f("installation_accessories", "ملحقات التركيب والأعمال المطلوبة", "textarea",
+              default_by_package=INSTALLATION_WORK),
         ]),
         note="إرسال الطلب يعني أن العميل وافق على التصميم واللون والكتابة.",
     ),
@@ -95,7 +103,6 @@ SECTIONS = [
         files("design_image", "صورة التصميم واللون المعتمدين", True),
         files("inscription_file", "صورة / ملف الكتابة، إن وجدت"),
     ),
-    NOTES,
     section(
         "التركيب وأمر الشغل",
         yes_no("create_work_order", "إنشاء أمر الشغل في دفترة"),
@@ -104,4 +111,5 @@ SECTIONS = [
           placeholder="مثال: 15 أو 20", unit="يومًا", required_if=WANTS_WORK_ORDER),
         note="عند الاعتماد يُنشأ أمر الشغل في دفترة والمدير المعتمِد مسؤولًا عنه، يبدأ يوم الاعتماد وينتهي بعد مدة التركيب، ويُربط بالفاتورة.",
     ),
+    NOTES,
 ]

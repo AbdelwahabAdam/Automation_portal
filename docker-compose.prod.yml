@@ -47,6 +47,7 @@ services:
       DAFTRA_SUBDOMAIN: ${DAFTRA_SUBDOMAIN:-}
       DAFTRA_API_KEY: ${DAFTRA_API_KEY:-}
       DAFTRA_SEND_PAYMENT_PROOF: ${DAFTRA_SEND_PAYMENT_PROOF:-false}
+      GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY:-}
       # The server is the portal: a test portal on the same Daftra account uses another prefix
       DAFTRA_MARKER_PREFIX: ${DAFTRA_MARKER_PREFIX:-PORTAL}
     volumes:

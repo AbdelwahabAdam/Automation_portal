@@ -112,7 +112,7 @@ def test_lists_are_cached_and_kept_when_daftra_is_down(fake_daftra):
     ("DUbai", "", "دبي", "مدينة دبي"),                   # written in English, and in no one case
     ("Abu Dhabi", "Khalifa Bin Zayed", "أبوظبي", "Khalifa Bin Zayed"),
     ("Sharjah", "", "الشارقة", "مدينة الشارقة"),
-    ("العين", "", "أبوظبي", "منطقة العين"),              # a city of its own, not أبوظبي the city
+    ("العين", "", "العين", "منطقة العين"),              # an الإمارة of the forms' own, not أبوظبي
     ("كلباء", "", "الشارقة", "كلباء"),
     ("السمحه", "ابو ظبي", "أبوظبي", "السمحه"),           # city and area the other way round
     ("Atlantis", "y", "", "Atlantis، y"),                # nothing we know: kept where it can be read

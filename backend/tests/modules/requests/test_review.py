@@ -83,25 +83,30 @@ def test_approving_again_keeps_a_status_someone_set_on_the_work_order(client, db
     assert edit["WorkOrder"]["follow_up_status_id"] == 176
 
 
-def test_the_work_order_is_assigned_to_the_salesperson_who_sent_the_request(client, db, fake_daftra, sales, manager):
+def test_the_work_order_is_always_assigned_to_the_installations_staff_member(client, db, fake_daftra,
+                                                                           sales, manager):
+    """معلومات الموظفين المعينين is the one staff member every installation is held by, not the sender."""
     seed.catalog(db)
     request_id = submitted_sale(client, db, sales)
     assert approve(client, manager, request_id).status_code == 200
     [work_order_id] = fake_daftra.work_orders
     [assignment] = fake_daftra.posted("/v2/api/entity/item_staff")
-    assert assignment == {"item_id": work_order_id, "item_type": 8, "staff_id": sales.daftra_staff_id,
+    assert assignment == {"item_id": work_order_id, "item_type": 8,
+                          "staff_id": settings.daftra_work_order_staff_id,
                           "assigned_by": manager.daftra_staff_id}
+    # Whoever sent it is on the invoice as its sales person, and nowhere near this
+    assert assignment["staff_id"] != sales.daftra_staff_id
 
 
 def test_a_manager_with_no_daftra_staff_still_gets_the_work_order_assigned(client, db, fake_daftra, sales, manager):
-    """Daftra refuses an assignment that does not say who made it."""
+    """Daftra refuses an assignment that does not say who made it, so the staff member assigns himself."""
     seed.catalog(db)
     manager.daftra_staff_id = None
     db.commit()
     request_id = submitted_sale(client, db, sales)
     assert approve(client, manager, request_id).status_code == 200
     [assignment] = fake_daftra.posted("/v2/api/entity/item_staff")
-    assert assignment["assigned_by"] == sales.daftra_staff_id
+    assert assignment["assigned_by"] == settings.daftra_work_order_staff_id
 
 
 def test_approving_again_does_not_assign_the_work_order_twice(client, db, fake_daftra, sales, manager):
@@ -181,7 +186,7 @@ def test_approving_a_new_sale_creates_everything_in_daftra(client, db, fake_daft
     [new_client] = fake_daftra.posted("/api2/clients.json")
     assert new_client == {
         "Client": {"business_name": "عميل تجريبي", "type": 2, "gender": 1, "phone1": "0501234567", "address1": "شارع 1",
-                   "address2": "فيلا 2", "city": "أبوظبي", "state": "منطقة العين", "country_code": "AE",
+                   "address2": "فيلا 2", "city": "العين", "state": "العين العامره", "country_code": "AE",
                    "default_currency_code": "AED", "category_id": 5, "category": "العين العامره"},
         "le_custom_data_client": {"test": "N + F", "coordinates_text": "24.178700, 55.604510"},
     }
@@ -193,8 +198,8 @@ def test_approving_a_new_sale_creates_everything_in_daftra(client, db, fake_daft
         "branch_id": 1, "sales_person_id": 71, "order_source_id": 16, "po_number": f"PORTAL-{request_id}",
         "adjustment_label": "مبادرة لك ان تشارك", "adjustment_value": -200.0, "html_notes": WARRANTY_TERMS_HTML,
         # The address of this request, so it is the one printed on the invoice
-        "client_address1": "شارع 1", "client_address2": "فيلا 2", "client_city": "أبوظبي",
-        "client_state": "منطقة العين", "client_country_code": "AE",
+        "client_address1": "شارع 1", "client_address2": "فيلا 2", "client_city": "العين",
+        "client_state": "العين العامره", "client_country_code": "AE",
     }
     assert invoice["InvoiceItem"] == [
         {"product_id": 501, "item": "WATER COOLER BLACK 3 T", "unit_price": 2000.0, "quantity": 2, "tax1": 3, "store_id": 1},
@@ -216,7 +221,7 @@ def test_approving_a_new_sale_creates_everything_in_daftra(client, db, fake_daft
     fields = work_order["WorkOrder"]
     assert fields["client_id"] == client_id
     assert (fields["start_date"], fields["delivery_date"]) == (start.isoformat(), (start + timedelta(days=20)).isoformat())
-    assert fields["title"].startswith("باقة برادة سقيا الخير - 3 صنابير - أسود أبوظبي منطقة العين")
+    assert fields["title"].startswith("باقة برادة سقيا الخير - 3 صنابير - أسود العين العين العامره")
     # The description is ملاحظات خاصة للتصنيع and nothing else, then the mark that finds it again
     assert fields["description"] == f"PORTAL-{request_id}"   # nothing was written for the floor
     saved = next(iter(fake_daftra.work_orders.values()))
@@ -445,8 +450,8 @@ def test_approving_a_quotation_creates_the_estimate_and_nothing_else(client, db,
         "client_id": client_id, "date": TODAY, "draft": 0, "currency_code": "AED", "store_id": 1, "branch_id": 1,
         "sales_person_id": 71, "po_number": f"PORTAL-{request_id}", "order_source_id": 16,
         "adjustment_label": "مبادرة لك ان تشارك", "adjustment_value": -200.0,
-        "client_address1": "شارع 1", "client_address2": "فيلا 2", "client_city": "أبوظبي",
-        "client_state": "منطقة العين", "client_country_code": "AE",
+        "client_address1": "شارع 1", "client_address2": "فيلا 2", "client_city": "العين",
+        "client_state": "العين العامره", "client_country_code": "AE",
         # How it would be paid, if the offer is taken up — the only thing تفاصيل الدفعة is for here
         "notes": "طريقة الدفع: تحويل بنكي",
     }
@@ -525,7 +530,7 @@ def maintenance_data(**overrides):
     # A business, with an email: what a new client is created with in Daftra
     data = {"request_date": TODAY, "order_source": "12", "phone": "0502222222", "customer_name": "عميل صيانة",
             "customer_type": "تجاري", "gender": "أنثى", "email": "Office@Example.COM",
-            "category": "5", "area": "منطقة العين", "emirate": "أبوظبي",
+            "category": "5", "area": "العين العامره", "emirate": "العين",
             "location_url": "https://www.google.com/maps?q=24.100000,55.600000", "coordinates": "24.100000, 55.600000",
             "devices": ["فلتر RO VIB"], "service": "تبديل فلاتر", "visit_date": TODAY,
             # صيانة وتبديل prices each line itself: 65 a piece, not the catalog's 50
@@ -612,8 +617,9 @@ def test_the_pdfs_saved_on_approval_cannot_be_deleted_by_the_owner(client, db, s
     assert client.delete(f"/api/attachments/{invoice_pdf.id}", headers=auth(sales)).status_code == 409
 
 
-# The address seed.renewal_data carries, as Daftra keeps one: the city is the emirate, the state the area
-RENEWAL_ADDRESS = {"address1": "", "address2": "", "city": "أبوظبي", "state": "منطقة العين", "country_code": "AE"}
+# The address seed.renewal_data carries, as Daftra keeps one: the city is the الإمارة, and the state
+# the المنطقة, which is the التصنيف itself
+RENEWAL_ADDRESS = {"address1": "", "address2": "", "city": "العين", "state": "العين العامره", "country_code": "AE"}
 
 
 def client_updates(fake, client_id=4053):
@@ -698,7 +704,7 @@ def test_a_second_address_goes_into_the_spare_block_and_leaves_the_first_alone(c
     # The address it already had is untouched
     assert {key: saved[key] for key in home} == home
     assert saved["active_secondary_address"] == 1
-    assert saved["secondary_city"] == "أبوظبي" and saved["secondary_state"] == "منطقة العين"
+    assert saved["secondary_city"] == "العين" and saved["secondary_state"] == "العين العامره"
 
 
 def test_the_location_link_of_the_request_is_put_on_the_client(client, db, fake_daftra, sales, manager):

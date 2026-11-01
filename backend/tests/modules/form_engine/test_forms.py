@@ -6,7 +6,9 @@ from datetime import date, timedelta
 from app.core.text import uae_today
 
 from ...seed import LISTS, PACKAGE_PRICES, PRODUCTS, TODAY, new_sale, package_lines
-from app.modules.form_engine import (CUSTOMER_TYPE_CODES, INSCRIPTIONS, INSTALLATION_WORK, form_fields, installation_work, keys,
+from app.modules.form_engine import (CUSTOMER_TYPE_CODES, INSCRIPTIONS, INSTALLATION_WORK, PACKAGE_INSCRIPTIONS,
+                                     PLATE_COLORS,
+                                     form_fields, installation_work, keys,
                                      package_colors, package_quantity, sanitize_draft, validate_submission,
                                      visible_forms)
 from app.modules.invoicing.work_order import WORK_ORDER_FIELDS
@@ -95,6 +97,31 @@ def test_an_empty_inscription_on_a_form_that_asks_it_once_is_saved_the_same_way(
     assert clean["inscription"] == "لا يوجد"
 
 
+def test_the_cover_colour_is_asked_on_every_package_and_the_plate_colour_is_its_own_field():
+    """لون الغطاء is on every package: its own colours, or the six plain ones. لون اللوحه is asked outright."""
+    lines = next(spec for spec in form_fields("new_sale") if spec["type"] == "order_lines")
+    cover = next(d for d in lines["line_fields"] if d["name"] == "cover_color")
+    assert cover["default_colors"] == PLATE_COLORS and cover["optional"]
+    plate = next(d for d in lines["line_fields"] if d["name"] == "plate_color")
+    assert plate["type"] == "select" and plate["options"] == PLATE_COLORS and not plate["required"]
+    # ملحقات التركيب sits under ملاحظات خاصة للتصنيع, which is where the salesperson reads them
+    order = [d["name"] for d in lines["line_fields"]]
+    assert order.index("installation_accessories") == order.index("manufacturing_notes") + 1
+    assert order.index("plate_color") == order.index("cover_color") + 1
+
+    # A package with no colours of its own takes one of the six, and the server keeps it
+    with_six = package_lines(cover_color="اللون الازرق", plate_color="اللون الخشبي")
+    for line in with_six:
+        line["group_name"] = "باب خلفي جرار لبرادة مدمجة"
+    clean, errors = validate("new_sale", new_sale(order_lines=with_six), FILES)
+    assert errors == {}
+    assert clean["order_lines"][0]["details"]["cover_color"] == "اللون الازرق"
+    assert clean["order_lines"][0]["details"]["plate_color"] == "اللون الخشبي"
+    # And a colour that is on neither list is refused, as before
+    _, errors = validate("new_sale", new_sale(order_lines=package_lines(cover_color="أخضر")), FILES)
+    assert errors["order_lines"]["lines"]["0"]["cover_color"] == "اختر من القائمة"
+
+
 def test_the_inscription_catalogue_is_offered_and_saves_the_wording_alone():
     """The list is what the salesperson picks from; the plate carries the text, never the code."""
     lines = next(spec for spec in form_fields("new_sale") if spec["type"] == "order_lines")
@@ -130,7 +157,7 @@ def test_unknown_products_are_dropped_and_an_empty_order_refused():
 def maintenance_data(**overrides):
     data = {
         "request_date": TODAY, "order_source": "16", "phone": "0501234567", "customer_name": "عميل",
-        "category": "5", "area": "منطقة العين", "emirate": "أبوظبي",
+        "category": "5", "area": "العين العامره", "emirate": "العين",
         "location_url": "https://www.google.com/maps?q=24.100000,55.600000", "coordinates": "24.100000, 55.600000",
         "devices": ["فلتر RO VIB"], "service": "تبديل فلاتر", "visit_date": TODAY,
         "order_lines": [{"product_id": "3", "name": "RO .PP 10", "quantity": 2, "details": {"item_price": "65"}}],
@@ -211,7 +238,7 @@ def test_balance_payment_requires_the_invoice_and_a_positive_amount():
 
 def test_contract_renewal_total_follows_the_typed_price():
     data = {"request_date": TODAY, "order_source": "16", "phone": "0501234567", "customer_name": "x", "category": "5",
-            "area": "منطقة العين", "emirate": "أبوظبي", "cooler_type": "سقيا",
+            "area": "العين العامره", "emirate": "العين", "cooler_type": "سقيا",
             "location_url": "https://www.google.com/maps?q=1.100000,2.200000", "coordinates": "1.100000, 2.200000",
             "subtotal_amount": "1680", "discount_amount": "80", "discount_approved_by": "M", "discount_label": "خصم",
             "paid_amount": "1600", "payment_method": "تحويل بنكي", "treasury": "13", "payment_date": TODAY,
@@ -299,12 +326,18 @@ def test_every_amount_field_is_marked_as_money():
             assert spec.get("money", False) == looks_like_money, f"{key}.{spec['name']}"
 
 
-def test_the_area_keeps_the_neighbourhood_daftra_holds():
-    """المنطقة is not a list to pick from: Daftra's own addresses hold a neighbourhood, and only
-    28 of the 3,931 we imported hold one of the regions the form suggests."""
+def test_the_area_is_the_category_whatever_was_sent():
+    """المنطقة is not the user's to set: the client reaches Daftra with its التصنيف and its
+    المنطقة saying the same thing, so the browser filling it in is not what decides it."""
     clean, errors = validate("new_sale", new_sale(area="الخوانيج 2"), FILES)
     assert "area" not in errors
-    assert clean["area"] == "الخوانيج 2"
+    assert clean["area"] == "العين العامره" == clean["category_name"]
+    # Left empty it is still filled in, so nothing has to be typed there
+    clean, errors = validate("new_sale", new_sale(area=""), FILES)
+    assert "area" not in errors and clean["area"] == "العين العامره"
+    # With no التصنيف chosen it is left as it came, and the form still asks for both
+    _, errors = validate("new_sale", new_sale(category="", area=""), FILES)
+    assert errors["category"] == "مطلوب" and errors["area"] == "مطلوب"
 
 
 def test_a_request_needs_a_location():
@@ -628,3 +661,33 @@ def test_the_package_picked_says_what_installing_it_involves():
     assert field["default_by_package"] == INSTALLATION_WORK
     # And a request carries it to the work order's own ملحقات التركيب (field_8)
     assert WORK_ORDER_FIELDS["installation_accessories"] == "field_8"
+
+
+def test_saqya_packages_start_with_their_verse_for_free():
+    [family] = PACKAGE_INSCRIPTIONS
+    assert family["match"] == ["سقيا الخير"] and family["exclude"] == [] and family["price"] == "0"
+    # It is the catalogue's own entry, to the letter, or the form would show it under «أخرى»
+    assert dict(INSCRIPTIONS)["104"] == family["text"]
+    assert family["work"] == f"104 - {family['text']}"
+    lines = next(spec for spec in form_fields("new_sale") if spec["type"] == "order_lines")
+    field = next(d for d in lines["line_fields"] if d["name"] == "inscription")
+    names = {d["name"] for d in lines["line_fields"]}
+    assert field["default_by_package"] == PACKAGE_INSCRIPTIONS
+    assert {field["price_field"], field["work_field"]} <= names
+
+
+def test_the_verse_at_no_charge_passes_and_adds_nothing():
+    verse = PACKAGE_INSCRIPTIONS[0]["text"]
+    clean, errors = validate("new_sale", new_sale(order_lines=package_lines(inscription=verse, inscription_price="0")), FILES)
+    assert "order_lines" not in errors
+    details = clean["order_lines"][0]["details"]
+    assert details["inscription"] == verse and details["inscription_price"] == 0
+    bare, _ = validate("new_sale", new_sale(order_lines=package_lines(inscription="لا يوجد", inscription_price="")), FILES)
+    assert clean["subtotal_amount"] == bare["subtotal_amount"]
+
+
+def test_only_the_form_with_ملحقات_التركيب_starts_a_package_off_with_a_verse():
+    for key in ("quotation",):
+        lines = next(spec for spec in form_fields(key) if spec["type"] == "order_lines")
+        field = next(d for d in lines["line_fields"] if d["name"] == "inscription")
+        assert "default_by_package" not in field and "work_field" not in field

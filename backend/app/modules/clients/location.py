@@ -6,14 +6,21 @@ redirects to is not allowed — so the portal follows it here and hands back the
 
 Not every link has one. A link shared from a place resolves to «/place/…/@24.1,55.6/…!3d24.1!4d55.6»
 and does; one shared from the phone's own position resolves to «?q=<the place's name>&entry=gps» and
-does not, because Google kept only the name. Those are answered as "no point in it".
+does not, because Google kept only the name. With GOOGLE_MAPS_API_KEY set, Google's Places API is
+asked where that name is. Without one, or with no answer, those are "no point in it".
 """
 
 import http.cookiejar
+import json
+import logging
 import re
 import urllib.error
 import urllib.parse
 import urllib.request
+
+from ...core.config import settings
+
+log = logging.getLogger(__name__)
 
 # Only Google's own map addresses are followed: this takes a link from the person filling the form,
 # and a server that fetches whatever it is given can be pointed at things it should not reach
@@ -26,6 +33,10 @@ TIMEOUT_SECONDS = 10
 PLACE_POINT = re.compile(r"!3d(-?\d{1,2}(?:\.\d+)?)!4d(-?\d{1,3}(?:\.\d+)?)")
 MAP_CENTRE = re.compile(r"@(-?\d{1,2}(?:\.\d+)?),(-?\d{1,3}(?:\.\d+)?)")
 PLAIN_POINT = re.compile(r"[?&]q=(-?\d{1,2}(?:\.\d+)?),\s*(-?\d{1,3}(?:\.\d+)?)")
+PLACES_SEARCH = "https://places.googleapis.com/v1/places:searchText"
+# The Emirates. Our clients are all here, so a name found elsewhere is another place of that name,
+# and a wrong point would send the technicians there; leaving it to be typed in is better.
+UAE = {"rectangle": {"low": {"latitude": 22.5, "longitude": 51.4}, "high": {"latitude": 26.3, "longitude": 56.5}}}
 
 
 class NotALocation(Exception):
@@ -50,6 +61,30 @@ def point_in(url: str) -> tuple[float, float] | None:
         if abs(lat) <= 90 and abs(lng) <= 180:
             return lat, lng
     return None
+
+
+def place_named(url: str) -> tuple[float, float] | None:
+    """Where the place named in a map address («?q=<name>») is, by asking Google. Each call is
+    billed, so only a link that holds no point of its own comes here. Any failure means no point:
+    الإحداثيات can still be typed in. It is logged, as a key that stopped working shows nowhere else."""
+    name = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query).get("q", [""])[0].strip()
+    if not name or not settings.google_maps_api_key:
+        return None
+    request = urllib.request.Request(
+        PLACES_SEARCH, method="POST",
+        data=json.dumps({"textQuery": name, "pageSize": 1, "regionCode": "AE", "locationRestriction": UAE}).encode("utf-8"),
+        headers={"Content-Type": "application/json", "X-Goog-Api-Key": settings.google_maps_api_key,
+                 "X-Goog-FieldMask": "places.location"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as answer:
+            places = json.load(answer).get("places") or []
+    except (urllib.error.URLError, OSError, ValueError) as error:
+        log.warning("Google's Places API did not answer: %s", error)
+        return None
+    if not places:
+        return None
+    return places[0]["location"]["latitude"], places[0]["location"]["longitude"]
 
 
 class _KeepRedirects(urllib.request.HTTPRedirectHandler):
@@ -85,8 +120,8 @@ def resolve(url: str) -> tuple[float, float]:
     except (urllib.error.URLError, OSError) as error:
         raise NotALocation(f"تعذّر فتح الرابط: {error}") from error
 
-    found = point_in(final)
+    # Shared from the phone's own position, Google kept the place's name and not where it is
+    found = point_in(final) or place_named(final)
     if not found:
-        # Shared from the phone's own position: Google kept the place's name and not where it is
         raise NotALocation("هذا الرابط لا يحمل إحداثيات. اختر الموقع على الخريطة.")
     return found

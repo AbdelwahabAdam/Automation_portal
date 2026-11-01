@@ -2,7 +2,7 @@
 import { Fragment, useMemo, useState } from 'react';
 import { Button, Choice, Combobox, Field, Icon, Select } from '../../../ds/index.jsx';
 import { formatMoney } from '../../../lib/format.js';
-import { groupLines, linePrice, packageColors, packageDefault, packageQuantity } from '../validation.js';
+import { changedDetails, groupLines, linePrice, packageColors, packageDefault, packageQuantity } from '../validation.js';
 import { Control, guessFromProductName, Stepper } from './fields.jsx';
 
 const newGroupId = () => `g${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
@@ -153,10 +153,14 @@ export default function OrderLines({ spec, value, invalid, catalog, onChange, li
     const choices = colorSpec ? packageColors(colorSpec, packageName || itemNames[0]) : [];
     const cover = choices.length === 1 ? choices[0] : '';
     // What installing this package involves (ملحقات التركيب): the text written for it, to add to or empty
-    const byPackage = lineFields.filter((d) => d.default_by_package)
+    const byPackage = lineFields.filter((d) => d.default_by_package && !d.work_field)
       .map((d) => [d.name, packageDefault(d, packageName || itemNames[0])]);
-    return Object.fromEntries([['cover_color', cover], ['cooler_color', cooler], ...byPackage]
+    const guessed = Object.fromEntries([['cover_color', cover], ['cooler_color', cooler], ...byPackage]
       .filter(([name, v]) => v && fields.has(name)));
+    // The inscription a package starts with, last: it writes itself into what was just filled in
+    const inscription = lineFields.find((d) => d.work_field);
+    const text = packageName && inscription ? packageDefault(inscription, packageName) : '';
+    return text ? changedDetails(lineFields, packageName, inscription.name, guessed, text) : guessed;
   }
 
   function addItem(item) {
@@ -202,7 +206,7 @@ export default function OrderLines({ spec, value, invalid, catalog, onChange, li
   // Changing a package's «الكمية» changes how many of each of its products there are
   const setGroupDetail = (groupId, name, fieldValue) => set(lines.map((line) => {
     if (line.group_id !== groupId) return line;
-    const next = { ...line, details: { ...line.details, [name]: fieldValue } };
+    const next = { ...line, details: changedDetails(lineFields, line.group_name, name, line.details, fieldValue) };
     if (name === 'package_quantity') next.quantity = (Number(line.base_quantity) || 1) * (Number(fieldValue) || 1);
     return next;
   }));

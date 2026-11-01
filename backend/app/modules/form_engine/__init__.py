@@ -10,9 +10,11 @@ the field builders, the choices more than one form offers, and `FormSpec`/`regis
 from .fields import (INSCRIPTION, NOTES, address, amounts, attachments, client, client_kind, discount_fields, f, files,
                      money, need, original_refs, payment, request_info, section, yes_no)
 from .inscriptions import INSCRIPTIONS
-from .options import (AREAS, AREAS_BY_EMIRATE, CASH, CASH_PAYMENT, COLORS, CUSTOMER_TYPE_CODES, CUSTOMER_TYPES,
+from .options import (CASH, CASH_PAYMENT, COLORS, CUSTOMER_TYPE_CODES, CUSTOMER_TYPES,
                       DISCOUNTED, DISCOUNT_AMOUNTS, DISCOUNT_LABELS, EMIRATES, GENDERS, INSTALLATION_WORK, MAX_PACKAGE_QUANTITY, NO_INSCRIPTION,
-                      PACKAGE_COLOR_FAMILIES, PAID, PAYMENT_METHODS, SOURCES, TREASURY_BY_METHOD, YES_NO,
+                      PACKAGE_COLOR_FAMILIES, PACKAGE_INSCRIPTIONS, PAID, PAYMENT_METHODS, PLATE_COLORS, SOURCES,
+                      TREASURY_BY_METHOD,
+                      YES_NO,
                       installation_work, package_colors, package_quantity)
 from .registry import (all_forms, clear, find, form_fields, forms_for, get, keys, known, may,
                        register, visible_forms)
@@ -27,9 +29,10 @@ __all__ = [
     "INSCRIPTION", "NOTES", "address", "amounts", "attachments", "client", "client_kind", "discount_fields", "f", "files",
     "money", "need", "original_refs", "payment", "request_info", "section", "yes_no",
     # the choices more than one form offers
-    "INSCRIPTIONS", "AREAS", "AREAS_BY_EMIRATE", "CASH", "CASH_PAYMENT", "COLORS", "CUSTOMER_TYPE_CODES", "CUSTOMER_TYPES",
+    "INSCRIPTIONS", "CASH", "CASH_PAYMENT", "COLORS", "CUSTOMER_TYPE_CODES", "CUSTOMER_TYPES",
     "DISCOUNTED", "DISCOUNT_AMOUNTS", "DISCOUNT_LABELS", "EMIRATES", "GENDERS", "INSTALLATION_WORK",
-    "MAX_PACKAGE_QUANTITY", "NO_INSCRIPTION", "PACKAGE_COLOR_FAMILIES", "PAID", "PAYMENT_METHODS", "SOURCES",
+    "MAX_PACKAGE_QUANTITY", "NO_INSCRIPTION", "PACKAGE_COLOR_FAMILIES", "PACKAGE_INSCRIPTIONS", "PAID", "PAYMENT_METHODS",
+    "PLATE_COLORS", "SOURCES",
     "TREASURY_BY_METHOD", "YES_NO", "installation_work", "package_colors", "package_quantity",
     # validating what comes back
     "DAFTRA_LIST_TYPES", "is_input", "sanitize_draft", "validate_submission",

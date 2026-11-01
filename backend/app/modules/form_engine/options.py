@@ -4,19 +4,9 @@ from ...core.text import squash
 
 YES_NO = ["نعم", "لا"]
 CASH = "نقدًا"
-EMIRATES = ["أبوظبي", "دبي", "الشارقة", "عجمان", "أم القيوين", "رأس الخيمة", "الفجيرة"]
-# Each emirate's areas, from UAE_Location_Reference.xlsx's Areas sheet (active rows only);
-# no area name repeats across emirates, so a picked area also picks its emirate.
-AREAS_BY_EMIRATE = {
-    "أبوظبي": ["منطقة أبوظبي", "منطقة العين", "منطقة الظفرة"],
-    "دبي": ["مدينة دبي", "حتا"],
-    "الشارقة": ["مدينة الشارقة", "الحمرية", "الذيد", "البطائح", "مليحة", "المدام", "خورفكان", "كلباء", "دبا الحصن"],
-    "عجمان": ["مدينة عجمان", "المنامة", "مصفوت"],
-    "أم القيوين": ["مدينة أم القيوين", "فلج المعلا", "الحمرة", "الرملة"],
-    "رأس الخيمة": ["نطاق مدينة رأس الخيمة", "المنطقة الشمالية", "المنطقة الجنوبية", "منطقة النخيل", "نطاق الظيت الجنوبي–خت"],
-    "الفجيرة": ["مدينة الفجيرة", "دبا الفجيرة"],
-}
-AREAS = [area for areas in AREAS_BY_EMIRATE.values() for area in areas]
+# العين is offered as one of its own, though Daftra's own addresses keep it inside أبوظبي:
+# the work there is a department of its own, and the تصنيفات of منطقة العين say العين.
+EMIRATES = ["أبوظبي", "العين", "دبي", "الشارقة", "عجمان", "أم القيوين", "رأس الخيمة", "الفجيرة"]
 PAYMENT_METHODS = ["تحويل بنكي", CASH, "ماكينة POS", "تابي", "تمارا", "طلب من الموقع"]
 SOURCES = ["ماركتنج", "عميل شركة", "عميل جديد", "عميل سابق", "مكتب", "الموقع", "أخرى"]
 COLORS = ["أبيض", "أسود", "ذهبي", "أخرى"]
@@ -36,6 +26,11 @@ DISCOUNT_AMOUNTS = {"مبادرة دعم نبع المزن": 1275, "مبادرة
 # The treasury a payment usually goes into in Daftra, by payment method; the salesperson can change it
 TREASURY_BY_METHOD = dict(zip(PAYMENT_METHODS, [13, 9, 16, 7, 8, 12]))
 
+# The colours a plate is written in on the work order, and what لون الغطاء offers for a package
+# with no list of its own. Written as the work order carries them, so nothing has to be translated.
+PLATE_COLORS = ["اللون الابيض", "اللون الاسود", "اللون الدهبي", "اللون الخشبي",
+                "اللون العيناوي", "اللون الازرق"]
+
 # Conditions used with required_if
 PAID = {"field": "paid_amount", "gt": 0}
 DISCOUNTED = {"field": "discount_amount", "gt": 0}
@@ -43,7 +38,7 @@ CASH_PAYMENT = {"field": "payment_method", "equals": CASH}
 # A package's cover colours (لون الغطاء) depend on the package. Each family: the words its package names
 # contain (and must not contain), and its colours as (shown in the form, written on the Daftra work order
 # as «الألوان المتاحة», exactly as staff write it there). The first family that matches wins; a package
-# that matches none has no colours to pick.
+# that matches none offers the field's own default_colors instead (PLATE_COLORS).
 PACKAGE_COLOR_FAMILIES = [
     {"match": ["سقيا الخير مدمجة"], "exclude": [], "colors": [
         # The trailing space is the Daftra list's own, and an entry must match it to the letter
@@ -80,7 +75,11 @@ PACKAGE_COLOR_FAMILIES = [
 
 def package_colors(package_name: str) -> list[tuple[str, str]]:
     """The colours a package's name allows, as (shown, as written on the work order); [] for none.
-    frontend/src/validation.js packageColors() mirrors this."""
+
+    [] does not mean the field is hidden: a «package_color» field with default_colors offers those
+    instead (لون الغطاء is asked for on every package). The browser mirrors this in
+    frontend/src/modules/requests/validation.js packageColors().
+    """
     name = squash(package_name)
     for family in PACKAGE_COLOR_FAMILIES:
         if any(word in name for word in family["match"]) and not any(word in name for word in family["exclude"]):
@@ -104,6 +103,13 @@ INSTALLATION_WORK = [
     {"match": ["نبع المزن", "سقيا الخير"], "exclude": ["حفظ الطعام", "ستانلس"], "text":
         "تمديد مياه وكهرباء كامل للبرادة • تركيب فلتر 3 مراحل * مع تركيب صندوق الفلتر • "
         "سينسور إضاءة تلقائي. • إضاءة جانبية + بروفايل ليد *"},
+]
+
+# The inscription a package starts with, matched like the two lists above: its wording as the
+# catalogue saves it, its price, and how ملحقات التركيب names it while it is the one chosen.
+PACKAGE_INSCRIPTIONS = [
+    {"match": ["سقيا الخير"], "exclude": [], "text": "وجعلنا من الماء كل شيئ حي", "price": "0",
+     "work": "104 - وجعلنا من الماء كل شيئ حي"},
 ]
 
 

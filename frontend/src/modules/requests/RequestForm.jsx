@@ -9,7 +9,7 @@ import { Control, DaftraListSelect, FileField, ProductPicker, guessFromProductNa
 import FormProgress, { Totals, formTotals } from './form/FormProgress.jsx';
 import OrderLines from './form/OrderLines.jsx';
 import { formatAmount } from '../../lib/format.js';
-import { afterArea, afterCategory, afterEmirate, categoriesFor, categoryById } from './address.js';
+import { afterCategory, afterEmirate, categoriesFor, categoryById } from './address.js';
 import { DAFTRA_LIST_TYPES, allFields, coordinatesFromLink, evaluateForm, fieldApplies, initialValues } from './validation.js';
 
 // Sections open when a form starts; the rest are folded until needed
@@ -59,12 +59,11 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
 
   // Where a التصنيف's clients live
   const categories = catalog.daftraLists?.daftra_client_category;
-  const addressLists = { areasByEmirate: specOf('area')?.areas_by_emirate, categories };
+  const addressLists = { categories };
 
   // A التصنيف the form did not get from the user — the one Daftra holds for a found client, or a
-  // saved draft's — fills المنطقة and الإمارة only while they are empty: the client's own
-  // neighbourhood is their address. One picked by hand replaces them (chooseFromList).
-  // Runs again if the list of categories arrives later.
+  // saved draft's — gives its name to المنطقة, which is never anything else, and fills الإمارة
+  // while that is empty. Runs again if the list of categories arrives later.
   const placedBy = useRef('');
   useEffect(() => {
     const id = values.category;
@@ -75,7 +74,8 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
     if (!place) return;
     // Decided out here, not inside the update: an update may be run more than once, and reading
     // what was auto-filled while also writing it would make the second run change its mind
-    const takeArea = !values.area;
+    // المنطقة always follows it; الإمارة only while nothing has been chosen there
+    const takeArea = values.area !== place.area;
     const takeEmirate = !values.emirate;
     placedBy.current = String(id);
     if (!takeArea && !takeEmirate) return;
@@ -257,12 +257,6 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
     setValues((current) => ({ ...current, ...afterEmirate(current, value, addressLists) }));
     setMessage(null);
     clearError('emirate');
-  }
-
-  function chooseArea(value) {
-    setValues((current) => ({ ...current, ...afterArea(current, value, addressLists) }));
-    setMessage(null);
-    clearError('area', 'emirate');
   }
 
   // Changing the number or code a client was found by means another client: what they brought goes
@@ -497,10 +491,11 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
       return { control: <Control spec={spec} value={values.emirate} invalid={invalid} onChange={(_, v) => chooseEmirate(v)} /> };
     }
     if (spec.name === 'area') {
-      // Typed freely — a client's neighbourhood is whatever Daftra holds — with the regions of the
-      // chosen emirate offered as suggestions
-      const suggestions = (values.emirate && spec.areas_by_emirate?.[values.emirate]) || spec.suggestions;
-      return { control: <Control spec={{ ...spec, suggestions }} value={values.area} invalid={invalid} onChange={(_, v) => chooseArea(v)} /> };
+      // Never typed: it is the التصنيف, and the server fills it in from what is sent as well
+      return {
+        locked: 'يتبع التصنيف',
+        control: <TextInput id={spec.name} value={values.area ?? ''} readOnly placeholder="—" />,
+      };
     }
     if (spec.fills) {
       return {
