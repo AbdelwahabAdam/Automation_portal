@@ -20,6 +20,12 @@ export function categoriesFor(categories, { emirate }, chosenId) {
   return chosen && !shown.includes(chosen) ? [chosen, ...shown] : shown;
 }
 
+// What المنطقة says: the name of the التصنيف, and nothing without one. A client's own category may
+// not be on the list offered, so the name that came with it stands in for the row.
+export function areaOf({ category, category_name: name }, categories) {
+  return category ? categoryById(categories, category)?.name || name || '' : '';
+}
+
 // What picking a التصنيف changes: المنطقة is its own name, and الإمارة is where its clients are.
 // One that does not say where they are still gives its name to المنطقة.
 export const afterCategory = (row) => (row ? { area: row.name, ...(row.emirate ? { emirate: row.emirate } : {}) } : {});

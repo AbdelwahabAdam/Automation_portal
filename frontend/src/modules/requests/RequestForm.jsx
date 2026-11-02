@@ -9,7 +9,7 @@ import { Control, DaftraListSelect, FileField, ProductPicker, guessFromProductNa
 import FormProgress, { Totals, formTotals } from './form/FormProgress.jsx';
 import OrderLines from './form/OrderLines.jsx';
 import { formatAmount } from '../../lib/format.js';
-import { afterCategory, afterEmirate, categoriesFor, categoryById } from './address.js';
+import { afterCategory, afterEmirate, areaOf, categoriesFor, categoryById } from './address.js';
 import { DAFTRA_LIST_TYPES, allFields, coordinatesFromLink, evaluateForm, fieldApplies, initialValues } from './validation.js';
 
 // Sections open when a form starts; the rest are folded until needed
@@ -61,31 +61,29 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
   const categories = catalog.daftraLists?.daftra_client_category;
   const addressLists = { categories };
 
-  // A التصنيف the form did not get from the user — the one Daftra holds for a found client, or a
-  // saved draft's — gives its name to المنطقة, which is never anything else, and fills الإمارة
-  // while that is empty. Runs again if the list of categories arrives later.
+  // المنطقة is never anything but the التصنيف, wherever either came from: a found client's, a saved
+  // draft's, or the list arriving late. A التصنيف not yet known by name leaves it for now.
+  useEffect(() => {
+    if (!fieldNames.has('category')) return;
+    const area = areaOf(values, categories);
+    if ((values.category && !area) || area === (values.area ?? '')) return;
+    setValues((current) => ({ ...current, area }));
+    if (area) clearError('area');
+  }, [values.category, values.category_name, values.area, categories]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // A التصنيف the form did not get from the user fills الإمارة while that is empty
   const placedBy = useRef('');
   useEffect(() => {
     const id = values.category;
     if (!id) placedBy.current = '';
     if (!id || placedBy.current === String(id)) return;
-    const { area, emirate } = afterCategory(categoryById(categories, id));
-    const place = area ? { area, emirate } : null;
-    if (!place) return;
-    // Decided out here, not inside the update: an update may be run more than once, and reading
-    // what was auto-filled while also writing it would make the second run change its mind
-    // المنطقة always follows it; الإمارة only while nothing has been chosen there
-    const takeArea = values.area !== place.area;
-    const takeEmirate = !values.emirate;
+    const row = categoryById(categories, id);
+    if (!row) return;
     placedBy.current = String(id);
-    if (!takeArea && !takeEmirate) return;
-    if (takeArea) autoFilled.current.area = place.area;
-    if (takeEmirate) autoFilled.current.emirate = place.emirate;
-    setValues((current) => ({
-      ...current,
-      ...(takeArea ? { area: place.area } : {}),
-      ...(takeEmirate ? { emirate: place.emirate } : {}),
-    }));
+    const { emirate } = afterCategory(row);
+    if (values.emirate || !emirate) return;
+    autoFilled.current.emirate = emirate;
+    setValues((current) => ({ ...current, emirate }));
   }, [values.category, categories]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {

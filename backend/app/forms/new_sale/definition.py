@@ -45,6 +45,8 @@ COVER_BACKS = [
     "باب الالمنيوم لوفر مفصلي",
     "باب الالمنيوم لوفر جرار",
 ]
+# What a cooler has when nothing else is chosen, and what the work order carries then
+NO_COVER_BACK = COVER_BACKS[0]
 
 DESIGN_VERSIONS = [
     "تصميم جديد",
@@ -78,7 +80,10 @@ SECTIONS = [
             # The build details the work order's form in Daftra asks for
             f("front_design", "تصميم القطعة الأمامية، إن ينطبق", "select", options=FRONT_DESIGNS),
             f("w_direction", "اتجاه الدبليو، إن ينطبق", "select", options=W_DIRECTIONS),
-            f("cover_back", "ظهر الكفر، إن ينطبق", "select", options=COVER_BACKS),
+            # «بدون ظهر» unless another is chosen: the box opens on it, and a line that somehow
+            # arrives without one is saved with it, so ظهر الكفر on the work order is never blank
+            f("cover_back", "ظهر الكفر، إن ينطبق", "select", options=COVER_BACKS,
+              default=NO_COVER_BACK, blank_value=NO_COVER_BACK),
             f("design_version", "التصميم قديم أم جديد، إن ينطبق", "select", options=DESIGN_VERSIONS),
             f("base_color", "لون القاعدة، إن ينطبق", "select", options=BASE_COLORS),
             # The package picked may start it off (PACKAGE_INSCRIPTIONS). While that one stays chosen it

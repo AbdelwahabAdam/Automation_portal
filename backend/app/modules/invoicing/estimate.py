@@ -62,6 +62,8 @@ def ensure_estimate(request, items: list[dict], staff_id: int, notes: str = "") 
                 "currency_code": "AED", "store_id": settings.daftra_store_id,
                 "branch_id": settings.daftra_branch_id, "sales_person_id": staff_id,
                 "po_number": marker(request),
+                # أنشئ بواسطة as well as بيعت بواسطة; without it, the API key itself
+                "staff_id": staff_id,
                 # The address this request is for, printed on the estimate
                 **invoice_address(data),
                 **({"order_source_id": data["order_source"]} if data.get("order_source") else {}),

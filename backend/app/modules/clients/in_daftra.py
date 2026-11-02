@@ -273,6 +273,7 @@ def create_client(data: dict, phone: str, db: Session) -> int:
     body = {
         "Client": {
             "business_name": name, "phone1": phone,
+            **({"phone2": local_phone(data["phone2"])} if data.get("phone2") else {}),
             # نوع العميل and الجنس as Daftra's codes (forms.options). Neither is required: one left
             # empty gets what every client got before the form asked: an individual, gender not set
             "type": CUSTOMER_TYPE_CODES.get(data.get("customer_type"), 2),
@@ -290,6 +291,7 @@ def create_client(data: dict, phone: str, db: Session) -> int:
     row = daftra.get(f"clients/{new_id}.json").get("data", {}).get("Client", {})
     db.add(Client(
         daftra_id=new_id, client_code=str(row.get("client_number") or new_id)[:10], customer_name=name, phone=phone,
+        phone2=local_phone(data.get("phone2") or ""),
         email=data.get("email") or "",
         addresses=[Address(emirate=data.get("emirate") or "", area=data.get("area") or "", street=data.get("street") or "",
                            house=data.get("house") or "", link=data.get("location_url") or "", is_default=True)],
@@ -336,6 +338,12 @@ def update_client(daftra_client_id: int, data: dict):
     link = usable_link(data)
     if link and str(saved.get("link") or "").strip() != link:
         wanted["link"] = link
+    # رقم الهاتف 2: the form fills in the one Daftra holds, so a different one coming back was
+    # typed on purpose and replaces it. An empty one changes nothing: a number already on the
+    # client is never thrown away by a form that simply did not ask.
+    phone2 = local_phone(data.get("phone2") or "")
+    if phone2 and phone2 != local_phone(saved.get("phone2") or ""):
+        wanted["phone2"] = phone2
     wanted.update(address_change(saved, address_fields(data)))
     # The coordinates live in a custom field, which is saved separately from the client's own fields
     if custom == {key: str(held.get(key) or "") for key in custom} and not wanted:

@@ -25,12 +25,13 @@ def address_out(address: Address) -> dict:
 
 
 def client_match(client: Client) -> dict:
-    """A client as the form reads one: the last address on file filled in, and all of them listed."""
+    """A client as the form reads one: the last address on file filled in, and all of them listed.
+    Not its المنطقة: on the form that is always the التصنيف, whatever the address on file says."""
     addresses = sorted(client.addresses, key=lambda a: a.id)
     last = addresses[-1] if addresses else None
     return {
         "daftra_id": client.daftra_id, "client_code": client.client_code, "customer_name": client.customer_name,
-        "phone": client.phone, "emirate": last.emirate if last else "", "area": last.area if last else "",
+        "phone": client.phone, "phone2": client.phone2, "emirate": last.emirate if last else "",
         "street": last.street if last else "", "house": last.house if last else "",
         "location_url": last.link if last else "",
         "addresses": [address_out(a) for a in addresses],

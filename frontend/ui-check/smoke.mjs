@@ -133,8 +133,8 @@ async function salesForm(page, prefix) {
     await page.locator('#phone').press('Enter');
     await expectText(page, 'عميل مسجل', 'client lookup after pressing Enter');
   }
-  // Finding a client fills التصنيف from Daftra, and المنطقة and الإمارة come from its address.
-  // التصنيف and الإمارة are buttons showing what is chosen; المنطقة is typed, so it has a value.
+  // Finding a client fills التصنيف from Daftra, المنطقة is that التصنيف, and الإمارة comes from the
+  // address. التصنيف and الإمارة are buttons showing what is chosen; المنطقة has a value.
   const picked = (id) => page.locator(id).evaluate((el) => ((el.tagName === 'INPUT' ? el.value : el.textContent) || '').trim());
   // Daftra answers a moment after the client is found; wait for التصنيف before reading the three
   await page.locator('#category').filter({ hasNotText: 'اختر…' }).waitFor({ timeout: 12000 }).catch(() => {});
@@ -143,6 +143,9 @@ async function salesForm(page, prefix) {
   const empty = (text) => !text || text.includes('اختر') || text.includes('بدون تحديد');
   if (!empty(afterLookup.category) && (empty(afterLookup.area) || empty(afterLookup.emirate))) {
     problems.push(`[client] التصنيف «${afterLookup.category}» came with المنطقة «${afterLookup.area}» and الإمارة «${afterLookup.emirate}»`);
+  }
+  if (!empty(afterLookup.category) && afterLookup.area !== afterLookup.category) {
+    problems.push(`[client] المنطقة «${afterLookup.area}» is not the التصنيف «${afterLookup.category}»`);
   }
 
   // التصنيف is a long list, so its drop-down opens with a search box; picking one fills المنطقة and الإمارة
@@ -208,6 +211,8 @@ async function salesForm(page, prefix) {
       log(`${prefix} back to «${label}»: ${filled || 'nothing filled'}`);
       // Whatever that address holds must come back; «بلا عنوان مسجل» is the one that holds nothing
       if (!label.includes('بلا عنوان') && !filled) problems.push(`[address] going back to «${label}» filled nothing in`);
+      const again = await picked('#category');
+      if (!again.includes('اختر') && back !== again) problems.push(`[address] المنطقة «${back}» is not the التصنيف «${again}» after going back`);
     }
   }
   await page.evaluate(() => document.querySelector('.fl-main-col')?.scrollTo(0, 0));

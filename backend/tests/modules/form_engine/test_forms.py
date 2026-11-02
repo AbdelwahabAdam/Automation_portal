@@ -122,6 +122,21 @@ def test_the_cover_colour_is_asked_on_every_package_and_the_plate_colour_is_its_
     assert errors["order_lines"]["lines"]["0"]["cover_color"] == "اختر من القائمة"
 
 
+def test_a_line_with_no_cover_back_is_saved_without_one():
+    """«بدون ظهر» is what the box opens on, and what a line that arrives without one is saved with."""
+    lines = next(spec for spec in form_fields("new_sale") if spec["type"] == "order_lines")
+    back = next(d for d in lines["line_fields"] if d["name"] == "cover_back")
+    assert back["default"] == back["blank_value"] == "بدون ظهر"
+    assert back["options"][0] == "بدون ظهر"       # the one the Daftra list holds too
+    # Nothing sent for it, and nothing required of it: it is saved as «بدون ظهر»
+    clean, errors = validate("new_sale", new_sale(order_lines=package_lines(cover_back="")), FILES)
+    assert errors == {}
+    assert [line["details"]["cover_back"] for line in clean["order_lines"]] == ["بدون ظهر", "بدون ظهر"]
+    # One that was chosen is kept as it was
+    clean, _ = validate("new_sale", new_sale(order_lines=package_lines(cover_back="باب W جرار")), FILES)
+    assert clean["order_lines"][0]["details"]["cover_back"] == "باب W جرار"
+
+
 def test_the_inscription_catalogue_is_offered_and_saves_the_wording_alone():
     """The list is what the salesperson picks from; the plate carries the text, never the code."""
     lines = next(spec for spec in form_fields("new_sale") if spec["type"] == "order_lines")

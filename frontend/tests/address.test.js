@@ -1,7 +1,7 @@
 // node --test tests/  How التصنيف, المنطقة and الإمارة follow and narrow each other.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { afterCategory, afterEmirate, categoriesFor } from '../src/modules/requests/address.js';
+import { afterCategory, afterEmirate, areaOf, categoriesFor } from '../src/modules/requests/address.js';
 
 const AIN = { id: 1, name: 'العين العامره', emirate: 'أبوظبي', area: 'منطقة العين' };
 const ABU_DHABI = { id: 2, name: 'الشامخه', emirate: 'أبوظبي', area: 'منطقة أبوظبي' };
@@ -39,6 +39,28 @@ test('a category that does not say where it is still names the area, and leaves 
 
 test('no category changes nothing', () => {
   assert.deepEqual(afterCategory(undefined), {});
+});
+
+test('the area is the category, whatever the client\'s address on file says', () => {
+  assert.equal(areaOf({ category: '3', category_name: 'المزهر', area: 'مدينة دبي' }, categories), 'المزهر');
+});
+
+test('the category\'s name in the list decides, over the one saved with it', () => {
+  assert.equal(areaOf({ category: '3', category_name: 'اسم قديم' }, categories), 'المزهر');
+});
+
+test('a client\'s category that is not on the list still names the area', () => {
+  assert.equal(areaOf({ category: '99', category_name: 'تصنيف العميل' }, categories), 'تصنيف العميل');
+  assert.equal(areaOf({ category: '3', category_name: 'المزهر' }, undefined), 'المزهر');
+});
+
+test('with no category there is no area', () => {
+  assert.equal(areaOf({ category: '', area: 'منطقة العين' }, categories), '');
+  assert.equal(areaOf({}, categories), '');
+});
+
+test('a category not known by name yet has no area to give', () => {
+  assert.equal(areaOf({ category: '99' }, undefined), '');
 });
 
 test('a category with no place of its own survives a change of emirate', () => {

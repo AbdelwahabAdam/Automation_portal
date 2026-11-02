@@ -64,9 +64,18 @@ def _imports(path: Path) -> list[tuple[str, int]]:
 
 
 def _is_file(dotted: str) -> bool:
-    """Whether a dotted name is a module or package of its own, rather than a name inside one."""
-    here = APP.parent / Path(*dotted.split("."))
-    return here.with_suffix(".py").exists() or (here / "__init__.py").exists()
+    """Whether a dotted name is a module or package of its own, rather than a name inside one.
+
+    Read from the folder's own listing, so the letters must match: Windows (and a Docker mount
+    of a Windows folder) answers to INSCRIPTIONS.py for inscriptions.py, and a name the
+    `__init__` re-exports would look like a module of its own.
+    """
+    *parent, last = dotted.split(".")
+    folder = APP.parent / Path(*parent)
+    if not folder.is_dir():
+        return False
+    here = {entry.name for entry in folder.iterdir()}
+    return f"{last}.py" in here or (last in here and (folder / last / "__init__.py").exists())
 
 
 def _layer(dotted: str) -> int | None:

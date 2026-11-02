@@ -145,6 +145,8 @@ export default function OrderLines({ spec, value, invalid, catalog, onChange, li
   // name's colour is its cover's (e.g. «… - ذهبي»), the water cooler inside it has its own
   function guessedDetails(packageName, itemNames) {
     const fields = new Set(lineFields.map((d) => d.name));
+    // A line field with a default of its own opens on it (ظهر الكفر's «بدون ظهر»)
+    const defaults = lineFields.filter((d) => d.default !== undefined).map((d) => [d.name, d.default]);
     // The cooler's colour: that of the water cooler inside the package, else the one in the package's name
     const coolerName = itemNames.find((name) => /water\s*cooler/i.test(name));
     const cooler = (coolerName && guessFromProductName(coolerName).cooler_color) || (packageName && guessFromProductName(packageName).cooler_color);
@@ -155,7 +157,7 @@ export default function OrderLines({ spec, value, invalid, catalog, onChange, li
     // What installing this package involves (ملحقات التركيب): the text written for it, to add to or empty
     const byPackage = lineFields.filter((d) => d.default_by_package && !d.work_field)
       .map((d) => [d.name, packageDefault(d, packageName || itemNames[0])]);
-    const guessed = Object.fromEntries([['cover_color', cover], ['cooler_color', cooler], ...byPackage]
+    const guessed = Object.fromEntries([...defaults, ['cover_color', cover], ['cooler_color', cooler], ...byPackage]
       .filter(([name, v]) => v && fields.has(name)));
     // The inscription a package starts with, last: it writes itself into what was just filled in
     const inscription = lineFields.find((d) => d.work_field);

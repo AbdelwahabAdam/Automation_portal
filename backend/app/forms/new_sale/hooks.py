@@ -4,7 +4,8 @@ The client when new, the invoice with its lines, the receipt (سند قبض) for
 paid now, and the installation work order when asked for. Today's `sync_new_sale`.
 """
 
-from ...modules.invoicing import (ensure_invoice, ensure_work_order, finish, invoice_items, payment_inputs,
+from ...modules.invoicing import (ensure_invoice, ensure_work_order, finish, form_notes, invoice_items,
+                                  payment_inputs,
                             reports_daftra_errors, sales_person)
 from ...modules.clients import client_id, update_client
 
@@ -20,8 +21,8 @@ def on_approve(ctx) -> dict:
     if request.daftra_client_id is None:
         request.save_document("client", client_id(data, db))
     update_client(request.daftra_client_id, data)
-    invoice = ensure_invoice(request, items, staff_id)
-    summary = finish(request, invoice, paid, method, reviewer, db)
+    invoice = ensure_invoice(request, items, staff_id, notes=form_notes(data))
+    summary = finish(request, invoice, paid, method, db)
     if data.get("create_work_order") == "نعم":
         (summary["work_order_pdf_saved"], summary["work_order_fields_saved"],
          summary["work_order_staff_assigned"]) = ensure_work_order(request, invoice, reviewer, db)

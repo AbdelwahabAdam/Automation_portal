@@ -5,17 +5,19 @@ import * as clientsApi from '../../../api/clients.js';
 import { Alert, Button, Select } from '../../../ds/index.jsx';
 import { coordinatesFromLink, normalizePhone } from '../validation.js';
 
-// Form fields that an existing Daftra client can fill
-const CLIENT_FIELDS = ['client_code', 'customer_name', 'phone', 'emirate', 'area', 'street', 'house', 'location_url'];
-const ADDRESS_FIELDS = ['emirate', 'area', 'street', 'house', 'location_url'];
+// Form fields that an existing Daftra client can fill. المنطقة is not one: whatever a client's saved
+// address says, it is the التصنيف, and the form works that out for itself.
+const CLIENT_FIELDS = ['client_code', 'customer_name', 'phone', 'phone2', 'emirate', 'street', 'house', 'location_url'];
+const ADDRESS_FIELDS = ['emirate', 'street', 'house', 'location_url'];
 // Belongs to the address as much as the fields above: the coordinates come from its link, and
 // التصنيف decides its المنطقة and الإمارة. A new address starts without any of them.
-const ADDRESS_ALSO = ['coordinates', 'category', 'category_name'];
+const ADDRESS_ALSO = ['area', 'coordinates', 'category', 'category_name'];
 const BLANK_ADDRESS = Object.fromEntries([...ADDRESS_FIELDS, ...ADDRESS_ALSO].map((name) => [name, '']));
 // The fields a client is looked up by
 export const SEARCH_FIELDS = ['phone', 'client_code'];
-// What a search fills in besides the address; these go only if the user has not changed them since
-const FOUND_FIELDS = [...SEARCH_FIELDS, 'customer_name'];
+// What a search fills in besides the address; these go only if the user has not changed them since.
+// رقم الهاتف 2 is among them: the client's second number shows, and changing it changes theirs.
+const FOUND_FIELDS = [...SEARCH_FIELDS, 'customer_name', 'phone2'];
 // The invoice belongs to the client it was picked from
 const OF_THE_CLIENT = { invoice: '', invoice_name: '' };
 
@@ -144,11 +146,14 @@ export function useClientLookup(form) {
     }
     const address = lookup.client.addresses.find((a) => String(a.id) === choice);
     if (!address) return;
+    // Coming back from a new address, which emptied it: their own التصنيف, and المنطقة with it
+    const own = form.fieldNames.has('category') ? clientInfo?.category : null;
     form.setValues((current) => ({
       ...current,
       ...Object.fromEntries(ADDRESS_FIELDS.map((name) => [name, address[name] ?? ''])),
       // The coordinates of the address being left do not belong to this one
       coordinates: coordinatesFromLink(address.location_url),
+      ...(own && !current.category ? { category: String(own.id), category_name: own.name } : {}),
     }));
   }
 
@@ -158,7 +163,8 @@ export function useClientLookup(form) {
     try {
       const address = await clientsApi.addClientAddress(client.daftra_id, {
         // The coordinates go too: Daftra will not save a client without them
-        ...Object.fromEntries(ADDRESS_FIELDS.map((f) => [f, values[f] || ''])), coordinates: values.coordinates || '',
+        ...Object.fromEntries(ADDRESS_FIELDS.map((f) => [f, values[f] || ''])), area: values.area || '',
+        coordinates: values.coordinates || '',
       });
       setLookup((current) => ({ ...current, client: { ...current.client, addresses: [...current.client.addresses, address] } }));
       setAddressChoice(String(address.id));

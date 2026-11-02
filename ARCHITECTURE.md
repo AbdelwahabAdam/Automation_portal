@@ -450,7 +450,7 @@ from ...modules.clients import client_id, update_client
 
 @reports_daftra_errors
 def on_approve(ctx) -> dict:
-    request, db, reviewer = ctx.request, ctx.db, ctx.reviewer
+    request, db = ctx.request, ctx.db
     data = request.data
 
     # 1. Everything that can be checked is checked before anything is sent
@@ -465,11 +465,12 @@ def on_approve(ctx) -> dict:
 
     # 3. The invoice, then the receipt and both PDFs
     invoice = ensure_invoice(request, items, staff_id)
-    return finish(request, invoice, paid, method, reviewer, db)
+    return finish(request, invoice, paid, method, db)
 ```
 
-`ctx` is an `ApprovalContext`: `ctx.request`, `ctx.db`, `ctx.reviewer` (the approving manager, who
-becomes the receipt's المستلم). The return value is a summary dict that goes into the activity log.
+`ctx` is an `ApprovalContext`: `ctx.request`, `ctx.db`, `ctx.reviewer` (the approving manager). The
+receipt's المستلم is the salesperson who sent the request, not them. The return value is a summary
+dict that goes into the activity log.
 
 ### The building blocks
 

@@ -13,7 +13,7 @@ from ...integrations.daftra import DaftraError
 from ..form_engine import INSCRIPTIONS, NO_INSCRIPTION, package_colors, package_quantity
 from ..catalog import Product
 from ...core.text import UAE, day_month_year, display_name, squash
-from .common import WORK_ORDER_ATTACHMENT_FIELD, attach_pdf, marker
+from .common import WORK_ORDER_ATTACHMENT_FIELD, attach_pdf, marker, sales_person_name
 
 # The work order's custom fields in our Daftra account (its form «نموذج أمر تشغيل ومتابعة عقد»), worked
 # out from the values staff put in them: there is no API listing their labels
@@ -25,7 +25,7 @@ WORK_ORDER_FIELDS = {
     "base_color": "field_36",                # لون القاعده
     "location": "field_37",                  # اللوكيشن
     "design_version": "field_38",            # تصميم قديم & جديد
-    "sales_person": "field_39",              # اسم الموظف (the salesperson)
+    "sales_person": "field_39",              # اسم المسؤول عن المبيع
     "cooler_color": "field_44",              # لون البراده
     "w_direction": "field_45",               # اتجاه الدبليو
     "front_design": "field_46",              # تصميم القطعه الاماميه
@@ -121,7 +121,7 @@ def work_order_values(request, db: Session) -> dict:
         "base_color": joined(lambda d, _: BASE_TEXT.get(d.get("base_color"), d.get("base_color"))),
         "location": data.get("location_url") or "",
         "design_version": joined(lambda d, _: d.get("design_version")),
-        "sales_person": display_name(request.created_by),
+        "sales_person": sales_person_name(request),
         "cooler_color": joined(cooler_color),
         "w_direction": joined(lambda d, _: d.get("w_direction")),
         "front_design": joined(lambda d, _: d.get("front_design")),
@@ -356,7 +356,7 @@ def draw_work_order(request, row: dict, invoice: dict, reviewer, db: Session) ->
         # Daftra holds the picture by a file id and gives no address for it, so the line is
         # left to fill in, as صورة المعاينة is on its own form
         product_image="", invoice_no=request.daftra_invoice_no or "",
-        responsible=display_name(reviewer), sales_person=display_name(request.created_by),
+        responsible=display_name(reviewer), sales_person=sales_person_name(request),
     )
 
 

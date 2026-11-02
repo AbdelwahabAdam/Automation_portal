@@ -13,11 +13,12 @@ from sqlalchemy.orm import Session
 
 from ...core.config import settings
 from ...core.errors import SyncError
+from ...integrations import daftra
 from ...integrations.daftra import DaftraError
 from .. import requests
 from .payment_methods import PAYMENT_METHOD_KEYS
 
-from ...core.text import UAE, squash
+from ...core.text import UAE, display_name, squash
 
 # The fields the PDFs approving a request saves are attached under (not fields of any form)
 INVOICE_ATTACHMENT_FIELD = "daftra_invoice"
@@ -30,6 +31,18 @@ TOTAL_TOLERANCE = Decimal("0.05")
 
 def money(value) -> Decimal:
     return Decimal(str(value or 0)).quantize(CENT)
+
+
+def form_notes(data: dict, *parts: str) -> str:
+    """What a record Daftra makes carries under «ملاحظات»: what the form works out, and last the
+    ملاحظات the salesperson wrote. Every form sends its own, so a note travels with the request.
+
+    Daftra prints none of this on the invoice (only html_notes prints), so it is for whoever opens
+    the record in Daftra.
+    """
+    written = str(data.get("notes") or "").strip()
+    lines = [*(part for part in parts if part), f"ملاحظات: {written}" if written else ""]
+    return "\n".join(line for line in lines if line)
 
 
 def daftra_failed(error: DaftraError) -> SyncError:
@@ -80,6 +93,18 @@ def sales_person(request) -> int:
         raise SyncError(f"الموظف «{request.created_by.full_name or request.created_by.username}» غير مربوط "
                         "بموظف في دفترة. اربطه من الإدارة ← المستخدمون، ثم اعتمد الطلب مرة أخرى.")
     return staff_id
+
+
+def sales_person_name(request) -> str:
+    """Who sent the request, as Daftra names the staff member they are linked to: the name they have
+    in the portal means nothing there. Staff Daftra no longer lists as active, or Daftra not
+    answering, leaves the portal's name, as a name is not worth stopping an approval for."""
+    try:
+        members = daftra.list_staff_members()
+    except DaftraError:
+        members = []
+    return next((member["name"] for member in members if member["id"] == request.created_by.daftra_staff_id),
+                display_name(request.created_by))
 
 
 def payment_inputs(data: dict) -> tuple[Decimal, str | None]:

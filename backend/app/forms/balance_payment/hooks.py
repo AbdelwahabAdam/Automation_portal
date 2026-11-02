@@ -6,7 +6,8 @@ Today the check is hard-coded in the shared `requests_api.apply_action`, and the
 """
 
 from ...core.errors import SyncError
-from ...modules.invoicing import (TOTAL_TOLERANCE, finish, get_invoice, money, payment_inputs, payment_of,
+from ...modules.invoicing import (TOTAL_TOLERANCE, finish, form_notes, get_invoice, money, payment_inputs,
+                            payment_of,
                             reports_daftra_errors)
 from ...integrations.daftra import NotFound
 
@@ -25,7 +26,7 @@ def validate(data: dict, ctx) -> dict:
 
 @reports_daftra_errors
 def on_approve(ctx) -> dict:
-    request, db, reviewer = ctx.request, ctx.db, ctx.reviewer
+    request, db = ctx.request, ctx.db
     data = request.data
     paid, method = payment_inputs(data)
     request.save_document("invoice", int(data["invoice"]))
@@ -40,4 +41,5 @@ def on_approve(ctx) -> dict:
     if request.daftra_payment_id is None and not payment_of(request, invoice) and paid > unpaid + TOTAL_TOLERANCE:
         raise SyncError(f"المبلغ المدفوع {paid} أكبر من المتبقي على الفاتورة {request.daftra_invoice_no} ({unpaid}). "
                         "أعد الطلب للموظف ليصحح المبلغ.")
-    return finish(request, invoice, paid, method, reviewer, db)
+    # The invoice is another request's, so nothing of ours goes in its notes: the receipt carries them
+    return finish(request, invoice, paid, method, db, payment_notes=form_notes(data))

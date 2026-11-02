@@ -41,8 +41,9 @@ def catalog(db) -> dict:
             "package": package}
 
 
-def existing_client(db, daftra_id=4053, phone="0509999999", code="004089") -> Client:
+def existing_client(db, daftra_id=4053, phone="0509999999", code="004089", phone2="0507777777") -> Client:
     client = Client(daftra_id=daftra_id, client_code=code, customer_name="عميل قديم", phone=phone,
+                    phone2=phone2,
                     addresses=[Address(emirate="دبي", area="مدينة دبي", street="الشارع", is_default=True)])
     db.add(client)
     db.commit()

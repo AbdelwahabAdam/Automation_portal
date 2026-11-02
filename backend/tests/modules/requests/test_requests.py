@@ -94,6 +94,8 @@ def test_client_lookup_by_phone_and_code(client, db, sales):
     by_phone = client.get("/api/clients/lookup", params={"phone": "+971 50 999 9999"}, headers=auth(sales)).json()
     assert [m["client_code"] for m in by_phone["matches"]] == ["004089"]
     assert by_phone["matches"][0]["emirate"] == "دبي"
+    # A client with a second number brings it, so the form shows the one Daftra holds
+    assert by_phone["matches"][0]["phone2"] == "0507777777"
     by_code = client.get("/api/clients/lookup", params={"code": "٤٠٨٩"}, headers=auth(sales)).json()
     assert by_code["matches"][0]["daftra_id"] == 4053
     assert client.get("/api/clients/lookup", params={"phone": "123"}, headers=auth(sales)).json() == {"matches": []}

@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 
 from app.integrations import daftra
 from app.core.config import UPLOAD_DIR, settings
+from app.modules.invoicing import printouts
 from app.modules.invoicing.invoice import WARRANTY_TERMS_HTML
 from app.modules.invoicing.work_order import WORK_ORDER_FIELDS, manufacturing_notes, work_order_rows
 from app.jobs.redraw_work_orders import redraw
@@ -67,6 +68,51 @@ def test_filling_in_a_work_order_keeps_its_number(client, db, fake_daftra, sales
     assert work_order["number"]
     [edit] = work_order_edits(fake_daftra)
     assert edit["WorkOrder"]["number"] == work_order["number"]
+
+
+def test_the_work_order_names_the_salesperson_as_daftra_does(client, db, fake_daftra, sales, manager, monkeypatch):
+    """اسم المسؤول عن المبيع, in Daftra and on the PDF: not the name they have in the portal."""
+    printed = {}
+    real = printouts.work_order
+    monkeypatch.setattr(printouts, "work_order", lambda **values: printed.update(values) or real(**values))
+    seed.catalog(db)
+    sales.full_name = "alaa"
+    db.commit()
+    request_id = submitted_sale(client, db, sales)
+    assert approve(client, manager, request_id).status_code == 200
+    [edit] = work_order_edits(fake_daftra)
+    assert edit["CustomModel"]["field_39"] == "Sales One"
+    assert printed["sales_person"] == "Sales One"
+
+
+def test_staff_daftra_no_longer_lists_keep_their_portal_name(client, db, fake_daftra, sales, manager):
+    seed.catalog(db)
+    sales.full_name, sales.daftra_staff_id = "alaa", 9   # «Old Staff», who has left
+    db.commit()
+    request_id = submitted_sale(client, db, sales)
+    assert approve(client, manager, request_id).status_code == 200
+    [edit] = work_order_edits(fake_daftra)
+    assert edit["CustomModel"]["field_39"] == "alaa"
+
+
+def test_daftra_not_listing_its_staff_does_not_stop_the_approval(client, db, fake_daftra, sales, manager, monkeypatch):
+    """The receipt and the work order each ask, so it stays down for both."""
+    def down():
+        raise daftra.DaftraError("HTTP 500: simulated failure")
+
+    printed = {}
+    real = printouts.receipt
+    monkeypatch.setattr(printouts, "receipt", lambda **values: printed.update(values) or real(**values))
+    seed.catalog(db)
+    sales.full_name = "alaa"
+    db.commit()
+    request_id = submitted_sale(client, db, sales)
+    monkeypatch.setattr(daftra, "list_staff_members", down)
+    assert approve(client, manager, request_id).status_code == 200
+    assert db.get(Request, request_id).status == "approved"
+    [edit] = work_order_edits(fake_daftra)
+    assert edit["CustomModel"]["field_39"] == "alaa"
+    assert printed["receiver"] == "alaa"
 
 
 def test_approving_again_keeps_a_status_someone_set_on_the_work_order(client, db, fake_daftra, sales, manager):
@@ -195,7 +241,8 @@ def test_approving_a_new_sale_creates_everything_in_daftra(client, db, fake_daft
     [invoice] = fake_daftra.posted("/api2/invoices.json")
     assert invoice["Invoice"] == {
         "client_id": client_id, "date": TODAY, "draft": 0, "is_offline": 1, "currency_code": "AED", "store_id": 1,
-        "branch_id": 1, "sales_person_id": 71, "order_source_id": 16, "po_number": f"PORTAL-{request_id}",
+        "branch_id": 1, "sales_person_id": 71, "staff_id": 71, "order_source_id": 16,
+        "po_number": f"PORTAL-{request_id}",
         "adjustment_label": "مبادرة لك ان تشارك", "adjustment_value": -200.0, "html_notes": WARRANTY_TERMS_HTML,
         # The address of this request, so it is the one printed on the invoice
         "client_address1": "شارع 1", "client_address2": "فيلا 2", "client_city": "العين",
@@ -213,7 +260,7 @@ def test_approving_a_new_sale_creates_everything_in_daftra(client, db, fake_daft
     [payment] = fake_daftra.posted("/api2/invoice_payments.json")
     assert payment == {"InvoicePayment": {
         "invoice_id": invoice_id, "amount": 1000.0, "payment_method": "bank", "treasury_id": 13, "date": TODAY,
-        "transaction_id": "TRX-1", "notes": f"PORTAL-{request_id}", "staff_id": 40,
+        "transaction_id": "TRX-1", "notes": f"PORTAL-{request_id}", "staff_id": sales.daftra_staff_id,
     }}
 
     [work_order] = fake_daftra.posted("/api2/work_orders.json")
@@ -231,7 +278,7 @@ def test_approving_a_new_sale_creates_everything_in_daftra(client, db, fake_daft
         "CONTAINE_CUSTOM_DATA": "1",
         # field_30 is the first line's product image (seed.catalog gives the cooler file_id 7809)
         "field_8": "", "field_30": "7809", "field_32": "سقيا الخير-  اللون الاسود مقاس طبيعي",
-        "field_33": "", "field_34": "", "field_36": "",
+        "field_33": "بدون ظهر", "field_34": "", "field_36": "",
         "field_37": "https://www.google.com/maps?q=24.178700,55.604510",
         # field_47 is empty: «بسم الله» was typed, so it is on the PDF and on no list of Daftra's
         "field_38": "", "field_39": "Sales One", "field_44": "اللون الاسود ", "field_45": "", "field_46": "",
@@ -448,7 +495,7 @@ def test_approving_a_quotation_creates_the_estimate_and_nothing_else(client, db,
     [estimate] = fake_daftra.posted("/api2/estimates.json")
     assert estimate["Invoice"] == {
         "client_id": client_id, "date": TODAY, "draft": 0, "currency_code": "AED", "store_id": 1, "branch_id": 1,
-        "sales_person_id": 71, "po_number": f"PORTAL-{request_id}", "order_source_id": 16,
+        "sales_person_id": 71, "staff_id": 71, "po_number": f"PORTAL-{request_id}", "order_source_id": 16,
         "adjustment_label": "مبادرة لك ان تشارك", "adjustment_value": -200.0,
         "client_address1": "شارع 1", "client_address2": "فيلا 2", "client_city": "العين",
         "client_state": "العين العامره", "client_country_code": "AE",
@@ -524,6 +571,96 @@ def test_balance_payment(client, db, fake_daftra, sales, manager):
     assert payment["InvoicePayment"]["payment_method"] == "cash"
     assert payment["InvoicePayment"]["amount"] == 500.0
     assert fake_daftra.posted("/api2/invoices.json") == []
+
+
+def test_the_receipts_receiver_is_the_salesperson_not_the_manager(client, db, fake_daftra, sales, manager, monkeypatch):
+    """المستلم, in Daftra and on the PDF: the one person, under the name Daftra has them by."""
+    printed = {}
+    real = printouts.receipt
+    monkeypatch.setattr(printouts, "receipt", lambda **values: printed.update(values) or real(**values))
+    seed.catalog(db)
+    sales.full_name = "alaa"
+    db.commit()
+    request_id = submitted_sale(client, db, sales)
+    assert approve(client, manager, request_id).status_code == 200
+    [payment] = fake_daftra.posted("/api2/invoice_payments.json")
+    assert payment["InvoicePayment"]["staff_id"] == sales.daftra_staff_id != manager.daftra_staff_id
+    assert printed["receiver"] == "Sales One"
+
+
+def test_a_manager_with_no_daftra_staff_still_gets_the_salesperson_on_the_receipt(client, db, fake_daftra, sales, manager):
+    seed.catalog(db)
+    manager.daftra_staff_id = None
+    db.commit()
+    request_id = submitted_sale(client, db, sales)
+    assert approve(client, manager, request_id).status_code == 200
+    [payment] = fake_daftra.posted("/api2/invoice_payments.json")
+    assert payment["InvoicePayment"]["staff_id"] == sales.daftra_staff_id
+
+
+def test_a_balance_payment_from_someone_not_in_daftra_says_so_and_takes_no_money(client, db, fake_daftra, sales, manager):
+    """The one form with no invoice of its own to stop it: the receipt would otherwise print «API»."""
+    seed.existing_client(db)
+    fake_daftra.add_client(4053, "0509999999")
+    invoice_id = fake_daftra.add_invoice(4053, total=5000, paid=1000)
+    request_id = create(client, sales, balance_data(invoice_id), form_type="balance_payment").json()["id"]
+    upload(client, sales, request_id, "payment_proof")
+    sent = client.put(f"/api/requests/{request_id}", json={"data": balance_data(invoice_id), "action": "submit"}, headers=auth(sales))
+    assert sent.status_code == 200, sent.json()
+    sales.daftra_staff_id = None
+    db.commit()
+
+    refused = approve(client, manager, request_id)
+    assert refused.status_code >= 400 and "غير مربوط" in str(refused.json())
+    assert fake_daftra.posted("/api2/invoice_payments.json") == []
+
+    sales.daftra_staff_id = 71
+    db.commit()
+    assert approve(client, manager, request_id).status_code == 200
+    [payment] = fake_daftra.posted("/api2/invoice_payments.json")
+    assert payment["InvoicePayment"]["staff_id"] == 71
+
+
+def test_the_invoice_names_a_person_not_the_api(client, db, fake_daftra, sales, manager):
+    """أنشئ بواسطة (staff_id) is the salesperson, as المستلم on the receipt is. Daftra writes
+    «The API» into any record that names nobody."""
+    seed.catalog(db)
+    request_id = submitted_sale(client, db, sales, create_work_order="لا", installation_days="")
+    assert approve(client, manager, request_id).status_code == 200
+    [invoice] = fake_daftra.posted("/api2/invoices.json")
+    assert invoice["Invoice"]["staff_id"] == sales.daftra_staff_id            # أنشئ بواسطة
+    assert invoice["Invoice"]["sales_person_id"] == sales.daftra_staff_id     # بيعت بواسطة
+    [payment] = fake_daftra.posted("/api2/invoice_payments.json")
+    assert payment["InvoicePayment"]["staff_id"] == sales.daftra_staff_id     # المستلم on the receipt
+
+
+def test_every_form_sends_the_salespersons_notes_to_daftra(client, db, fake_daftra, sales, manager):
+    """ملاحظات travels with the request: on the invoice the form makes, or the receipt when it makes none."""
+    seed.catalog(db)
+    written = "العميل يفضل التركيب صباحًا"
+
+    # طلب بيع لعميل جديد: its invoice
+    request_id = submitted_sale(client, db, sales, notes=written, create_work_order="لا", installation_days="")
+    assert approve(client, manager, request_id).status_code == 200
+    [invoice] = fake_daftra.posted("/api2/invoices.json")
+    assert invoice["Invoice"]["notes"] == f"ملاحظات: {written}"
+
+    # طلب تسديد مبلغ متبقي: no invoice of its own, so the receipt carries it under the mark
+    seed.existing_client(db)
+    fake_daftra.add_client(4053, "0509999999")
+    invoice_id = fake_daftra.add_invoice(4053, total=5000, paid=1000)
+    data = balance_data(invoice_id)
+    data["notes"] = written
+    balance_id = create(client, sales, data, form_type="balance_payment").json()["id"]
+    upload(client, sales, balance_id, "payment_proof")
+    assert client.put(f"/api/requests/{balance_id}", json={"data": data, "action": "submit"},
+                      headers=auth(sales)).status_code == 200
+    assert approve(client, manager, balance_id).status_code == 200
+    paid_rows = fake_daftra.posted("/api2/invoice_payments.json")
+    assert paid_rows[-1]["InvoicePayment"]["notes"] == f"PORTAL-{balance_id}" + "\n" + f"ملاحظات: {written}"
+    # The mark is still the first line, which is what finds the payment again on a retry
+    assert approve(client, manager, balance_id).status_code == 409
+    assert len(fake_daftra.posted("/api2/invoice_payments.json")) == len(paid_rows)
 
 
 def maintenance_data(**overrides):
@@ -636,6 +773,26 @@ def renewal_request(client, db, sales, **overrides):
     sent = client.put(f"/api/requests/{request_id}", json={"data": data, "action": "submit"}, headers=auth(sales))
     assert sent.status_code == 200, sent.json()
     return request_id
+
+
+def test_the_second_number_reaches_daftra_and_replaces_the_one_held(client, db, fake_daftra, sales, manager):
+    """رقم الهاتف 2 is Daftra's phone2: a new client is created with it, an existing one's is replaced."""
+    seed.catalog(db)
+    request_id = submitted_sale(client, db, sales, phone2="0559998877",
+                                create_work_order="لا", installation_days="")
+    assert approve(client, manager, request_id).status_code == 200
+    [made] = fake_daftra.posted("/api2/clients.json")
+    assert (made["Client"]["phone1"], made["Client"]["phone2"]) == ("0501234567", "0559998877")
+    # Our own copy keeps it, so a search by either number finds them
+    assert db.query(Client).filter_by(phone="0501234567").one().phone2 == "0559998877"
+
+    # A client Daftra already has: a different second number replaces theirs
+    seed.existing_client(db)
+    fake_daftra.add_client(4053, "0509999999", category_id=5, address=RENEWAL_ADDRESS)
+    fake_daftra.clients[4053]["phone2"] = "0507777777"
+    renewal_id = renewal_request(client, db, sales, phone2="0551112222")
+    assert approve(client, manager, renewal_id).status_code == 200
+    assert fake_daftra.clients[4053]["phone2"] == "0551112222"
 
 
 def test_the_client_is_left_alone_when_daftra_already_has_all_of_it(client, db, fake_daftra, sales, manager):
