@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from ...core.config import UPLOAD_DIR
-from .models import Attachment, Request
+from .models import Attachment, Request, RequestDocument
 
 
 def count_by_owner(db: Session, user_id: int) -> int:
@@ -42,6 +42,12 @@ def queue(db: Session, form_types: list[str], limit: int = 1000) -> list[Request
                  selectinload(Request.documents))
         .order_by(func.coalesce(Request.submitted_at, Request.updated_at).desc()).limit(limit)
     ))
+
+
+def document_holder(db: Session, kind: str, external_id: int) -> int | None:
+    """Which request a document Daftra made belongs to, if any of them holds it."""
+    return db.scalar(select(RequestDocument.request_id)
+                     .where(RequestDocument.kind == kind, RequestDocument.external_id == external_id).limit(1))
 
 
 def lock(db: Session, request_id: int):

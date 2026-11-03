@@ -10,10 +10,10 @@ draws through `save_file`, because the attachments table is this module's.
 
 from .labels import request_label
 from .models import Attachment, Request, RequestEvent
-from .repo import count_by_owner, save_file
+from .repo import count_by_owner, document_holder, save_file
 from .router import router
 from .service.access import can_view
 from .service.review import form_label
 
-__all__ = ["Attachment", "Request", "RequestEvent", "can_view", "count_by_owner", "form_label",
+__all__ = ["Attachment", "Request", "RequestEvent", "can_view", "count_by_owner", "document_holder", "form_label",
            "request_label", "router", "save_file"]

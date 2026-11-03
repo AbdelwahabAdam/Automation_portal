@@ -66,7 +66,8 @@ def client(code_required, name_label="اسم العميل المطلوب على 
         f("phone", "رقم الهاتف", "phone", True),
         # Daftra keeps two numbers per client (phone1 and phone2) and half of them have a second.
         # A client found by the search brings theirs; what is typed here is what they end up with.
-        f("phone2", "رقم الهاتف 2", "phone"),
+        # It is the number of someone else to reach there, so the work order names it so too.
+        f("phone2", "رقم مسؤول اخر", "phone"),
         f("client_code", "كود العميل" if code_required else "كود العميل، إن وجد", required=code_required,
           pattern=r"^\d{1,6}$", pattern_message="أرقام فقط، حتى 6 خانات"),
         f("customer_name", name_label, required=True, max_length=150),

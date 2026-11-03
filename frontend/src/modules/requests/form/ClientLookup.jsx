@@ -16,7 +16,7 @@ const BLANK_ADDRESS = Object.fromEntries([...ADDRESS_FIELDS, ...ADDRESS_ALSO].ma
 // The fields a client is looked up by
 export const SEARCH_FIELDS = ['phone', 'client_code'];
 // What a search fills in besides the address; these go only if the user has not changed them since.
-// رقم الهاتف 2 is among them: the client's second number shows, and changing it changes theirs.
+// رقم مسؤول اخر (phone2) is among them: the client's second number shows, and changing it changes theirs.
 const FOUND_FIELDS = [...SEARCH_FIELDS, 'customer_name', 'phone2'];
 // The invoice belongs to the client it was picked from
 const OF_THE_CLIENT = { invoice: '', invoice_name: '' };

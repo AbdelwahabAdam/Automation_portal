@@ -93,7 +93,7 @@ SECTIONS = [
             # beside: shown on the same line as that field, taking a third of it
             money("inscription_price", "سعر الكتابة، شامل الضريبة (درهم)", required_if=HAS_INSCRIPTION,
                   charge=True, beside="inscription"),
-            f("manufacturing_notes", "ملاحظات خاصة للتصنيع", "textarea"),
+            f("manufacturing_notes", "ملاحظات", "textarea", placeholder="يتم اضافة تفاصيل الطلب بشكل كامل"),
             # What installing it involves, printed on the work order as ملحقات التركيب. The package
             # picked fills it in (default_by_package); the salesperson may add to it or empty it.
             f("installation_accessories", "ملحقات التركيب والأعمال المطلوبة", "textarea",

@@ -39,8 +39,8 @@ def test_any_number_of_installation_days_sets_the_work_orders_due_date(client, d
     [work_order] = fake_daftra.posted("/api2/work_orders.json")
     start = datetime.now(UAE).date()
     assert work_order["WorkOrder"]["delivery_date"] == (start + timedelta(days=17)).isoformat()
-    # The floor reads مدة التركيب on the PDF; the description carries the notes and the mark alone
-    assert work_order["WorkOrder"]["description"] == f"PORTAL-{request_id}"
+    # The floor reads مدة التركيب on the PDF; the description carries the notes alone, with no mark
+    assert work_order["WorkOrder"]["description"] == ""
     assert "مدة التركيب: 17 يومًا" in work_order_rows(db.get(Request, request_id), manager)
 
 
@@ -269,8 +269,8 @@ def test_approving_a_new_sale_creates_everything_in_daftra(client, db, fake_daft
     assert fields["client_id"] == client_id
     assert (fields["start_date"], fields["delivery_date"]) == (start.isoformat(), (start + timedelta(days=20)).isoformat())
     assert fields["title"].startswith("باقة برادة سقيا الخير - 3 صنابير - أسود العين العين العامره")
-    # The description is ملاحظات خاصة للتصنيع and nothing else, then the mark that finds it again
-    assert fields["description"] == f"PORTAL-{request_id}"   # nothing was written for the floor
+    # The description is the form's ملاحظات and nothing else, and carries no mark
+    assert fields["description"] == ""   # nothing was written for the floor
     saved = next(iter(fake_daftra.work_orders.values()))
     # Every field goes, blank ones included: Daftra empties any field the body leaves out. The flag is
     # Daftra's own (its spelling), and صورة المنتج carries a file id — text in it makes the save 500.
@@ -307,7 +307,7 @@ def test_approving_a_new_sale_creates_everything_in_daftra(client, db, fake_daft
 
 def test_the_work_orders_description_is_the_notes_for_the_floor_and_nothing_else(client, db, fake_daftra,
                                                                                    sales, manager):
-    """ملاحظات خاصة للتصنيع of every product, one under the other, then the mark that finds it again."""
+    """The ملاحظات of every product, one under the other, and no mark under them."""
     seed.catalog(db)
     first = seed.package_lines(manufacturing_notes="بدون ثقوب على الجانب الأيسر")
     second = [{**line, "group_id": "g2", "details": {**line["details"],
@@ -317,12 +317,73 @@ def test_the_work_orders_description_is_the_notes_for_the_floor_and_nothing_else
     assert approve(client, manager, request_id).status_code == 200
     [work_order] = fake_daftra.posted("/api2/work_orders.json")
     assert work_order["WorkOrder"]["description"] == (
-        "بدون ثقوب على الجانب الأيسر" + "\n" + "اللوحة تركب بعد الدهان" + "\n" + f"PORTAL-{request_id}")
+        "بدون ثقوب على الجانب الأيسر" + "\n" + "اللوحة تركب بعد الدهان")
     # The same note on two packages is written once, and the floor's own sheet still says the rest
     same = [{**line, "group_id": "g2"} for line in first]
     rows = work_order_rows(db.get(Request, request_id), manager)
     assert any(row.startswith("العميل:") for row in rows) and any(row.startswith("المسؤول:") for row in rows)
     assert manufacturing_notes({"order_lines": first + same}) == "بدون ثقوب على الجانب الأيسر"
+
+
+def test_the_other_contact_number_is_added_to_the_work_orders_description(client, db, fake_daftra, sales, manager):
+    """رقم مسؤول اخر goes under the notes, not in place of them."""
+    seed.catalog(db)
+    lines = seed.package_lines(manufacturing_notes="بدون ثقوب على الجانب الأيسر")
+    request_id = submitted_sale(client, db, sales, order_lines=lines, phone2="0559998877")
+    assert approve(client, manager, request_id).status_code == 200
+    [work_order] = fake_daftra.posted("/api2/work_orders.json")
+    assert work_order["WorkOrder"]["description"] == (
+        "بدون ثقوب على الجانب الأيسر" + "\n" + "رقم مسؤول اخر: 0559998877")
+
+
+def test_the_other_contact_number_alone_is_the_whole_description(client, db, fake_daftra, sales, manager):
+    seed.catalog(db)
+    request_id = submitted_sale(client, db, sales, phone2="0559998877")
+    assert approve(client, manager, request_id).status_code == 200
+    [work_order] = fake_daftra.posted("/api2/work_orders.json")
+    assert work_order["WorkOrder"]["description"] == "رقم مسؤول اخر: 0559998877"
+
+
+def answer_lost_once(fake_daftra, monkeypatch, path):
+    """Daftra makes the record, and its answer never reaches the portal: the case only a search finds."""
+    real = type(fake_daftra).__call__
+    state = {"lost": False}
+
+    def call(self, method, called, params=None, body=None):
+        answer = real(self, method, called, params, body)
+        if method == "POST" and called == path and not state["lost"]:
+            state["lost"] = True
+            raise daftra.DaftraError("timed out")
+        return answer
+
+    monkeypatch.setattr(type(fake_daftra), "__call__", call)
+
+
+def test_a_work_order_whose_answer_was_lost_is_found_again_not_made_twice(client, db, fake_daftra, sales, manager,
+                                                                          monkeypatch):
+    seed.catalog(db)
+    request_id = submitted_sale(client, db, sales, phone2="0559998877")
+    answer_lost_once(fake_daftra, monkeypatch, "/api2/work_orders.json")
+    assert approve(client, manager, request_id).status_code == 502
+    assert db.get(Request, request_id).daftra_work_order_id is None
+    [made] = fake_daftra.work_orders
+
+    assert approve(client, manager, request_id).status_code == 200
+    assert len(fake_daftra.posted("/api2/work_orders.json")) == 1
+    assert db.get(Request, request_id).daftra_work_order_id == made
+
+
+def test_a_like_work_order_another_request_holds_is_not_taken(client, db, fake_daftra, sales, manager):
+    """Two sales of the same package to one client: the second gets its own work order."""
+    seed.catalog(db)
+    first = submitted_sale(client, db, sales)
+    assert approve(client, manager, first).status_code == 200
+    second = submitted_sale(client, db, sales)
+    assert approve(client, manager, second).status_code == 200
+    # One client, one title and description: only who holds which tells them apart
+    assert db.get(Request, first).daftra_client_id == db.get(Request, second).daftra_client_id
+    assert len(fake_daftra.posted("/api2/work_orders.json")) == 2
+    assert db.get(Request, first).daftra_work_order_id != db.get(Request, second).daftra_work_order_id
 
 
 def test_a_failed_step_is_resumed_without_duplicates(client, db, fake_daftra, sales, manager):
@@ -776,7 +837,7 @@ def renewal_request(client, db, sales, **overrides):
 
 
 def test_the_second_number_reaches_daftra_and_replaces_the_one_held(client, db, fake_daftra, sales, manager):
-    """رقم الهاتف 2 is Daftra's phone2: a new client is created with it, an existing one's is replaced."""
+    """رقم مسؤول اخر is Daftra's phone2: a new client is created with it, an existing one's is replaced."""
     seed.catalog(db)
     request_id = submitted_sale(client, db, sales, phone2="0559998877",
                                 create_work_order="لا", installation_days="")

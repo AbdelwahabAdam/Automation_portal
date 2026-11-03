@@ -338,7 +338,7 @@ def update_client(daftra_client_id: int, data: dict):
     link = usable_link(data)
     if link and str(saved.get("link") or "").strip() != link:
         wanted["link"] = link
-    # رقم الهاتف 2: the form fills in the one Daftra holds, so a different one coming back was
+    # رقم مسؤول اخر (Daftra's phone2): the form fills in the one Daftra holds, so a different one coming back was
     # typed on purpose and replaces it. An empty one changes nothing: a number already on the
     # client is never thrown away by a form that simply did not ask.
     phone2 = local_phone(data.get("phone2") or "")

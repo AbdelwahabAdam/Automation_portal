@@ -13,7 +13,8 @@ from ...integrations.daftra import DaftraError
 from ..form_engine import INSCRIPTIONS, NO_INSCRIPTION, package_colors, package_quantity
 from ..catalog import Product
 from ...core.text import UAE, day_month_year, display_name, squash
-from .common import WORK_ORDER_ATTACHMENT_FIELD, attach_pdf, marker, sales_person_name
+from .. import requests
+from .common import WORK_ORDER_ATTACHMENT_FIELD, attach_pdf, made_before_the_request, marker, sales_person_name
 
 # The work order's custom fields in our Daftra account (its form «نموذج أمر تشغيل ومتابعة عقد»), worked
 # out from the values staff put in them: there is no API listing their labels
@@ -235,7 +236,7 @@ def work_order_title(data: dict, invoice: dict) -> str:
 def work_order_rows(request, reviewer) -> list[str]:
     """What the technicians need, one line each, printed under «وصف» on the PDF the portal draws.
 
-    Not the Daftra description any more — that holds ملاحظات خاصة للتصنيع alone — so the PDF is
+    Not the Daftra description any more — that holds ملاحظات and رقم مسؤول اخر alone — so the PDF is
     where the approving manager's name appears, Daftra's API having no field of its own for it.
     """
     data = request.data
@@ -294,21 +295,40 @@ def manufacturing_notes(data: dict) -> str:
 
 
 def work_order_description(request) -> str:
-    """ملاحظات خاصة للتصنيع alone, then the marker that finds the work order again on a retry.
+    """ملاحظات (the form's notes for the floor), then رقم مسؤول اخر when there is one. Each is added
+    to the other, neither replaces it. No marker: find_work_order knows the work order without one.
 
     Nothing else goes here: the client is the work order's own, the location and the colours are
     its custom fields, the invoice is linked to it, its title carries the emirate, the area and
     the client's code, and the PDF the portal attaches carries the rest for the floor.
     """
     notes = manufacturing_notes(request.data)
-    return "\n".join(([notes] if notes else []) + [marker(request)])
+    other = str(request.data.get("phone2") or "").strip()
+    lines = [notes, f"رقم مسؤول اخر: {other}" if other else ""]
+    return "\n".join(line for line in lines if line)
 
 
-def find_work_order(request) -> int | None:
+def find_work_order(request, invoice: dict, db: Session) -> int | None:
+    """The work order an earlier try of this approval made, when Daftra made it but its answer never
+    came back, so the request does not hold it. Without a marker it is known by what the portal
+    wrote: this client's, with this title and description, made after the request, and held by no
+    other request. One from before the marker went still carries it, and is found by it."""
+    def same(a, b) -> bool:
+        return " ".join(str(a or "").split()) == " ".join(str(b or "").split())
+
+    title, description = work_order_title(request.data, invoice), work_order_description(request)
     rows = daftra.get("work_orders.json", {"client_id": request.daftra_client_id, "status": -1, "limit": 100}).get("data", [])
-    return next((int(row["WorkOrder"]["id"]) for row in rows
-                 if str(row["WorkOrder"].get("client_id")) == str(request.daftra_client_id)
-                 and (row["WorkOrder"].get("description") or "").rstrip().endswith(marker(request))), None)
+    for row in rows:
+        found = row["WorkOrder"]
+        if str(found.get("client_id")) != str(request.daftra_client_id):
+            continue
+        if (found.get("description") or "").rstrip().endswith(marker(request)):
+            return int(found["id"])
+        if (same(found.get("title"), title) and same(found.get("description"), description)
+                and not made_before_the_request(request, found.get("created"))
+                and requests.document_holder(db, "work_order", int(found["id"])) in (None, request.id)):
+            return int(found["id"])
+    return None
 
 
 def ensure_work_order(request, invoice: dict, reviewer, db: Session):
@@ -316,7 +336,7 @@ def ensure_work_order(request, invoice: dict, reviewer, db: Session):
     request's مدة التركيب. It is linked to the invoice, so the invoice shows it, and its PDF is attached."""
     data = request.data
     if request.daftra_work_order_id is None:
-        request.save_document("work_order", find_work_order(request))
+        request.save_document("work_order", find_work_order(request, invoice, db))
     if request.daftra_work_order_id is None:
         start = datetime.now(UAE).date()
         days = int(data.get("installation_days") or 20)
