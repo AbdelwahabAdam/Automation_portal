@@ -35,10 +35,9 @@ def money(value) -> Decimal:
 
 def form_notes(data: dict, *parts: str) -> str:
     """What a record Daftra makes carries under «ملاحظات»: what the form works out, and last the
-    ملاحظات the salesperson wrote. Every form sends its own, so a note travels with the request.
-
-    Daftra prints none of this on the invoice (only html_notes prints), so it is for whoever opens
-    the record in Daftra.
+    ملاحظات the salesperson wrote. Used for the estimate and for a receipt that has no invoice of its
+    own (طلب تسديد مبلغ متبقي). Invoices get none: Daftra shows an invoice's notes under
+    الشروط والأحكام, which holds only the warranty terms.
     """
     written = str(data.get("notes") or "").strip()
     lines = [*(part for part in parts if part), f"ملاحظات: {written}" if written else ""]

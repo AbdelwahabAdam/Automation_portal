@@ -7,7 +7,7 @@ Today's `sync_contract_renewal`.
 from ...core.config import settings
 from ...core.text import local_phone
 from ...core.errors import SyncError
-from ...modules.invoicing import (ensure_invoice, finish, form_notes, money, payment_inputs,
+from ...modules.invoicing import (ensure_invoice, finish, money, payment_inputs,
                                   reports_daftra_errors,
                             sales_person)
 from ...modules.clients import existing_client_id, update_client
@@ -35,5 +35,5 @@ def on_approve(ctx) -> dict:
                             f"«{data.get('client_code') or '—'}». التجديد لعميل موجود فقط؛ أعد الطلب للموظف ليصحح بيانات العميل.")
         request.save_document("client", found)
     update_client(request.daftra_client_id, data)
-    invoice = ensure_invoice(request, [item], staff_id, notes=form_notes(data))
+    invoice = ensure_invoice(request, [item], staff_id)
     return finish(request, invoice, paid, method, db)

@@ -149,13 +149,15 @@ class FakeDaftra:
     # ---------- what a test and the seed put in ----------
 
     def add_client(self, client_id, phone, name="Existing", category_id=None, client_number=None, custom=None,
-                   address=None, link=""):
+                   address=None, link="", gender=""):
         # custom: the required custom fields, as a client added through the portal has them
         # address: the client's own address block (city holds the emirate, state the area)
         # link: the رابط اللوكيشن, which Daftra keeps one of per client
+        # gender: Daftra's own code (1 ذكر, 2 أنثى); empty for a client never given one, as Daftra answers
         self.clients[int(client_id)] = {"id": str(client_id), "business_name": name, "phone1": phone, "phone2": "",
                                         "client_number": client_number or f"{int(client_id):06d}",
                                         "category_id": str(category_id) if category_id else "", "category": "",
+                                        "gender": str(gender or ""),
                                         "custom": custom, "link": link, **(address or {})}
         self.save()
 
@@ -301,6 +303,8 @@ class FakeDaftra:
             (r"GET /api2/products\.json", lambda **kw: self._page([{"Product": p} for p in self.products])),
             (r"POST /api2/products\.json", self.create_product),
             (r"GET /api2/products/(\d+)\.json", self.get_product),
+            (r"PUT /api2/products/(\d+)\.json", self.update_product),
+            (r"DELETE /api2/products/(\d+)\.json", self.delete_product),
             (r"GET /api2/treasuries\.json", lambda **kw: self._page([{"Treasury": t} for t in self.treasuries])),
             (r"GET /v2/api/entity/order_source/list/1", lambda **kw: {"data": self.order_sources}),
             (r"POST /v2/api/entity/order_source", self.create_order_source),
@@ -373,14 +377,38 @@ class FakeDaftra:
                               "status": "0"})
         return {"id": product_id}
 
+    def _product(self, product_id):
+        found = next((row for row in self.products if str(row["id"]) == product_id), None)
+        if found is None:
+            raise NotFound("HTTP 404: فشل إيجاد المنتجات")
+        return found
+
     def get_product(self, product_id, params, body):
-        return {"data": {"Product": next(row for row in self.products if str(row["id"]) == product_id)}}
+        return {"data": {"Product": self._product(product_id)}}
+
+    def update_product(self, product_id, params, body):
+        """Changes only the fields sent, as Daftra does, except that it empties brand_id and
+        average_price unless they are sent (seen on a live test product)."""
+        product = self._product(product_id)
+        product.pop("brand_id", None)
+        product.pop("average_price", None)
+        product.update({key: str(value) if isinstance(value, (int, float)) else value
+                        for key, value in body["Product"].items()})
+        return {"result": "successful", "code": 200}
+
+    def delete_product(self, product_id, params, body):
+        """Refused for a product marked "in_use" (Daftra refuses one with stock movements)."""
+        product = self._product(product_id)
+        if product.get("in_use"):
+            raise DaftraError("HTTP 400: لا يمكن حذف المنتج لوجود حركات عليه")
+        self.products.remove(product)
+        return {"result": "successful", "code": 200, "message": "تم حذف Service "}
 
     def create_client(self, params, body):
         client_id = self._new_id()
         # Every field a client is read back with, so what the portal left out answers as empty
         # rather than missing, as Daftra's own answer does
-        fields = {"business_name": "", "phone1": "", "phone2": "", **body["Client"]}
+        fields = {"business_name": "", "phone1": "", "phone2": "", "gender": "", **body["Client"]}
         self.clients[client_id] = {**fields, "id": str(client_id),
                                    "client_number": self._client_number(client_id),
                                    "custom": body.get("le_custom_data_client")}

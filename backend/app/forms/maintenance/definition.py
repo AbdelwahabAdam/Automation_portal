@@ -5,7 +5,6 @@ from ...modules.form_engine import (
     NOTES,
     PAID,
     PAYMENT_METHODS,
-    TREASURY_BY_METHOD,
     address,
     attachments,
     client,
@@ -84,8 +83,7 @@ SECTIONS = [
     section(
         "تفاصيل الدفعة",
         f("payment_method", "طريقة الدفع", "select", options=PAYMENT_METHODS, required_if=PAID),
-        f("treasury", "الخزينة / الحساب المستلم في دفترة", "daftra_treasury",
-          default_from={"field": "payment_method", "values": TREASURY_BY_METHOD}, required_if=PAID),
+        f("treasury", "الخزينة / الحساب المستلم في دفترة", "daftra_treasury", required_if=PAID),
         f("payment_date", "تاريخ الدفع", "date", default="today", not_future=True, required_if=PAID),
         f("collector_name", "اسم المحصل، في حالة الدفع النقدي", "staff", required_if=CASH_PAYMENT),
     ),

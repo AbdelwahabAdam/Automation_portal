@@ -479,7 +479,7 @@ From `modules.invoicing`:
 | | |
 |---|---|
 | `invoice_items(data, db)` | the order lines as Daftra `InvoiceItem` rows, prices looked up here. Raises if a product is not linked to Daftra |
-| `ensure_invoice(request, items, staff_id, notes="")` | the invoice — found again if it already exists, created if not |
+| `ensure_invoice(request, items, staff_id)` | the invoice — found again if it already exists, created if not. Sends no «notes»: Daftra shows them under الشروط والأحكام, which holds only the warranty terms |
 | `ensure_payment(request, invoice, paid, method, reviewer)` | the receipt (سند قبض) |
 | `finish(request, invoice, paid, method, reviewer, db)` | the usual tail: the payment, both PDFs, the summary |
 | `ensure_work_order(request, invoice, reviewer, db)` | the installation work order, its custom fields and its PDF |

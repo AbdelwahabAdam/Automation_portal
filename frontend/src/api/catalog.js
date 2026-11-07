@@ -7,7 +7,9 @@ export const picker = () => api('/catalog/picker');
 export const listProducts = () => api('/admin/products');
 export const createProduct = (body) => api('/admin/products', { method: 'POST', body });
 export const updateProduct = (id, body) => api(`/admin/products/${id}`, { method: 'PUT', body });
-export const deleteProduct = (id) => api(`/admin/products/${id}`, { method: 'DELETE' });
+// fromDaftra: also delete the Daftra product it is linked to
+export const deleteProduct = (id, fromDaftra = false) =>
+  api(`/admin/products/${id}${fromDaftra ? '?from_daftra=true' : ''}`, { method: 'DELETE' });
 
 export const listPackages = () => api('/admin/packages');
 export const createPackage = (body) => api('/admin/packages', { method: 'POST', body });

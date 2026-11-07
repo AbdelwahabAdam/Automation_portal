@@ -3,7 +3,6 @@
 from ...modules.form_engine import (
     NOTES,
     PAYMENT_METHODS,
-    TREASURY_BY_METHOD,
     attachments,
     client_kind,
     f,
@@ -28,8 +27,7 @@ SECTIONS = [
     section(
         "تفاصيل الدفعة",
         f("payment_method", "طريقة الدفع", "select", True, options=PAYMENT_METHODS),
-        f("treasury", "الخزينة / الحساب المستلم في دفترة", "daftra_treasury", True,
-          default_from={"field": "payment_method", "values": TREASURY_BY_METHOD}),
+        f("treasury", "الخزينة / الحساب المستلم في دفترة", "daftra_treasury", True),
         f("collector_name", "اسم المحصل", "staff", True),
         f("payment_date", "تاريخ التحصيل", "date", True, default="today", not_future=True),
         f("payment_reference", "رقم التحويل / السند الورقي", required=True),

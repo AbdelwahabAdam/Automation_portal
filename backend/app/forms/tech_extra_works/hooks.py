@@ -8,7 +8,7 @@ Today's `sync_tech_extra_works`.
 from ...core.errors import SyncError
 from ...core.text import local_phone
 from ...modules.clients import existing_client_id
-from ...modules.invoicing import (ensure_invoice, finish, form_notes, invoice_items, payment_inputs,
+from ...modules.invoicing import (ensure_invoice, finish, invoice_items, payment_inputs,
                                   reports_daftra_errors, sales_person)
 
 
@@ -26,8 +26,5 @@ def on_approve(ctx) -> dict:
                             f"«{data.get('client_code') or '—'}». الأعمال الإضافية لعميل مسجل فقط؛ "
                             "أعد الطلب للموظف ليصحح بيانات العميل.")
         request.save_document("client", found)
-    # Printed on the invoice, so the technical department finds its own work again, and so whatever
-    # was agreed with the customer travels with it
-    notes = form_notes(data, f"الفني: {data['technician_name']}" if data.get("technician_name") else "")
-    invoice = ensure_invoice(request, items, staff_id, notes=notes)
+    invoice = ensure_invoice(request, items, staff_id)
     return finish(request, invoice, paid, method, db)

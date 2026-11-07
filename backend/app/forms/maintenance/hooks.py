@@ -4,8 +4,7 @@ The client when new, the invoice of the chosen items, and its receipt. Today's `
 """
 
 from ...core.config import settings
-from ...core.text import day_month_year
-from ...modules.invoicing import (ensure_invoice, finish, form_notes, invoice_items, payment_inputs,
+from ...modules.invoicing import (ensure_invoice, finish, invoice_items, payment_inputs,
                             reports_daftra_errors, sales_person)
 from ...modules.clients import client_id, update_client
 
@@ -21,14 +20,8 @@ def on_approve(ctx) -> dict:
             item["description"] = data["service_description"]
     staff_id = sales_person(request)
     paid, method = payment_inputs(data)
-    notes = form_notes(
-        data,
-        "الأجهزة: " + "، ".join(data.get("devices") or []) if data.get("devices") else "",
-        f"الخدمة: {data['service']}" if data.get("service") else "",
-        f"تاريخ الزيارة: {day_month_year(str(data['visit_date']))}" if data.get("visit_date") else "",
-    )
     if request.daftra_client_id is None:
         request.save_document("client", client_id(data, db))
     update_client(request.daftra_client_id, data)
-    invoice = ensure_invoice(request, items, staff_id, notes=notes)
+    invoice = ensure_invoice(request, items, staff_id)
     return finish(request, invoice, paid, method, db)

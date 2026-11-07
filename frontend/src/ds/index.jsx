@@ -756,12 +756,14 @@ export function useToast() {
 
 // const [confirmDialog, confirm] = useConfirm(); … {confirmDialog} …
 // if (!(await confirm({ title, body, confirmLabel, tone: 'danger' }))) return;
+// altLabel adds a second way to say yes, which answers 'alt' instead of true
 export function useConfirm() {
   const [asking, setAsking] = useState(null);
   const confirm = (question) => new Promise((resolve) => setAsking({ ...question, resolve }));
   const answer = (yes) => { asking.resolve(yes); setAsking(null); };
   const dialog = asking && (
     <Dialog title={asking.title} confirmLabel={asking.confirmLabel || 'تأكيد'} tone={asking.tone} cancelLabel={asking.cancelLabel}
+      altLabel={asking.altLabel} onAlt={() => answer('alt')}
       onConfirm={() => answer(true)} onCancel={() => answer(false)}>
       {asking.body}
     </Dialog>

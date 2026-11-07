@@ -319,7 +319,8 @@ def save_address(daftra_id: int, data: dict):
 
 def update_client(daftra_client_id: int, data: dict):
     """Puts on the client in Daftra what a request knows about them: the التصنيف picked on the
-    form, the رابط اللوكيشن and the الإحداثيات of the address it is for.
+    form, the رقم مسؤول اخر and الجنس given for them, and the رابط اللوكيشن and الإحداثيات of
+    the address it is for.
 
     It takes the id and the request's data rather than the request itself, so `clients` needs to
     know nothing about `requests` — the two would otherwise import each other.
@@ -344,6 +345,12 @@ def update_client(daftra_client_id: int, data: dict):
     phone2 = local_phone(data.get("phone2") or "")
     if phone2 and phone2 != local_phone(saved.get("phone2") or ""):
         wanted["phone2"] = phone2
+    # الجنس, under the same rule: Daftra answers with its own code (1 ذكر, 2 أنثى), so what the form
+    # holds is compared as that code, and one picked on the form replaces what the client was given
+    # before. Nothing picked changes nothing, the way an empty second number does.
+    gender = GENDERS.get(data.get("gender") or "")
+    if gender and str(saved.get("gender") or "") != str(gender):
+        wanted["gender"] = gender
     wanted.update(address_change(saved, address_fields(data)))
     # The coordinates live in a custom field, which is saved separately from the client's own fields
     if custom == {key: str(held.get(key) or "") for key in custom} and not wanted:

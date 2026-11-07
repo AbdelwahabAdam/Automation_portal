@@ -116,8 +116,11 @@ def find_invoice(request) -> int | None:
                  and not made_before_the_request(request, row["Invoice"].get("created"))), None)
 
 
-def ensure_invoice(request, items: list[dict], staff_id: int, notes: str = "") -> dict:
-    """staff_id: the salesperson who sent the request. Daftra shows them twice, as it does on the
+def ensure_invoice(request, items: list[dict], staff_id: int) -> dict:
+    """Sends no «notes»: Daftra shows them in the invoice's الشروط والأحكام box, which holds only
+    the warranty terms (html_notes). The form's ملاحظات stay on the request in the portal.
+
+    staff_id: the salesperson who sent the request. Daftra shows them twice, as it does on the
     receipt: «بيعت بواسطة» (sales_person_id) and «أنشئ بواسطة» (staff_id). Without the second one
     Daftra writes the API key's own identity there, which reads «The API»."""
     data = request.data
@@ -153,8 +156,6 @@ def ensure_invoice(request, items: list[dict], staff_id: int, notes: str = "") -
                 # Left out rather than sent empty when the form does not ask for it, or does not insist
                 **({"order_source_id": data["order_source"]} if data.get("order_source") else {}),
             }
-            if notes:
-                fields["notes"] = notes
             discount = money(data.get("discount_amount"))
             if discount > 0:
                 fields["adjustment_label"] = data.get("discount_label") or "خصم"

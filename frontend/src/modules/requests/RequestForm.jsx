@@ -177,15 +177,6 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
           const found = coordinatesFromLink(value);
           if (found) autoFill(current, next, spec.name, found);
         }
-        // A field whose usual value follows this one (e.g. the treasury of a payment method) is filled in,
-        // unless the user has already picked something else
-        const suggested = spec.default_from?.field === name ? spec.default_from.values[value] : undefined;
-        if (suggested === undefined) continue;
-        const suggestedId = String(suggested);
-        autoFill(current, next, spec.name, suggestedId);
-        if (next[spec.name] === suggestedId) {
-          next[`${spec.name}_name`] = catalog.daftraLists?.[spec.type]?.find((row) => String(row.id) === suggestedId)?.name || '';
-        }
       }
       return next;
     });

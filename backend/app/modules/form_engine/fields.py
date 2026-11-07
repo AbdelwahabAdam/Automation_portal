@@ -3,7 +3,7 @@
 from .inscriptions import OTHER_LABEL, inscription_choices
 from .options import (CASH_PAYMENT, CUSTOMER_TYPES, DISCOUNT_AMOUNTS, DISCOUNT_LABELS,
     DISCOUNTED, EMIRATES,
-    GENDERS, NO_INSCRIPTION, PAYMENT_METHODS, SOURCES, TREASURY_BY_METHOD, YES_NO)
+    GENDERS, NO_INSCRIPTION, PAYMENT_METHODS, SOURCES, YES_NO)
 
 
 def f(name, label, type="text", required=False, **extra):
@@ -185,8 +185,8 @@ def payment(title="تفاصيل الدفعة", when=True, invoiced=False, detail
     return section(
         title,
         f("payment_method", "طريقة الدفع", "select", options=PAYMENT_METHODS, **need(when)),
-        *([f("treasury", "الخزينة / الحساب المستلم في دفترة", "daftra_treasury",
-             default_from={"field": "payment_method", "values": TREASURY_BY_METHOD}, **rest)] if invoiced else []),
+        # Chosen by hand every time: طريقة الدفع does not say which account the money went into
+        *([f("treasury", "الخزينة / الحساب المستلم في دفترة", "daftra_treasury", **rest)] if invoiced else []),
         # Today, because a payment is nearly always taken on the day the request is written
         f("payment_date", "تاريخ الدفع", "date", default="today", not_future=True, **rest),
         f("payment_reference", "رقم التحويل / طلب تابي / السند الورقي", **rest),

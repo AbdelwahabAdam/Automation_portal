@@ -51,9 +51,10 @@ def update_product(body: ProductIn, product: Product = Depends(existing_product)
 
 
 @admin_router.delete("/products/{product_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_product(product: Product = Depends(existing_product), who: Actor = Depends(acting(may_keep)),
-                   db: Session = Depends(get_db)):
-    service.delete_product(db, who, product)
+def delete_product(from_daftra: bool = False, product: Product = Depends(existing_product),
+                   who: Actor = Depends(acting(may_keep)), db: Session = Depends(get_db)):
+    """from_daftra: also delete the Daftra product it is linked to (?from_daftra=true)."""
+    service.delete_product(db, who, product, from_daftra)
 
 
 @admin_router.get("/packages")

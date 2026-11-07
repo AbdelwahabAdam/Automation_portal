@@ -34,6 +34,7 @@ from .resources import (
     post,
     products_named,
     read_v2,
+    remove,
     same_name,
     set_order_source_active,
     update,
@@ -47,6 +48,6 @@ __all__ = [
     "assign_work_order", "attach_invoice_document", "cached", "call", "clear", "client_category",
     "client_invoices", "create", "create_order_source", "forget", "get", "invoice_pdf",
     "list_client_categories", "list_clients", "list_order_sources", "list_products", "list_staff",
-    "list_staff_members", "list_treasuries", "post", "products_named", "read_v2", "same_name",
+    "list_staff_members", "list_treasuries", "post", "products_named", "read_v2", "remove", "same_name",
     "set_order_source_active", "update", "update_unconfirmed", "upload_file", "work_order_staff",
 ]

@@ -46,6 +46,11 @@ def update(resource: str, body: dict):
     client.call("PUT", f"/api2/{resource}", None, body)
 
 
+def remove(resource: str):
+    """Deletes a record, e.g. remove("products/12.json"). NotFound when it is already gone."""
+    client.call("DELETE", f"/api2/{resource}")
+
+
 def update_unconfirmed(resource: str, body: dict):
     """Like update(), for an edit Daftra saves but then answers with a redirect to an HTML error
     page (a work order's CustomModel does this). Only a real refusal is raised; the caller must read

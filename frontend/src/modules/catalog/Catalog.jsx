@@ -37,10 +37,16 @@ function ProductDrawer({ product, onSaved, onDeleted, onClose }) {
   }
 
   async function remove() {
-    const yes = await confirm({ title: `حذف المنتج «${product.name}»؟`, body: 'يُحذف المنتج نهائيًا من الكتالوج.', confirmLabel: 'حذف المنتج', tone: 'danger' });
-    if (!yes) return;
+    const linked = product.daftra_id != null;
+    // A product linked to Daftra: delete it here only, or its Daftra product too
+    const answer = await confirm(linked ? {
+      title: `حذف المنتج «${product.name}»؟`,
+      body: `يُحذف المنتج نهائيًا من الكتالوج. اختر هل يبقى منتج دفترة المربوط به (رقم ${product.daftra_id}) أم يُحذف أيضًا. إن رفضت دفترة حذفه (مثلًا لوجود حركات عليه) فلا يُحذف من أيٍّ منهما.`,
+      confirmLabel: 'حذف من البوابة فقط', altLabel: 'حذف من البوابة ودفترة', tone: 'danger',
+    } : { title: `حذف المنتج «${product.name}»؟`, body: 'يُحذف المنتج نهائيًا من الكتالوج.', confirmLabel: 'حذف المنتج', tone: 'danger' });
+    if (!answer) return;
     run('delete', async () => {
-      await catalogApi.deleteProduct(product.id);
+      await catalogApi.deleteProduct(product.id, answer === 'alt');
       onDeleted(product);
     });
   }
@@ -50,7 +56,7 @@ function ProductDrawer({ product, onSaved, onDeleted, onClose }) {
     {confirmDialog}
     <Drawer
       title={product ? 'تعديل منتج' : 'إضافة منتج'}
-      subtitle={product ? 'المنتج وحدة واحدة لا يدخل فيها شيء آخر.' : 'المنتج وحدة واحدة لا يدخل فيها شيء آخر، ويُنشأ في دفترة عند الحفظ.'}
+      subtitle={product ? 'المنتج وحدة واحدة لا يدخل فيها شيء آخر. تعديل الاسم والسعر والوصف يُحفظ في دفترة أيضًا.' :'المنتج وحدة واحدة لا يدخل فيها شيء آخر، ويُنشأ في دفترة عند الحفظ.'}
       onClose={onClose}
       footer={(
         <>

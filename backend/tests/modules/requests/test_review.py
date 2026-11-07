@@ -695,16 +695,18 @@ def test_the_invoice_names_a_person_not_the_api(client, db, fake_daftra, sales, 
     assert payment["InvoicePayment"]["staff_id"] == sales.daftra_staff_id     # المستلم on the receipt
 
 
-def test_every_form_sends_the_salespersons_notes_to_daftra(client, db, fake_daftra, sales, manager):
-    """ملاحظات travels with the request: on the invoice the form makes, or the receipt when it makes none."""
+def test_invoices_carry_no_notes_and_a_receipt_of_its_own_does(client, db, fake_daftra, sales, manager):
+    """An invoice sends no «notes», as Daftra shows them under الشروط والأحكام beside the warranty
+    terms. طلب تسديد مبلغ متبقي makes no invoice, so its ملاحظات go on its receipt."""
     seed.catalog(db)
     written = "العميل يفضل التركيب صباحًا"
 
-    # طلب بيع لعميل جديد: its invoice
+    # طلب بيع لعميل جديد: its invoice has none
     request_id = submitted_sale(client, db, sales, notes=written, create_work_order="لا", installation_days="")
     assert approve(client, manager, request_id).status_code == 200
     [invoice] = fake_daftra.posted("/api2/invoices.json")
-    assert invoice["Invoice"]["notes"] == f"ملاحظات: {written}"
+    assert "notes" not in invoice["Invoice"]
+    assert invoice["Invoice"]["html_notes"] == WARRANTY_TERMS_HTML
 
     # طلب تسديد مبلغ متبقي: no invoice of its own, so the receipt carries it under the mark
     seed.existing_client(db)
@@ -773,7 +775,7 @@ def test_maintenance(client, db, fake_daftra, sales, manager):
     [invoice] = fake_daftra.posted("/api2/invoices.json")
     assert invoice["InvoiceItem"] == [{"product_id": 625, "item": "RO .PP 10", "unit_price": 65.0, "quantity": 2,
                                        "tax1": 3, "store_id": 1}]
-    assert invoice["Invoice"]["notes"] == f"الأجهزة: فلتر RO VIB\nالخدمة: تبديل فلاتر\nتاريخ الزيارة: {'/'.join(reversed(TODAY.split('-')))}"
+    assert "notes" not in invoice["Invoice"]
     assert invoice["Invoice"]["order_source_id"] == 12
     [new_client] = fake_daftra.posted("/api2/clients.json")
     assert (new_client["Client"]["type"], new_client["Client"]["gender"], new_client["Client"]["email"]) == (
@@ -854,6 +856,28 @@ def test_the_second_number_reaches_daftra_and_replaces_the_one_held(client, db, 
     renewal_id = renewal_request(client, db, sales, phone2="0551112222")
     assert approve(client, manager, renewal_id).status_code == 200
     assert fake_daftra.clients[4053]["phone2"] == "0551112222"
+
+
+def test_the_gender_reaches_daftra_and_replaces_the_one_held(client, db, fake_daftra, sales, manager):
+    """الجنس is Daftra's gender code (1 ذكر, 2 أنثى), on a new client and on one Daftra already has."""
+    seed.catalog(db)
+    seed.existing_client(db)
+    # Daftra holds this client as ذكر; the form says أنثى, so that is what they end up with
+    fake_daftra.add_client(4053, "0509999999", category_id=5, address=RENEWAL_ADDRESS, gender=1)
+    request_id = renewal_request(client, db, sales, gender="أنثى")
+    assert approve(client, manager, request_id).status_code == 200
+    assert str(fake_daftra.clients[4053]["gender"]) == "2"
+
+
+def test_a_gender_daftra_already_holds_is_not_written_again(client, db, fake_daftra, sales, manager):
+    seed.catalog(db)
+    seed.existing_client(db)
+    fake_daftra.add_client(4053, "0509999999", category_id=5, gender=1,
+                           custom={"test": "N + F", "coordinates_text": "24.100000, 55.600000"},
+                           address=RENEWAL_ADDRESS, link="https://www.google.com/maps?q=24.100000,55.600000")
+    request_id = renewal_request(client, db, sales, gender="ذكر")
+    assert approve(client, manager, request_id).status_code == 200
+    assert client_updates(fake_daftra) == []
 
 
 def test_the_client_is_left_alone_when_daftra_already_has_all_of_it(client, db, fake_daftra, sales, manager):
@@ -1132,7 +1156,7 @@ def test_extra_works_are_invoiced_at_the_forms_price_not_the_catalogs(client, db
     assert invoice["InvoiceItem"][0]["unit_price"] == 6.0
 
 
-def test_extra_works_print_the_technician_and_the_notes_on_the_invoice(client, db, fake_daftra, sales, manager):
+def test_extra_works_send_neither_the_technician_nor_the_notes_to_the_invoice(client, db, fake_daftra, sales, manager):
     seed.catalog(db)
     seed.existing_client(db)
     fake_daftra.add_client(4053, "0509999999")
@@ -1141,7 +1165,7 @@ def test_extra_works_print_the_technician_and_the_notes_on_the_invoice(client, d
     client.put(f"/api/requests/{request_id}", json={"data": data, "action": "submit"}, headers=auth(sales))
     assert approve(client, manager, request_id).status_code == 200
     [invoice] = fake_daftra.posted("/api2/invoices.json")
-    assert invoice["Invoice"]["notes"] == "الفني: Manager One\nملاحظات: العميل يفضل التركيب صباحًا"
+    assert "notes" not in invoice["Invoice"]
 
 
 def test_an_invoice_without_an_order_source_leaves_the_field_out(client, db, fake_daftra, sales, manager):

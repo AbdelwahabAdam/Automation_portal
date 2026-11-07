@@ -3,7 +3,9 @@
 import csv
 import io
 
-from app.modules.models import AuditLog, Package, Request, User
+from app.core.context import Actor
+from app.modules.catalog import sync_from_daftra
+from app.modules.models import AuditLog, Package, Product, Request, User
 
 from .. import seed
 from ..conftest import auth, make_user, may_fill
@@ -157,6 +159,7 @@ def test_editing_a_product_leaves_what_came_from_daftra(client, db, admin, fake_
     cooler.product_code, cooler.barcode, cooler.buy_price = "2008", "12345", 900
     cooler.stock_balance, cooler.category, cooler.brand = 3, "برادات", "Future Life"
     db.commit()
+    fake_daftra.products = [daftra_service(501, cooler.name, 1000)]
     response = client.put(f"/api/admin/products/{cooler.id}", json={"name": cooler.name, "unit_price": "1100"},
                           headers=auth(admin))
     assert response.status_code == 200
@@ -165,6 +168,113 @@ def test_editing_a_product_leaves_what_came_from_daftra(client, db, admin, fake_
     assert (saved["barcode"], saved["buy_price"], saved["stock_balance"]) == ("12345", 900, 3)
     assert (saved["category"], saved["brand"]) == ("برادات", "Future Life")
     assert fake_daftra.posted("/api2/products.json") == []
+
+
+def daftra_service(product_id, name, price, **more):
+    return {"id": str(product_id), "name": name, "unit_price": str(price), "description": "", "type": "2",
+            "status": "0", **more}
+
+
+def put_calls(fake_daftra):
+    return [(path, body) for method, path, _, body in fake_daftra.calls if method == "PUT"]
+
+
+def edit_product(client, admin, product, **changes):
+    body = {"name": product.name, "name_ar": product.name_ar, "description": product.description,
+            "unit_price": str(product.unit_price), "is_active": product.is_active,
+            "maintenance_group": product.maintenance_group or "", **changes}
+    return client.put(f"/api/admin/products/{product.id}", json=body, headers=auth(admin))
+
+
+def test_an_edit_changes_the_linked_daftra_service_too(client, db, admin, fake_daftra):
+    """Only the fields that changed are sent, with brand_id sent back as it was: Daftra empties it
+    on an edit otherwise. Fields that are the portal's own are not sent."""
+    filter_ = seed.catalog(db)["filter"]
+    fake_daftra.products = [daftra_service(625, filter_.name, 50, brand="Future Life", brand_id="3"),
+                            daftra_service(626, "Other filter", 20)]
+    response = edit_product(client, admin, filter_, name="RO PP 10 Filter", unit_price="55", description="5 micron",
+                            name_ar="فلتر")
+    assert response.status_code == 200, response.json()
+    assert put_calls(fake_daftra) == [("/api2/products/625.json", {"Product": {
+        "name": "RO PP 10 Filter", "unit_price": 55.0, "description": "5 micron", "brand_id": "3"}})]
+    in_daftra = fake_daftra.products[0]
+    assert (in_daftra["name"], in_daftra["unit_price"], in_daftra["brand_id"]) == ("RO PP 10 Filter", "55.0", "3")
+    # And the next sync keeps it, as Daftra now says the same
+    db.expire_all()
+    assert sync_from_daftra(db, Actor(user=None, username="test"))["changed"] == []
+
+    # Nothing sent when only the portal's own fields change
+    fake_daftra.calls.clear()
+    db.refresh(filter_)
+    assert edit_product(client, admin, filter_, name_ar="فلتر PP", is_active=False).status_code == 200
+    assert put_calls(fake_daftra) == []
+
+
+def test_an_edit_daftra_cannot_take_is_not_saved(client, db, admin, fake_daftra):
+    filter_ = seed.catalog(db)["filter"]
+    fake_daftra.products = [daftra_service(625, filter_.name, 50), daftra_service(626, "Other filter", 20)]
+    # Another Daftra product has that name
+    taken = edit_product(client, admin, filter_, name="other  FILTER")
+    assert taken.status_code == 409 and "626" in taken.json()["detail"]
+    # Daftra fails
+    fake_daftra.fail_once = "/api2/products/625.json"
+    assert edit_product(client, admin, filter_, unit_price="70").status_code == 502
+    # Gone from Daftra
+    fake_daftra.products = []
+    assert edit_product(client, admin, filter_, unit_price="70").status_code == 409
+    assert put_calls(fake_daftra) == []
+    db.refresh(filter_)
+    assert (filter_.name, float(filter_.unit_price)) == ("RO .PP 10", 50.0)
+
+
+def test_a_product_linked_to_a_stock_item_is_changed_in_daftra_not_here(client, db, admin, fake_daftra):
+    """An edit through the API empties a stock product's average cost, so the portal does not make one."""
+    cooler = seed.catalog(db)["cooler"]
+    fake_daftra.products = [{**daftra_service(501, cooler.name, 1000), "type": "1", "average_price": "850"}]
+    refused = edit_product(client, admin, cooler, unit_price="1100")
+    assert refused.status_code == 409 and "مزامنة من دفترة" in refused.json()["detail"]
+    assert put_calls(fake_daftra) == [] and fake_daftra.products[0]["average_price"] == "850"
+    db.refresh(cooler)
+    assert float(cooler.unit_price) == 1000
+    # Its portal-only fields still change
+    assert edit_product(client, admin, cooler, name_ar="برادة سوداء").status_code == 200
+
+
+def test_deleting_a_product_from_the_portal_only_leaves_daftras(client, db, admin, fake_daftra):
+    filter_ = seed.catalog(db)["filter"]
+    fake_daftra.products = [daftra_service(625, filter_.name, 50)]
+    assert client.delete(f"/api/admin/products/{filter_.id}", headers=auth(admin)).status_code == 204
+    db.expire_all()
+    assert db.get(Product, 3) is None
+    assert [row["id"] for row in fake_daftra.products] == ["625"]
+    assert not any(method == "DELETE" for method, *_ in fake_daftra.calls)
+
+
+def test_deleting_a_product_from_daftra_too(client, db, admin, fake_daftra):
+    products = seed.catalog(db)
+    filter_, water = products["filter"], products["water"]   # ids 3 and 4
+    fake_daftra.products = [daftra_service(625, filter_.name, 50), daftra_service(212, water.name, 6)]
+    assert client.delete(f"/api/admin/products/{filter_.id}", params={"from_daftra": "true"},
+                         headers=auth(admin)).status_code == 204
+    db.expire_all()
+    assert db.get(Product, 3) is None
+    assert [row["id"] for row in fake_daftra.products] == ["212"]
+    logged = db.query(AuditLog).filter_by(action="product.delete").one()
+    assert logged.after == {"deleted_in_daftra": 625}
+
+    # Daftra refuses: neither goes
+    fake_daftra.products[0]["in_use"] = True
+    refused = client.delete(f"/api/admin/products/{water.id}", params={"from_daftra": "true"}, headers=auth(admin))
+    assert refused.status_code == 409 and "إيقافه" in refused.json()["detail"]
+    db.expire_all()
+    assert db.get(Product, 4) is not None and len(fake_daftra.products) == 1
+
+    # Already deleted in Daftra: the portal's goes all the same
+    fake_daftra.products = []
+    assert client.delete(f"/api/admin/products/{water.id}", params={"from_daftra": "true"},
+                         headers=auth(admin)).status_code == 204
+    db.expire_all()
+    assert db.get(Product, 4) is None
 
 
 def test_audit_log_filters_and_csv_export(client, db, admin, sales):

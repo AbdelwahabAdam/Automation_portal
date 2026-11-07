@@ -13,7 +13,7 @@ from ...core.errors import Conflict, Invalid, NotFound
 from ..audit import changes
 from ..audit import log as audit_log
 from . import repo
-from .in_daftra import place_in_daftra
+from .in_daftra import delete_in_daftra, edit_in_daftra, place_in_daftra
 from .models import Package, PackageItem, Product
 from .schemas import PackageIn, ProductIn
 
@@ -137,17 +137,24 @@ def update_product(db: Session, who: Actor, product: Product, body: ProductIn) -
     before = product_snapshot(product)
     apply_product(db, product, body)
     old, new = changes(before, product_snapshot(product))
+    # Daftra first: if it refuses, nothing here is saved either
+    edit_in_daftra(product, new)
     if new:
         audit_log(db, who, "product.update", "product", product.id, product.name, old, new)
     db.commit()
     return product_out(product, repo.packages_holding(db, product.id))
 
 
-def delete_product(db: Session, who: Actor, product: Product):
+def delete_product(db: Session, who: Actor, product: Product, from_daftra: bool = False):
+    """from_daftra: also delete the Daftra product it is linked to; otherwise that one stays."""
     used = repo.packages_holding(db, product.id)
     if used:
         raise Conflict(f"المنتج داخل {used} باقة فلا يمكن حذفه. أزله من الباقات أولًا أو أوقفه.")
-    audit_log(db, who, "product.delete", "product", product.id, product.name, before=product_snapshot(product))
+    deleted_there = from_daftra and product.daftra_id is not None
+    if deleted_there:
+        delete_in_daftra(product)
+    audit_log(db, who, "product.delete", "product", product.id, product.name, before=product_snapshot(product),
+              after={"deleted_in_daftra": product.daftra_id} if deleted_there else None)
     db.delete(product)
     db.commit()
 
