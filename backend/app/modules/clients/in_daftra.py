@@ -16,7 +16,7 @@ from ...core.errors import SyncError
 from ...core.text import day_month_year, digits, fold_arabic, local_phone, squash
 from ...integrations import daftra
 from ...integrations.daftra import DaftraError
-from ..form_engine import CUSTOMER_TYPE_CODES, GENDERS
+from ..form_engine import CUSTOMER_TYPE_CODES, CUSTOMER_TYPES, GENDERS
 from .models import Address, Client
 
 # Each city as Daftra's clients write it (folded with fold_arabic), as the form's (الإمارة, المنطقة)
@@ -266,6 +266,13 @@ def held_custom_fields(client_id: int) -> dict:
         return {}
 
 
+def kind_labels(client: dict) -> dict:
+    """A Daftra client's «type» and «gender» codes as the forms' نوع العميل and الجنس; empty for a
+    code the forms do not offer (or none)."""
+    named = lambda labels, code: next((label for label, value in labels.items() if str(value) == str(code or "")), "")  # noqa: E731
+    return {"customer_type": named(CUSTOMER_TYPES, client.get("type")), "gender": named(GENDERS, client.get("gender"))}
+
+
 def create_client(data: dict, phone: str, db: Session) -> int:
     name = squash(data.get("customer_name"))
     fields = custom_fields(data)
@@ -293,6 +300,7 @@ def create_client(data: dict, phone: str, db: Session) -> int:
         daftra_id=new_id, client_code=str(row.get("client_number") or new_id)[:10], customer_name=name, phone=phone,
         phone2=local_phone(data.get("phone2") or ""),
         email=data.get("email") or "",
+        **kind_labels({"type": body["Client"]["type"], "gender": body["Client"].get("gender")}),
         addresses=[Address(emirate=data.get("emirate") or "", area=data.get("area") or "", street=data.get("street") or "",
                            house=data.get("house") or "", link=data.get("location_url") or "", is_default=True)],
     ))
@@ -317,7 +325,7 @@ def save_address(daftra_id: int, data: dict):
     daftra.update(resource, {"Client": client, "le_custom_data_client": custom})
 
 
-def update_client(daftra_client_id: int, data: dict):
+def update_client(daftra_client_id: int, data: dict, db: Session | None = None):
     """Puts on the client in Daftra what a request knows about them: the التصنيف picked on the
     form, the رقم مسؤول اخر and الجنس given for them, and the رابط اللوكيشن and الإحداثيات of
     the address it is for.
@@ -327,6 +335,9 @@ def update_client(daftra_client_id: int, data: dict):
 
     Daftra is only written to when something would actually change, and the newest request wins:
     a client has one link and one pair of coordinates, so they follow the address last used.
+
+    db: our copy of the client list, given the same نوع العميل, الجنس and رقم مسؤول اخر, so the next
+    search finds what was just saved rather than waiting for the nightly sync.
     """
     resource = f"clients/{daftra_client_id}.json"
     saved = daftra.get(resource).get("data", {}).get("Client", {})
@@ -351,9 +362,14 @@ def update_client(daftra_client_id: int, data: dict):
     gender = GENDERS.get(data.get("gender") or "")
     if gender and str(saved.get("gender") or "") != str(gender):
         wanted["gender"] = gender
+    # نوع العميل, the same way (2 فرد, 3 تجاري)
+    kind = CUSTOMER_TYPE_CODES.get(data.get("customer_type") or "")
+    if kind and str(saved.get("type") or "") != str(kind):
+        wanted["type"] = kind
     wanted.update(address_change(saved, address_fields(data)))
     # The coordinates live in a custom field, which is saved separately from the client's own fields
     if custom == {key: str(held.get(key) or "") for key in custom} and not wanted:
+        _keep_local(db, daftra_client_id, saved)
         return
 
     # Daftra rebuilds the client's name out of the name fields of whatever is sent to it: left out
@@ -363,3 +379,15 @@ def update_client(daftra_client_id: int, data: dict):
               "first_name": saved.get("first_name") or "", "last_name": saved.get("last_name") or ""}
     # The account refuses any client save that does not carry those two fields, so they always go
     daftra.update(resource, {"Client": client, "le_custom_data_client": custom})
+    _keep_local(db, daftra_client_id, {**saved, **wanted})
+
+
+def _keep_local(db: Session | None, daftra_client_id: int, client: dict):
+    """Our copy of the client, given what Daftra has (or is about to have) for these three."""
+    local = db.scalar(select(Client).where(Client.daftra_id == daftra_client_id)) if db is not None else None
+    if local is None:
+        return
+    local.customer_type, local.gender = kind_labels(client).values()
+    phone2 = local_phone(client.get("phone2") or "")
+    if phone2 and phone2 != local.phone:
+        local.phone2 = phone2

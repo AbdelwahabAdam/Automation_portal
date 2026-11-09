@@ -57,6 +57,7 @@ def client_rows(raw_clients: list[dict]) -> list[dict]:
         rows.append({
             "daftra_id": int(c["id"]), "client_code": c.get("client_number") or "", "customer_name": name,
             "phone": phone, "phone2": phone2, "email": (c.get("email") or "").strip(),
+            **daftra_side.kind_labels(c),
             "is_active": c.get("suspend") != "1", "addresses": addresses,
         })
     return rows

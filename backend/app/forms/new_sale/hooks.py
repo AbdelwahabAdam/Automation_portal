@@ -20,7 +20,7 @@ def on_approve(ctx) -> dict:
     paid, method = payment_inputs(data)
     if request.daftra_client_id is None:
         request.save_document("client", client_id(data, db))
-    update_client(request.daftra_client_id, data)
+    update_client(request.daftra_client_id, data, db)
     invoice = ensure_invoice(request, items, staff_id)
     summary = finish(request, invoice, paid, method, db)
     if data.get("create_work_order") == "نعم":

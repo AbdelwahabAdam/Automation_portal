@@ -154,7 +154,8 @@ def products_named(name: str) -> list[dict]:
 #: Nothing is written to Daftra; this is only how the forms name them.
 TREASURY_NUMBERS = {
     "ADIB BANK NEW CURRENT ACCOUNT": "5433",
-    "NEW ADIB": "8032",
+    # The one the office calls «NEW ADIB»; Daftra holds it under the shorter name
+    "ADIB BANK": "8032",
     "MAIN BANK ADCB": "20001",
 }
 _TREASURY_NUMBERS = {squash(name).casefold(): number for name, number in TREASURY_NUMBERS.items()}

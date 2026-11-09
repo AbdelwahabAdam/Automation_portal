@@ -7,7 +7,8 @@ import { coordinatesFromLink, normalizePhone } from '../validation.js';
 
 // Form fields that an existing Daftra client can fill. المنطقة is not one: whatever a client's saved
 // address says, it is the التصنيف, and the form works that out for itself.
-const CLIENT_FIELDS = ['client_code', 'customer_name', 'phone', 'phone2', 'emirate', 'street', 'house', 'location_url'];
+// نوع العميل and الجنس as Daftra has them: changed here, approving puts the change on the client
+const CLIENT_FIELDS = ['client_code', 'customer_name', 'phone', 'phone2', 'customer_type', 'gender', 'emirate', 'street', 'house', 'location_url'];
 const ADDRESS_FIELDS = ['emirate', 'street', 'house', 'location_url'];
 // Belongs to the address as much as the fields above: the coordinates come from its link, and
 // التصنيف decides its المنطقة and الإمارة. A new address starts without any of them.
@@ -128,7 +129,7 @@ export function useClientLookup(form) {
     });
     form.setErrors((current) => Object.fromEntries(Object.entries(current).filter(([name]) => !CLIENT_FIELDS.includes(name))));
     setLookup({ field, status: 'found', client });
-    // A client we have: Daftra already holds their نوع العميل, الجنس and البريد
+    // A client we have: Daftra already holds their البريد (نوع العميل and الجنس are filled in above)
     form.setValues((current) => ({ ...current, new_client: false }));
     typingNewAddress.current = false;
     if (form.needsClientInfo) loadClientInfo(client.daftra_id, client.location_url || "");

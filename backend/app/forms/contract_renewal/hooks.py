@@ -34,6 +34,6 @@ def on_approve(ctx) -> dict:
             raise SyncError(f"لا يوجد في دفترة عميل بالرقم {local_phone(data.get('phone'))} أو الكود "
                             f"«{data.get('client_code') or '—'}». التجديد لعميل موجود فقط؛ أعد الطلب للموظف ليصحح بيانات العميل.")
         request.save_document("client", found)
-    update_client(request.daftra_client_id, data)
+    update_client(request.daftra_client_id, data, db)
     invoice = ensure_invoice(request, [item], staff_id)
     return finish(request, invoice, paid, method, db)

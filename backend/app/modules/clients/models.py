@@ -38,6 +38,10 @@ class Client(Base):
     phone: Mapped[str] = mapped_column(String(20), index=True, default="", server_default="")
     phone2: Mapped[str] = mapped_column(String(20), default="", server_default="")
     email: Mapped[str] = mapped_column(String(200), default="", server_default="")
+    # نوع العميل and الجنس as the forms write them (فرد / تجاري, ذكر / أنثى), from Daftra's codes;
+    # empty when Daftra has none the forms know
+    customer_type: Mapped[str] = mapped_column(String(20), default="", server_default="")
+    gender: Mapped[str] = mapped_column(String(20), default="", server_default="")
     is_active: Mapped[bool] = mapped_column(default=True, server_default="true")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

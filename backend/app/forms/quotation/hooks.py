@@ -20,7 +20,7 @@ def on_approve(ctx) -> dict:
     staff_id = sales_person(request)
     if request.daftra_client_id is None:
         request.save_document("client", client_id(data, db))
-    update_client(request.daftra_client_id, data)
+    update_client(request.daftra_client_id, data, db)
     estimate = ensure_estimate(request, items, staff_id, notes=form_notes(data, payment_note(data)))
     return {"daftra_estimate_no": request.daftra_estimate_no,
             "estimate_pdf_saved": save_estimate_pdf(request, estimate, db)}

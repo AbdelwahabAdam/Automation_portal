@@ -109,7 +109,7 @@ def test_a_treasury_that_needs_its_account_number_is_named_with_it(fake_daftra):
     """Two ADIB accounts read alike in a dropdown, so the forms add the number Daftra leaves out."""
     fake_daftra.treasuries = [
         {"id": "13", "name": "ADIB BANK NEW CURRENT ACCOUNT", "active": "1"},
-        {"id": "21", "name": "new adib", "active": "1"},
+        {"id": "21", "name": "adib bank", "active": "1"},
         {"id": "22", "name": "MAIN BANK ADCB — 20001", "active": "1"},
         {"id": "9", "name": "خزينه المكتب", "active": "1"},
         # Not in the list and not active: named as Daftra names it, and left out
@@ -119,8 +119,8 @@ def test_a_treasury_that_needs_its_account_number_is_named_with_it(fake_daftra):
     daftra.cache.forget("treasuries")
     named = {row["id"]: row["name"] for row in daftra.list_treasuries()}
     assert named[13] == "ADIB BANK NEW CURRENT ACCOUNT — 5433"
-    # Matched whatever the case: Daftra holds it lowercase here
-    assert named[21] == "new adib — 8032"
+    # Matched whatever the case, and on the whole name: «ADIB BANK» is not «ADIB BANK NEW…»
+    assert named[21] == "adib bank — 8032"
     # Already numbered in Daftra: not numbered twice
     assert named[22] == "MAIN BANK ADCB — 20001"
     assert named[9] == "خزينه المكتب" and named[16] == "GEIDEA POS"
