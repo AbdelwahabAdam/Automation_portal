@@ -15,33 +15,8 @@ from ..form_engine import NO_INSCRIPTION, package_quantity
 from ..catalog import Product
 from ...core.text import day_month_year, squash
 from .common import (INVOICE_ATTACHMENT_FIELD, RECEIPT_ATTACHMENT_FIELD, TOTAL_TOLERANCE, 
-                     attach_pdf, made_before_the_request, marker, money, sales_person, sales_person_name)
-
-
-# Printed on every invoice's last page (Daftra's "html_notes" field, not "notes" or "terms" — those
-# print nowhere; confirmed against a real invoice and a live write/read/PDF round-trip on a test one).
-# Matches invoice 06296's wording exactly; Daftra appends the trailing span itself on save.
-WARRANTY_TERMS_HTML = (
-    "<p><b>شروط وأحكام الضمان</b></p><p><b><br></b></p>"
-    "<p><b>1. يقرّ العميل باستلام الجهاز / براد المياه بحالة سليمة وجيدة وصالحة للتشغيل.</b></p><p><b><br></b></p>"
-    "<p><b>2. مدة الضمان سنة واحدة من تاريخ الفاتورة، ويشمل عيوب التصنيع فقط، ما لم يُنص على خلاف ذلك في بنود خاصة.</b></p><p><b><br></b></p>"
-    "<p><b>3. لا يشمل الضمان الأجزاء الاستهلاكية مثل صنبور المياه، حاوية الفلتر، والفلاتر، إلا إذا تم النص صراحة على خلاف ذلك.</b></p><p><b><br></b></p>"
-    "<p><b>4. ضمان الكمبروسر ثلاث (3) سنوات من تاريخ الفاتورة، ويشمل عيوب التصنيع فقط.</b></p><p><b><br></b></p>"
-    "<p><b>5. لا يشمل ضمان الكمبروسر برادة الطعام (إن وُجدت)، ويكون ضمان كمبروسر برادة الطعام سنة واحدة فقط من تاريخ الفاتورة.</b></p><p><b><br></b></p>"
-    "<p><b>6. أي فتح أو تعديل أو عبث غير مصرح به بأي جزء من أجزاء الجهاز، بما في ذلك الصنبور، الجسم الخلفي، الغطاء العلوي، أوالتوصيلات الداخلية، يؤدي إلى إلغاء الضمان فورًا .</b></p><p><b><br></b></p>"
-    "<p><b>7. يتحمل العميل كامل المسؤولية عن استخراج أي تصاريح أو موافقات لازمة لتوصيلات المياه والكهرباء، ولا تتحمل شركة المستقبل لايف أي مسؤولية عن الاستخدام غير المصرح به أو أي رسوم أو مخالفات ناتجة عن ذلك.</b></p><p><b><br></b></p>"
-    "<p><b>8. تتحمل شركة المستقبل لايف أعمال التوريد والتركيب، بما يشمل تمديدات المياه والكهرباء، بشرط ألا تتجاوز مسافة التمديدات (15) مترًا.</b></p><p><b><br></b></p>"
-    "<p><b>9. في حال زيادة مسافة التمديدات عن (15) مترًا، يتم احتساب تكلفة إضافية على النحو التالي:</b></p><p><b><br></b></p>"
-    "<p><b>• 6 دراهم لكل متر لتمديدات المياه.&nbsp;</b></p><p><b>• 7 دراهم لكل متر لتمديدات الكهرباء.</b></p><p><b><br></b></p>"
-    "<p><b>10. يغطي الضمان عيوب التصنيع فقط، ولا يشمل الأعطال أو الأضرار الناتجة عن سوء الاستخدام، الإهمال، الحوادث، الكوارث الطبيعية، التشغيل غير الصحيح، أو النقل غير المعتمد للجهاز.</b></p><p><b><br></b></p>"
-    "<p><b>11. لا يشمل الضمان أي نقل أو تحريك غير منظم أو غير مصرح به للجهاز من مكان إلى آخر.</b></p><p><b><br></b></p>"
-    "<p><b>12. في حال وجود شكوى أو عطل، يتم الاستجابة والرد خلال يومي عمل من تاريخ استلام البلاغ.</b></p><p><b><br></b></p>"
-    "<p><b>13. في حال طلب صيانة وتبيّن عند وصول فريق الصيانة أن الجهاز يعمل بحالة طبيعية، وأن العطل ناتج عن سوء استخدام أو خطأ من جهة العميل، يتحمل العميل تكلفة الزيارة، ويتم تحديدها حسب الإمارة.</b></p><p><b><br></b></p>"
-    "<p><b>14. عند تركيب أو إضافة أي أجزاء أو ملحقات داخل أو خارج الجهاز تؤدي إلى تلف أي جزء من أجزائه، يتحمل العميل كامل تكلفة الإصلاح حتى وإن كان الجهاز ضمن فترة الضمان.</b></p><p><b><br></b></p>"
-    "<p><b>15. تحتفظ شركة المستقبل لايف بحق تعديل أو تحديث هذه الشروط والأحكام عند الحاجة، ويُعمل بالتعديلات من تاريخ اعتمادها أو نشرها رسميًا.</b></p><p><b><br></b></p>"
-    "<p><b>تمديد ضمان الكمبروسر</b></p><p><b><br></b></p>"
-    "<p><b>يمكن تمديد ضمان الكمبروسر حتى خمس (5) سنوات من تاريخ الفاتورة، وذلك عند توقيع عقد صيانة مع شركة المستقبل لايف وفق الشروط المعتمدة في عقد الصيانة</b></p>"
-)
+                     attach_pdf, made_before_the_request, marker, money, printed_terms, sales_person,
+                     sales_person_name, terms_to_print)
 
 
 def invoice_address(data: dict) -> dict:
@@ -118,7 +93,8 @@ def find_invoice(request) -> int | None:
 
 def ensure_invoice(request, items: list[dict], staff_id: int) -> dict:
     """Sends no «notes»: Daftra shows them in the invoice's الشروط والأحكام box, which holds only
-    the warranty terms (html_notes). The form's ملاحظات stay on the request in the portal.
+    the terms its packages print (html_notes, see modules/terms), or nothing. The form's ملاحظات
+    stay on the request in the portal.
 
     staff_id: the salesperson who sent the request. Daftra shows them twice, as it does on the
     receipt: «بيعت بواسطة» (sales_person_id) and «أنشئ بواسطة» (staff_id). Without the second one
@@ -148,7 +124,6 @@ def ensure_invoice(request, items: list[dict], staff_id: int) -> dict:
                 "client_id": request.daftra_client_id, "date": data.get("request_date"), "draft": 0, "is_offline": 1,
                 "currency_code": "AED", "store_id": settings.daftra_store_id, "branch_id": settings.daftra_branch_id,
                 "sales_person_id": staff_id, "staff_id": staff_id, "po_number": marker(request),
-                "html_notes": WARRANTY_TERMS_HTML,
                 # The address this request is for, printed on the invoice. Without it the invoice
                 # carries whatever the client record holds, which may be another of their addresses
                 # or nothing at all. Sent only when the form has one, so it can never blank it.
@@ -160,8 +135,12 @@ def ensure_invoice(request, items: list[dict], staff_id: int) -> dict:
             if discount > 0:
                 fields["adjustment_label"] = data.get("discount_label") or "خصم"
                 fields["adjustment_value"] = float(-discount)
+            term = terms_to_print(request)
+            if term is not None:
+                fields["html_notes"] = printed_terms.as_html(term.body)
             request.save_document(
                 "invoice", daftra.create("invoices.json", {"Invoice": fields, "InvoiceItem": items}))
+            request.printed_terms_id, request.printed_terms = (term.id, term.label) if term else (None, None)
         invoice = get_invoice(request.daftra_invoice_id)
     request.save_document("invoice", request.daftra_invoice_id, invoice.get("no") or "")
 

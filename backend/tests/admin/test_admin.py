@@ -5,7 +5,7 @@ import io
 
 from app.core.context import Actor
 from app.modules.catalog import sync_from_daftra
-from app.modules.models import AuditLog, Package, Product, Request, User
+from app.modules.models import AuditLog, Product, Request, User
 
 from .. import seed
 from ..conftest import auth, make_user, may_fill
@@ -90,14 +90,13 @@ def test_products_and_packages(client, db, admin):
     ]}, headers=auth(admin)).json()
     # 2 x 100, plus 5% tax, minus the line's 10
     assert package["total"] == 200.0
-    assert package["code"] == ""
-    # A code from the catalog's import stays, though the form no longer has one to send
-    db.get(Package, package["id"]).code = "FLP-001"
-    db.commit()
+    # A new package is given the next free code, in the shape the catalog's import writes them
+    assert package["code"] == "FLP-001"
     updated = client.put(f"/api/admin/packages/{package['id']}", json={"name": "Test pack", "items": [
         {"product_id": new["id"], "quantity": 3, "unit_price": "100"}, {"product_id": 3, "quantity": 1, "unit_price": "50"},
     ]}, headers=auth(admin)).json()
     assert updated["total"] == 350.0 and len(updated["items"]) == 2
+    # Editing a package leaves its code where it is
     assert updated["code"] == "FLP-001"
     repeated = client.put(f"/api/admin/packages/{package['id']}", json={"name": "Test pack", "items": [
         {"product_id": 3, "quantity": 1, "unit_price": "50"}, {"product_id": 3, "quantity": 1, "unit_price": "50"},

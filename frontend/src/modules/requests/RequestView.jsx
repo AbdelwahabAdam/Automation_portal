@@ -77,6 +77,7 @@ function DaftraCard({ request }) {
         {request.daftra_invoice_no && <div><dt>رقم الفاتورة</dt><dd><bdi dir="ltr">{request.daftra_invoice_no}</bdi></dd></div>}
         {request.daftra_receipt_no && <div><dt>رقم سند القبض</dt><dd><bdi dir="ltr">{request.daftra_receipt_no}</bdi></dd></div>}
         {request.daftra_work_order_no && <div><dt>رقم أمر الشغل</dt><dd><bdi dir="ltr">{request.daftra_work_order_no}</bdi></dd></div>}
+        {request.printed_terms && <div><dt>الشروط والأحكام المطبوعة</dt><dd>{request.printed_terms}</dd></div>}
         {pdfs.map(([label, file]) => <DocRow key={file.id} label={label} file={file} />)}
       </dl>
     </Card>

@@ -160,6 +160,7 @@ backend/app/
 │   ├── form_engine/             FormSpec, the registry, the field builders, shared choices, validation
 │   ├── clients/                 the customers: our copy of Daftra's, addresses, categories, map links
 │   ├── catalog/                 products and packages
+│   ├── terms/                   الشروط والأحكام: versioned texts, and the one each package prints
 │   ├── invoicing/               what approving creates in Daftra, and the PDFs the portal draws
 │   ├── lookups/                 Daftra's staff, treasuries and order sources (+ the order sources page)
 │   ├── audit/                   the activity log and its page
@@ -189,7 +190,7 @@ frontend/src/
 │   ├── identity/        Login · SetPassword · Account · Users · Roles
 │   ├── requests/        FormsCatalog · RequestForm · form/ · MyRequests · RequestList · RequestView ·
 │   │                    Review · screens.jsx (the route-aware wrappers) · validation.js · useFormData.js
-│   ├── catalog/ · lookups/ · audit/ · notifications/ · system/
+│   ├── catalog/ (with Terms.jsx: its terms tab) · lookups/ · audit/ · notifications/ · system/
 ├── ds/         the design system: components, tokens, styles, the search matcher
 └── lib/        format.js (how dates and amounts are written) · hooks.js · brand.js
 ```

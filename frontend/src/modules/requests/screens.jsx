@@ -11,6 +11,7 @@ import { FormsCatalog } from './FormsCatalog.jsx';
 import MyRequestsList from './MyRequests.jsx';
 import RequestForm from './RequestForm.jsx';
 import RequestView from './RequestView.jsx';
+import Dashboard from '../dashboard/Dashboard.jsx';
 import ReviewQueue from './Review.jsx';
 
 /** The forms and the catalog they come from are loaded once, for anyone who has any of them. */
@@ -113,6 +114,20 @@ export function EditRequestScreen({ user, sales }) {
       onBack={() => navigate('/requests/mine')}
       onNew={() => navigate('/forms')}
       onList={() => navigate('/requests/mine')}
+    />
+  );
+}
+
+export function DashboardScreen() {
+  const navigate = useNavigate();
+  return (
+    <Dashboard
+      // A request waiting on a decision opens in المراجعة; one waiting on its employee is read
+      onOpenRequest={(row) => navigate(row.can_review && row.status === 'submitted'
+        ? `/review/${row.id}` : `/requests/${row.id}`)}
+      // A card opens المراجعة on exactly what it counted: its own forms, period and basis
+      onOpenList={(params) => navigate(`/review?${new URLSearchParams(
+        Object.entries({ ...params, scope: 'review' }).filter(([, value]) => value))}`)}
     />
   );
 }

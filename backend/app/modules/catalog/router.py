@@ -103,7 +103,8 @@ def catalog_picker(user=Depends(form_user), db: Session = Depends(get_db)):
             "price": float(sum((service.line_total(item) for item in p.items), start=Decimal(0))),
             "items": [
                 {"product_id": item.product_id, "name": item.product.name, "quantity": item.quantity,
-                 "unit_price": service.unit_price_in_package(item)}
+                 "unit_price": service.unit_price_in_package(item), "open_price": item.product.open_price,
+                 "description": item.product.description or ""}
                 for item in p.items
             ],
         }
@@ -113,6 +114,6 @@ def catalog_picker(user=Depends(form_user), db: Session = Depends(get_db)):
         # list is short enough to show each product's description beside it
         {"kind": "product", "id": p.id, "name": p.name, "name_ar": p.name_ar,
          "price": price_or_none(p.unit_price), "maintenance_group": p.maintenance_group,
-         "daftra_id": p.daftra_id, "description": p.description or ""}
+         "daftra_id": p.daftra_id, "description": p.description or "", "open_price": p.open_price}
         for p in repo.active_products(db)
     ]

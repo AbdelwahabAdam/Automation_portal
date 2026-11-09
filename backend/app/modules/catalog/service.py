@@ -4,6 +4,7 @@ A product is a single unit with nothing inside it. A package is one or more prod
 together; each line of a package has its own quantity, price and discount.
 """
 
+import re
 from decimal import ROUND_HALF_UP, Decimal
 
 from sqlalchemy.orm import Session
@@ -63,7 +64,7 @@ def active_products_for_forms(db: Session) -> dict:
     sent from the form)."""
     return {
         str(p.id): {"id": p.id, "name": p.name, "price": float(p.unit_price) if p.unit_price else 0,
-                    "maintenance_group": p.maintenance_group, "daftra_id": p.daftra_id}
+                    "maintenance_group": p.maintenance_group, "daftra_id": p.daftra_id, "open_price": p.open_price}
         for p in repo.active_products(db)
     }
 
@@ -83,7 +84,7 @@ def product_out(product: Product, package_count: int = 0) -> dict:
         "name": product.name, "name_ar": product.name_ar,
         "description": product.description, "unit_price": float(product.unit_price),
         "price_includes_tax": product.price_includes_tax, "tax_rate": float(product.tax_rate),
-        "is_active": product.is_active, "package_count": package_count,
+        "is_active": product.is_active, "package_count": package_count, "open_price": product.open_price,
         "product_code": product.product_code or "", "barcode": product.barcode or "",
         "buy_price": float(product.buy_price) if product.buy_price is not None else None,
         "stock_balance": product.stock_balance, "category": product.category or "",
@@ -112,7 +113,12 @@ def apply_product(db: Session, product: Product, body: ProductIn):
     product.name = name
     product.name_ar = body.name_ar.strip()
     product.description = body.description.strip()
-    product.unit_price = body.unit_price
+    product.open_price = body.open_price
+    # Its price is typed on each order line, and its text starts the line: so it has no price of its
+    # own, and must have a text
+    product.unit_price = 0 if body.open_price else body.unit_price
+    if body.open_price and not product.description:
+        raise Invalid("اكتب نص البند: يبدأ به السطر في الطلب ويظهر في الفاتورة")
     product.is_active = body.is_active
     product.maintenance_group = body.maintenance_group.strip() or None
 
@@ -169,7 +175,7 @@ def package_out(package: Package) -> dict:
             "product_name_ar": item.product.name_ar,
             "quantity": item.quantity, "unit_price": float(item.unit_price),
             "price_includes_tax": item.price_includes_tax, "discount": float(item.discount),
-            "total": float(line_total(item)),
+            "total": float(line_total(item)), "open_price": item.product.open_price,
         }
         for item in package.items
     ]
@@ -215,9 +221,13 @@ def apply_package(db: Session, package: Package, body: PackageIn):
     package.name = name
     package.color = body.color.strip()
     package.is_active = body.is_active
+    # A product with no fixed price is priced on the order, so inside a package too: it adds
+    # nothing to the package's own price here
     set_items(package, [
-        {"product": products[item.product_id], "quantity": item.quantity, "unit_price": item.unit_price,
-         "price_includes_tax": item.price_includes_tax, "discount": item.discount}
+        {"product": products[item.product_id], "quantity": item.quantity,
+         "unit_price": Decimal(0) if products[item.product_id].open_price else item.unit_price,
+         "price_includes_tax": item.price_includes_tax,
+         "discount": Decimal(0) if products[item.product_id].open_price else item.discount}
         for item in body.items
     ])
 
@@ -226,8 +236,26 @@ def listed_packages(db: Session) -> list[dict]:
     return [package_out(package) for package in repo.packages_with_items(db)]
 
 
+# The reference a package is known by outside the portal. The catalog import hands these out by
+# position (jobs/import_catalog), and a package added here takes the next free one, so it is listed
+# and searched for like the rest instead of showing a dash.
+CODE_PREFIX = "FLP-"
+CODE_NUMBER = re.compile(rf"^{CODE_PREFIX}(\d+)$")
+
+
+def next_package_code(db: Session) -> str:
+    """FLP-046 after FLP-045: one past the highest number given out.
+
+    Only codes of that shape are counted, so one written by hand in another shape is passed over
+    rather than breaking the counting. Three digits until the number outgrows them (FLP-1000).
+    """
+    highest = max((int(found.group(1)) for code in repo.package_codes(db)
+                   if (found := CODE_NUMBER.match(code))), default=0)
+    return f"{CODE_PREFIX}{highest + 1:03d}"
+
+
 def create_package(db: Session, who: Actor, body: PackageIn) -> dict:
-    package = Package()
+    package = Package(code=next_package_code(db))
     apply_package(db, package, body)
     db.add(package)
     db.flush()

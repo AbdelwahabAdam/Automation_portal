@@ -11,11 +11,13 @@ import Users from '../modules/identity/Users.jsx';
 import OrderSources from '../modules/lookups/OrderSources.jsx';
 import MailTest from '../modules/notifications/MailTest.jsx';
 import {
-  EditRequestScreen, FormsScreen, MyRequestsScreen, NewRequestScreen, RequestScreen, ReviewRequestScreen, ReviewScreen,
+  DashboardScreen, EditRequestScreen, FormsScreen, MyRequestsScreen, NewRequestScreen, RequestScreen,
+  ReviewRequestScreen, ReviewScreen,
 } from '../modules/requests/screens.jsx';
 import Sync from '../modules/system/Sync.jsx';
 
 export const ROUTES = [
+  { key: 'dashboard', path: '/dashboard', screen: DashboardScreen },
   { key: 'forms', path: '/forms', screen: FormsScreen },
   { key: 'forms', path: '/forms/:formKey', screen: NewRequestScreen },
   { key: 'my_requests', path: '/requests/mine', screen: MyRequestsScreen },

@@ -41,6 +41,10 @@ class Request(Base):
     # These two are about the approval, not about one document, so they stay on the request
     daftra_error: Mapped[str | None] = mapped_column(Text)
     daftra_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # The terms its invoice printed (modules/terms), and their name and version as printed: kept
+    # as written, so it still reads right if the term is ever gone
+    printed_terms_id: Mapped[int | None] = mapped_column(ForeignKey("terms.id", ondelete="SET NULL"), index=True)
+    printed_terms: Mapped[str | None] = mapped_column(String(250))
 
     # Named, not imported: identity owns User, and no module imports another's models, so these
     # two carry no Mapped[...] annotation — SQLAlchemy resolves "User" from its own registry.

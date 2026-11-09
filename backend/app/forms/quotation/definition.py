@@ -12,6 +12,7 @@ from ...modules.form_engine import (
     MAX_PACKAGE_QUANTITY,
     NOTES,
     NO_INSCRIPTION,
+    OPEN_PRICE_FIELDS,
     PACKAGE_COLOR_FAMILIES,
     address,
     amounts,
@@ -46,6 +47,8 @@ SECTIONS = [
                   charge=True, beside="inscription"),
             f("dimensions", "المقاسات المطلوبة، إن تنطبق"),
             f("special_requirements", "مواصفات أو متطلبات خاصة", "textarea"),
+            # A product with no fixed price: its price and text, typed on its own line
+            *OPEN_PRICE_FIELDS,
         ]),
         note="الأسعار من الكتالوج؛ عدّلها على السطر إن كان العرض بسعر آخر.",
     ),

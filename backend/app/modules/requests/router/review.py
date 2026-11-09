@@ -17,10 +17,13 @@ reviewer = require_any_form(VIEW, REVIEW)
 
 
 @router.get("/review/requests")
-def review_queue(user=Depends(reviewer), db: Session = Depends(get_db)):
+def review_queue(scope: str = "", user=Depends(reviewer), db: Session = Depends(get_db)):
     """The requests of the forms this user may see, newest first: those sent, and the employees'
-    drafts (the «المسودات» tab, with a count per employee), a draft by when it was last saved."""
-    return review.queue(db, user)
+    drafts (the «المسودات» tab, with a count per employee), a draft by when it was last saved.
+
+    scope=review narrows it to the forms they may decide on, for the lists opened from لوحة المتابعة.
+    """
+    return review.queue(db, user, scope)
 
 
 @router.post("/review/requests/{request_id}/approve")

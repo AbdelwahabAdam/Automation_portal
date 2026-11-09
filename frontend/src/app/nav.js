@@ -6,6 +6,7 @@ export const pagePath = (key) => '/' + key.replace('.', '/');
 
 // Sidebar and bottom-bar icon for each page (from the design system's icon set)
 export const PAGE_ICONS = {
+  dashboard: 'layers',
   forms: 'grid',
   my_requests: 'inbox',
   review: 'check-circle',

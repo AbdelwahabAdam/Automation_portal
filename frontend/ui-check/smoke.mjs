@@ -536,6 +536,7 @@ async function devicePicker(page, prefix) {
 
 async function pages(page, prefix) {
   const visits = [
+    ['/dashboard', 'لوحة المتابعة', 'dashboard'],
     ['/requests/mine', 'طلباتي', 'my-requests'],
     ['/review', 'مراجعة الطلبات', 'review'],
     ['/admin/users', 'المستخدمون', 'users'],

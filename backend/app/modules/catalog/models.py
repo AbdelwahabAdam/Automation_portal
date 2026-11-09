@@ -25,6 +25,9 @@ class Product(Base):
     name: Mapped[str] = mapped_column(String(200), unique=True)
     name_ar: Mapped[str] = mapped_column(String(200), default="", server_default="")
     description: Mapped[str] = mapped_column(Text, default="", server_default="")
+    # Sold at whatever price the order line is given (بدون سعر ثابت): its unit_price stays 0, the
+    # salesperson types the price on طلب بيع / طلب عرض سعر, and its description is the line's text
+    open_price: Mapped[bool] = mapped_column(default=False, server_default="false")
     # The usual price; a package line can charge a different one
     unit_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0, server_default="0")
     price_includes_tax: Mapped[bool] = mapped_column(default=True, server_default="true")

@@ -13,6 +13,8 @@ from .catalog.models import Package, PackageItem, Product
 from .clients.models import Address, Client, ClientCategory
 from .identity.models import Role, User, user_roles
 from .requests.models import Attachment, Request, RequestDocument, RequestEvent
+from .terms.models import PackageTerm, Term
 
 __all__ = ["Address", "Attachment", "AuditLog", "Client", "ClientCategory", "Package", "PackageItem",
-           "Product", "Request", "RequestDocument", "RequestEvent", "Role", "User", "user_roles"]
+           "Product", "Request", "RequestDocument", "RequestEvent", "Role", "PackageTerm", "Term", "User",
+           "user_roles"]

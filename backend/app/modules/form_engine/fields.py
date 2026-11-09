@@ -15,6 +15,16 @@ def money(name, label, required=False, **extra):
     return f(name, label, "number", required, min=0, money=True, **extra)
 
 
+# The line of a product sold without a fixed price (the catalog's «بدون سعر ثابت»), in a package or
+# on its own: the salesperson types its price, and the text its invoice line carries, which starts
+# as the product's own (default_from_product). Neither is asked of any other product.
+OPEN_PRICE_FIELDS = [
+    money("item_price", "سعر الوحدة، شامل الضريبة (درهم)", True, line_price=True, column=True, open_price_only=True),
+    f("work_description", "نص البند في الفاتورة", "textarea", True, max_length=2000, open_price_only=True,
+      default_from_product="description"),
+]
+
+
 def yes_no(name, label, required=True, **extra):
     return f(name, label, "select", required, options=YES_NO, **extra)
 

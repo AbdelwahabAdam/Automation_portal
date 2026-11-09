@@ -116,6 +116,13 @@ def holds_any_form(user, does: str) -> bool:
 # النماذج would otherwise sit under المبيعات.
 MENU = [
     {
+        # Its own group above الطلبات, so whoever reviews lands on it when they sign in
+        "key": "overview", "label": "المتابعة",
+        "pages": [
+            {"key": "dashboard", "label": "لوحة المتابعة", "path": "/dashboard", "any_form": REVIEW},
+        ],
+    },
+    {
         "key": "requests", "label": "الطلبات",
         "pages": [
             {"key": "forms", "label": "النماذج", "path": "/forms", "any_form": SUBMIT},

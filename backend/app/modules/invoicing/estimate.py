@@ -15,7 +15,8 @@ from ...core.config import settings
 from ...core.errors import SyncError
 from ...integrations import daftra
 from ...integrations.daftra import DaftraError, NotFound
-from .common import (TOTAL_TOLERANCE, attach_pdf, made_before_the_request, marker, money)
+from .common import (TOTAL_TOLERANCE, attach_pdf, made_before_the_request, marker, money, printed_terms,
+                     terms_to_print)
 from .invoice import invoice_address
 
 # The field the estimate's PDF is attached to the request under (not a field of any form)
@@ -74,8 +75,13 @@ def ensure_estimate(request, items: list[dict], staff_id: int, notes: str = "") 
             if discount > 0:
                 fields["adjustment_label"] = data.get("discount_label") or "خصم"
                 fields["adjustment_value"] = float(-discount)
+            # Not yet seen on a real estimate: printed on an invoice's last page, and sent the same way
+            term = terms_to_print(request)
+            if term is not None:
+                fields["html_notes"] = printed_terms.as_html(term.body)
             request.save_document(
                 "estimate", daftra.create("estimates.json", {"Invoice": fields, "InvoiceItem": items}))
+            request.printed_terms_id, request.printed_terms = (term.id, term.label) if term else (None, None)
         estimate = get_estimate(request.daftra_estimate_id)
     request.save_document("estimate", request.daftra_estimate_id, estimate.get("no") or "")
 

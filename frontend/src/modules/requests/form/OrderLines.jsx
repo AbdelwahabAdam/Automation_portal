@@ -17,17 +17,28 @@ const COLUMNS = 5;
 // packageName: the package's (or the product's) name, which decides the cover colours offered.
 // A colour field with no colours for this package (or for a product picked on its own) would only
 // render as a disabled box saying so, which is a field's worth of space for nothing.
-// only_for: a field belonging to certain products (وصف العمل، سعر الوحدة under «أخرى»)
-function fieldsOfLine(lineFields, { forPackage, packageName, daftraId }) {
+// Whether a line field is asked of this product (a catalog item: its daftra_id and open_price).
+// only_for: certain products only, by Daftra id (وصف العمل، سعر الوحدة under «أخرى»).
+// open_price_only: a product sold without a fixed price only (its price and text). The server
+// keeps to the same rule.
+export function belongsTo(dspec, item) {
+  return (!dspec.only_for || dspec.only_for.includes(item?.daftra_id))
+    && (!dspec.open_price_only || Boolean(item?.open_price));
+}
+
+// item: the product the line is, when it is one product (not a package's own fields)
+// ownOnly: a product inside a package shows only what is its own (an open price's text)
+function fieldsOfLine(lineFields, { forPackage, packageName, item, ownOnly }) {
   return lineFields.filter((dspec) => (forPackage || !dspec.package_only)
     // column: it is shown in the table's own سعر الوحدة column, not among the line's fields
     && !dspec.column
-    && (!dspec.only_for || dspec.only_for.includes(daftraId))
+    && (!ownOnly || dspec.open_price_only)
+    && belongsTo(dspec, item)
     && (dspec.type !== 'package_color' || packageColors(dspec, packageName).length > 0));
 }
 
-function DetailFields({ lineFields, details, errors, keyPrefix, onChange, forPackage, packageName, daftraId }) {
-  const shown = fieldsOfLine(lineFields, { forPackage, packageName, daftraId });
+function DetailFields({ lineFields, details, errors, keyPrefix, onChange, forPackage, packageName, item, ownOnly }) {
+  const shown = fieldsOfLine(lineFields, { forPackage, packageName, item, ownOnly });
   if (!shown.length) return null;
   // A field with a partner (one marked "beside" it) shares a full line with it: two thirds and one third
   const besides = Object.fromEntries(shown.filter((dspec) => dspec.beside).map((dspec) => [dspec.beside, dspec]));
@@ -105,33 +116,36 @@ export default function OrderLines({ spec, value, invalid, catalog, onChange, li
     return catalog.catalogItems;
   }, [catalog.catalogItems, maintenance, only, bothKinds, kind]);
   const priceById = useMemo(() => new Map((catalog.products || []).map((p) => [p.id, p.price || 0])), [catalog.products]);
-  // Which product a line is, as Daftra numbers it: what only_for on a line field is matched against
-  const daftraById = useMemo(
-    () => new Map((catalog.catalogItems || []).filter((item) => item.kind === 'product').map((item) => [item.id, item.daftra_id])),
+  // Which catalog product a line is (its Daftra id and whether it has a fixed price): what a line
+  // field's only_for and open_price_only are matched against
+  const productById = useMemo(
+    () => new Map((catalog.catalogItems || []).filter((item) => item.kind === 'product').map((item) => [item.id, item])),
     [catalog.catalogItems],
   );
-  const daftraOf = (line) => daftraById.get(Number(line.product_id));
+  const itemOf = (line) => productById.get(Number(line.product_id));
   // Products whose price is typed on the line, not taken from the catalog. A line_price field
-  // naming products («أخرى» in اعمال اضافية) prices only those; one naming none prices every line
-  // (صيانة وتبديل, where each visit settles what its parts and services cost).
+  // naming products («أخرى» in اعمال اضافية) prices only those, one for products with no fixed
+  // price prices only those, and one naming none prices every line (صيانة وتبديل, where each visit
+  // settles what its parts and services cost).
   const priceFields = useMemo(() => lineFields.filter((dspec) => dspec.line_price), [lineFields]);
-  const everyLineTyped = priceFields.some((dspec) => !dspec.only_for);
-  const typedPrice = useMemo(() => new Set(priceFields.flatMap((dspec) => dspec.only_for || [])), [priceFields]);
-  const priceIsTyped = (daftraId) => everyLineTyped || typedPrice.has(daftraId);
+  const priceIsTyped = (item) => priceFields.some((dspec) => belongsTo(dspec, item));
   // fixed_prices: what an item costs on this form, by Daftra id, over the catalog's price. The server
   // applies the same; here it is what the line shows and the total adds up.
   const fixedPrice = (item) => spec.fixed_prices?.[item?.daftra_id];
   // item_prices: what the form starts an item's price at, by Daftra id. An item it does not name
   // is offered with no price at all, for the salesperson to fill in.
   const startingPrice = (item) => fixedPrice(item) ?? spec.item_prices?.[item?.daftra_id]
-    ?? (priceIsTyped(item?.daftra_id) ? undefined : item?.price);
+    ?? (priceIsTyped(item) ? undefined : item?.price);
   // The price field that lives in the table's سعر الوحدة column, for a line of this product
-  const columnPrice = (daftraId) => priceFields.find(
-    (dspec) => dspec.column && (!dspec.only_for || dspec.only_for.includes(daftraId)));
+  const columnPrice = (item) => priceFields.find((dspec) => dspec.column && belongsTo(dspec, item));
+  // What a product's own fields start as, from the product (an open price's text: its description)
+  const fromProduct = (item) => Object.fromEntries(lineFields
+    .filter((dspec) => dspec.default_from_product && belongsTo(dspec, item) && item?.[dspec.default_from_product])
+    .map((dspec) => [dspec.name, item[dspec.default_from_product]]));
   // item_labels: what this form calls a product, by its Daftra id. Only «أخرى» needs one: the rest
   // are offered under the name Daftra holds them by, which is the name their invoice line carries.
   const labelOf = (item) => spec.item_labels?.[item?.daftra_id] || item?.name || '';
-  const lineLabel = (line) => spec.item_labels?.[daftraOf(line)] || line.name;
+  const lineLabel = (line) => spec.item_labels?.[itemOf(line)?.daftra_id] || line.name;
   const matches = useMemo(() => {
     if (!items) return null;
     const words = query.toLowerCase().split(/\s+/).filter(Boolean);
@@ -171,21 +185,23 @@ export default function OrderLines({ spec, value, invalid, catalog, onChange, li
       const details = { package_quantity: '1', ...guessedDetails(item.name, item.items.map((line) => line.name)) };
       // Each line keeps the package it came from and the price it has there (the server checks it again)
       // base_quantity: how many the package itself holds; «الكمية» multiplies it into quantity
+      // A product with no fixed price inside it starts with its own text, and its price is typed
       const added = item.items.map((line) => ({
         product_id: line.product_id, name: line.name, quantity: line.quantity, base_quantity: line.quantity, group_id: groupId,
-        group_name: item.name, package_id: item.id, unit_price: line.unit_price, details: { ...details },
+        group_name: item.name, package_id: item.id, unit_price: line.unit_price,
+        details: { ...details, ...fromProduct(productById.get(line.product_id) || line) },
       }));
       set([...lines, ...added]);
       setOpenGroups((current) => new Set([...current, groupId]));
     } else {
       const start = startingPrice(item);
-      const priced = columnPrice(item.daftra_id) || priceFields.find(
-        (dspec) => !dspec.only_for || dspec.only_for.includes(item.daftra_id));
+      const priced = columnPrice(item) || priceFields.find((dspec) => belongsTo(dspec, item));
       set([...lines, {
         product_id: item.id, name: labelOf(item), quantity: 1, group_id: null, group_name: '', package_id: null,
-        unit_price: fixedPrice(item) ?? (priceIsTyped(item.daftra_id) ? 0 : (item.price ?? 0)),
+        unit_price: fixedPrice(item) ?? (priceIsTyped(item) ? 0 : (item.price ?? 0)),
         details: {
-          ...guessedDetails('', [item.name]),
+          ...(item.open_price ? {} : guessedDetails('', [item.name])),
+          ...fromProduct(item),
           // Its price, where the form has one to start from; typed on the line otherwise
           ...(priced && start != null ? { [priced.name]: String(start) } : {}),
         },
@@ -222,8 +238,13 @@ export default function OrderLines({ spec, value, invalid, catalog, onChange, li
   // inPackage: a line that came with a package is indented under it and has no fields of its own.
   function row({ line, index }, inPackage = false) {
     const unit = linePrice(line, priceById, lineFields);
-    // A line inside a package is priced by the package, never by hand
-    const priced = inPackage ? undefined : columnPrice(daftraOf(line));
+    const item = itemOf(line);
+    // A line inside a package is priced by the package, never by hand: except a product with no
+    // fixed price, whose price is typed wherever it is
+    const priced = inPackage && !item?.open_price ? undefined : columnPrice(item);
+    // A product with no fixed price is a service, not a cooler: only its price and text are asked
+    // of it, on its own as in a package (the server asks the same)
+    const ownOnly = inPackage || Boolean(item?.open_price);
     const priceError = priced && lineErrors?.[index]?.[priced.name];
     return (
       <Fragment key={`line-${index}`}>
@@ -254,13 +275,14 @@ export default function OrderLines({ spec, value, invalid, catalog, onChange, li
             <Button type="button" size="sm" variant="ghost" icon="trash" iconOnly label={`إزالة ${line.name}`} onClick={() => removeLine(index)} />
           </td>
         </tr>
-        {/* A line inside a package shows no fields of its own — they belong to the package, above */}
-        {!line.group_id && fieldsOfLine(lineFields, { forPackage: false, packageName: line.name, daftraId: daftraOf(line) }).length > 0 && (
-          <tr className="fl-row--detail">
+        {/* A line inside a package shows only what is its own (an open price's text): the rest
+            belongs to the package, above */}
+        {fieldsOfLine(lineFields, { forPackage: false, packageName: line.name, item, ownOnly }).length > 0 && (
+          <tr className={inPackage ? 'fl-row--detail fl-row--child' : 'fl-row--detail'}>
             <td colSpan={COLUMNS}>
               <DetailFields lineFields={lineFields} details={line.details} errors={lineErrors?.[index]} keyPrefix={`${spec.name}-${index}`}
                 onChange={(name, v) => setDetail(index, name, v)} forPackage={false} packageName={line.name}
-                daftraId={daftraOf(line)} />
+                item={item} ownOnly={ownOnly} />
             </td>
           </tr>
         )}
@@ -272,7 +294,8 @@ export default function OrderLines({ spec, value, invalid, catalog, onChange, li
     const first = group.rows[0];
     const count = packageQuantity(first.line);
     const total = group.rows.reduce((sum, { line }) => sum + linePrice(line, priceById, lineFields) * (Number(line.quantity) || 0), 0);
-    const open = openGroups.has(group.key);
+    // Open when one of its products has something to fix (an open price left empty), so it is seen
+    const open = openGroups.has(group.key) || group.rows.some(({ index }) => lineErrors?.[index]);
     return (
       <Fragment key={group.key}>
         <tr className="fl-row--group">

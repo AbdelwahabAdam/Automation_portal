@@ -8,7 +8,6 @@ from datetime import datetime, timedelta, timezone
 from app.integrations import daftra
 from app.core.config import UPLOAD_DIR, settings
 from app.modules.invoicing import printouts
-from app.modules.invoicing.invoice import WARRANTY_TERMS_HTML
 from app.modules.invoicing.work_order import WORK_ORDER_FIELDS, manufacturing_notes, work_order_rows
 from app.jobs.redraw_work_orders import redraw
 from app.modules.models import Attachment, Client, Product, Request
@@ -243,7 +242,8 @@ def test_approving_a_new_sale_creates_everything_in_daftra(client, db, fake_daft
         "client_id": client_id, "date": TODAY, "draft": 0, "is_offline": 1, "currency_code": "AED", "store_id": 1,
         "branch_id": 1, "sales_person_id": 71, "staff_id": 71, "order_source_id": 16,
         "po_number": f"PORTAL-{request_id}",
-        "adjustment_label": "مبادرة لك ان تشارك", "adjustment_value": -200.0, "html_notes": WARRANTY_TERMS_HTML,
+        "adjustment_label": "مبادرة لك ان تشارك", "adjustment_value": -200.0,
+        # No terms: none of its packages is marked eligible (tests/modules/terms)
         # The address of this request, so it is the one printed on the invoice
         "client_address1": "شارع 1", "client_address2": "فيلا 2", "client_city": "العين",
         "client_state": "العين العامره", "client_country_code": "AE",
@@ -537,7 +537,7 @@ def test_contract_renewal(client, db, fake_daftra, sales, manager):
     assert fake_daftra.clients[4053]["category_id"] == 5
     [invoice] = fake_daftra.posted("/api2/invoices.json")
     assert invoice["Invoice"]["client_id"] == 4053
-    assert invoice["Invoice"]["html_notes"] == WARRANTY_TERMS_HTML
+    assert "html_notes" not in invoice["Invoice"]
     assert invoice["InvoiceItem"] == [{
         "product_id": 37, "item": "exchange contract", "description": "تجديد عقد الصيانه لمده عام مع تبديل فلاتر كل ثلاث اشهر",
         "unit_price": 1680.0, "quantity": 1, "tax1": 3, "store_id": 1,
@@ -706,7 +706,7 @@ def test_invoices_carry_no_notes_and_a_receipt_of_its_own_does(client, db, fake_
     assert approve(client, manager, request_id).status_code == 200
     [invoice] = fake_daftra.posted("/api2/invoices.json")
     assert "notes" not in invoice["Invoice"]
-    assert invoice["Invoice"]["html_notes"] == WARRANTY_TERMS_HTML
+    assert "html_notes" not in invoice["Invoice"]
 
     # طلب تسديد مبلغ متبقي: no invoice of its own, so the receipt carries it under the mark
     seed.existing_client(db)
@@ -781,7 +781,7 @@ def test_maintenance(client, db, fake_daftra, sales, manager):
     assert (new_client["Client"]["type"], new_client["Client"]["gender"], new_client["Client"]["email"]) == (
         3, 2, "office@example.com")
     assert db.query(Client).filter_by(phone="0502222222").one().email == "office@example.com"
-    assert invoice["Invoice"]["html_notes"] == WARRANTY_TERMS_HTML
+    assert "html_notes" not in invoice["Invoice"]
 
 
 def test_an_unexpected_fault_midway_keeps_what_daftra_created(client, db, fake_daftra, sales, manager, monkeypatch):

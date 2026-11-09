@@ -22,3 +22,44 @@ export function formatDay(day) {
   const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(day ?? ''));
   return parts ? `${parts[3]}/${parts[2]}/${parts[1]}` : '';
 }
+
+// ---------- Time as لوحة المتابعة writes it ----------
+
+// The UAE day an ISO moment falls on (2026-11-09). The office works to that day, wherever the
+// browser is: a request sent at 1am in Dubai belongs to that day, not to the evening before in UTC.
+export function uaeDay(iso) {
+  if (!iso) return '';
+  return new Date(new Date(iso).getTime() + 4 * 3600 * 1000).toISOString().slice(0, 10);
+}
+
+// 1 -> ساعة، 2 -> ساعتان، 3 -> 3 ساعات: Arabic counts one, two and many differently
+function counted(number, one, two, few, many) {
+  if (number === 1) return one;
+  if (number === 2) return two;
+  return `${number} ${number <= 10 ? few : many}`;
+}
+
+/** How long something has been waiting, from an ISO moment until now (or until `now`). */
+export function waitedSince(iso, now = Date.now()) {
+  if (!iso) return '';
+  return waited((now - new Date(iso).getTime()) / 3600000);
+}
+
+/** A number of hours as it is read: «ساعتان»، «20 ساعة»، «يومان و3 ساعات». */
+export function waited(hours) {
+  if (!(hours > 0)) return 'أقل من ساعة';
+  const whole = Math.floor(hours);
+  if (whole < 1) return 'أقل من ساعة';
+  if (whole < 24) return counted(whole, 'ساعة', 'ساعتان', 'ساعات', 'ساعة');
+  const days = Math.floor(whole / 24);
+  const rest = whole % 24;
+  const spelled = counted(days, 'يوم', 'يومان', 'أيام', 'يومًا');
+  return rest ? `${spelled} و${counted(rest, 'ساعة', 'ساعتان', 'ساعات', 'ساعة')}` : spelled;
+}
+
+/** The زمن المراجعة card's own number: hours while they stay readable, then days. */
+export function formatHours(hours) {
+  if (hours === null || hours === undefined) return '';
+  if (hours < 48) return `${Number(hours.toFixed(1))} ساعة`;
+  return `${Number((hours / 24).toFixed(1))} يوم`;
+}

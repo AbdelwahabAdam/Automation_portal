@@ -200,8 +200,16 @@ def validate_submission(form_type: str, data: dict, file_counts: dict, employee_
             daftra_id = product.get("daftra_id") if product else None
             # A price the form fixes for a product stands over the catalog's, on this form alone
             price = spec.get("fixed_prices", {}).get(daftra_id, price)
+            # open_price_only: a field only a product sold without a fixed price has (its price and
+            # text, on طلب بيع / طلب عرض سعر), in a package or on its own
+            open_price = bool(product and product.get("open_price"))
             own_fields = [dspec for dspec in line_fields
-                          if not dspec.get("only_for") or daftra_id in dspec["only_for"]]
+                          if (not dspec.get("only_for") or daftra_id in dspec["only_for"])
+                          and (not dspec.get("open_price_only") or open_price)]
+            # On its own it is a service, not a cooler: only its price and text are asked of it.
+            # In a package it carries the package's details like the rest of the package.
+            if open_price and not line.get("group_id"):
+                own_fields = [dspec for dspec in own_fields if dspec.get("open_price_only")]
             for dspec in filter(is_input, own_fields):
                 dvalue, derror = _clean_value(dspec, line["details"].get(dspec["name"]))
                 if derror:

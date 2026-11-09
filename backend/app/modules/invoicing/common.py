@@ -9,13 +9,14 @@ import functools
 from datetime import datetime, timedelta
 from decimal import Decimal
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
 
 from ...core.config import settings
 from ...core.errors import SyncError
 from ...integrations import daftra
 from ...integrations.daftra import DaftraError
 from .. import requests
+from .. import terms as printed_terms
 from .payment_methods import PAYMENT_METHOD_KEYS
 
 from ...core.text import UAE, display_name, squash
@@ -42,6 +43,12 @@ def form_notes(data: dict, *parts: str) -> str:
     written = str(data.get("notes") or "").strip()
     lines = [*(part for part in parts if part), f"ملاحظات: {written}" if written else ""]
     return "\n".join(line for line in lines if line)
+
+
+def terms_to_print(request):
+    """The term (modules/terms) the invoice or estimate this request makes prints on its last page:
+    that of the first of its packages that has one. None: it prints no terms."""
+    return printed_terms.chosen_for(object_session(request), request.data)
 
 
 def daftra_failed(error: DaftraError) -> SyncError:

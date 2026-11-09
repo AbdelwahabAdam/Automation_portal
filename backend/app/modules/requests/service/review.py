@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from ....core.config import settings
 from ....core.context import Actor
 from ....core.errors import DomainError, Invalid, SyncError
+from ....core.permissions import REVIEW
 from ....core.text import display_name
 from ... import form_engine, notifications
 from ...audit import log as audit_log
@@ -62,12 +63,24 @@ def review_out(request: Request) -> dict:
     }
 
 
-def queue(db: Session, user) -> list[dict]:
+def queue(db: Session, user, scope: str = "") -> list[dict]:
     """Only the requests of the forms this user may view or review, each saying whether they may
-    decide on it — a reviewer of one form does not see another's requests at all."""
-    wanted = access.reviewable_form_keys(user)
-    return [{**review_out(request), "can_review": access.can_review(request, user)}
-            for request in repo.queue(db, wanted)]
+    decide on it — a reviewer of one form does not see another's requests at all.
+
+    scope="review" leaves out the forms they may only view, which is what لوحة المتابعة counted:
+    a card opened from there must not list more than it counted.
+
+    Each request also carries when it was first sent and first decided on, so the screen can show
+    the period's own requests — «أُرسلت» and «اتُّخذ أول قرار عليها» are not the same set as the
+    requests last sent in those days.
+    """
+    wanted = ([spec.key for spec in form_engine.forms_for(user, REVIEW)] if scope == "review"
+              else access.reviewable_form_keys(user))
+    requests = repo.queue(db, wanted)
+    milestones = repo.review_milestones(db, [request.id for request in requests])
+    return [{**review_out(request), "can_review": access.can_review(request, user),
+             **milestones.get(request.id, {})}
+            for request in requests]
 
 
 def history(request: Request) -> list[dict]:

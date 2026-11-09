@@ -1,7 +1,7 @@
 // A page of requests: a table on a wide area, cards on a narrow one (same data, same actions).
 // Used by «طلباتي» and «المراجعة», which differ only in their columns and actions.
 import { Pager, StatusBadge } from '../../ds/index.jsx';
-import { formatDate } from '../../lib/format.js';
+import { formatDate, waited } from '../../lib/format.js';
 
 // Table on a wide area, cards on a narrow one
 export const TABLE_MIN_WIDTH = 760;
@@ -27,6 +27,13 @@ const COLUMNS = {
   },
   employee: { label: 'الموظف', cell: (r) => <bdi>{r.created_by_name}</bdi>, card: (r) => <bdi>{r.created_by_name}</bdi> },
   status: { label: 'الحالة', cell: (r) => <StatusBadge status={r.status} />, card: null },
+  // How long the review itself took, for the list زمن المراجعة opens
+  wait: {
+    label: 'مدة المراجعة',
+    className: 'fl-cell--nowrap',
+    cell: (r) => (r.review_hours == null ? '—' : waited(r.review_hours)),
+    card: (r) => (r.review_hours == null ? '—' : waited(r.review_hours)),
+  },
   date: {
     label: (ctx) => ctx.dateLabel,
     className: 'fl-cell--nowrap',

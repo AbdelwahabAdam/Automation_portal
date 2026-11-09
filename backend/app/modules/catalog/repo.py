@@ -29,6 +29,11 @@ def packages_with_items(db: Session) -> list[Package]:
     ))
 
 
+def package_codes(db: Session) -> list[str]:
+    """Every code a package already carries, to hand out one that is free."""
+    return [code for code in db.scalars(select(Package.code).where(Package.code.is_not(None)))]
+
+
 def active_packages_by_name(db: Session) -> list[Package]:
     """For the order-lines picker, which lists them by name rather than by code."""
     return list(db.scalars(

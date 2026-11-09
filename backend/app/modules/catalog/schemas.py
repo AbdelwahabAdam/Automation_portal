@@ -13,6 +13,8 @@ class ProductIn(BaseModel):
     description: str = Field("", max_length=2000)
     unit_price: Decimal = Field(ge=0, le=MAX_PRICE, decimal_places=2)
     is_active: bool = True
+    # بدون سعر ثابت: priced on the order line; the price sent is then ignored and kept at 0
+    open_price: bool = False
     # Offered as an item on طلب صيانة وتبديل under this group; empty: not offered there
     maintenance_group: str = Field("", max_length=50)
 

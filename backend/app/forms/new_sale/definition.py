@@ -7,6 +7,7 @@ from ...modules.form_engine import (
     NO_INSCRIPTION,
     MAX_PACKAGE_QUANTITY,
     NOTES,
+    OPEN_PRICE_FIELDS,
     PACKAGE_COLOR_FAMILIES,
     PACKAGE_INSCRIPTIONS,
     PLATE_COLORS,
@@ -98,6 +99,8 @@ SECTIONS = [
             # picked fills it in (default_by_package); the salesperson may add to it or empty it.
             f("installation_accessories", "ملحقات التركيب والأعمال المطلوبة", "textarea",
               default_by_package=INSTALLATION_WORK),
+            # A product with no fixed price: its price and invoice text, typed on its own line
+            *OPEN_PRICE_FIELDS,
         ]),
         note="إرسال الطلب يعني أن العميل وافق على التصميم واللون والكتابة.",
     ),

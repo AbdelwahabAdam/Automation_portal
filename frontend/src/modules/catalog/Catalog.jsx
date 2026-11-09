@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import * as catalogApi from '../../api/catalog.js';
+import * as termsApi from '../../api/terms.js';
+import { TermsTab } from './Terms.jsx';
 import {
   Alert, Badge, Button, Checkbox, Drawer, EmptyState, Field, Loading, PageHeader, Pager, SearchInput, Select, Tabs, TextArea, TextInput,
   Skeleton, useConfirm, useToast,
@@ -10,7 +12,7 @@ import { useAction } from '../../lib/hooks.js';
 
 // ---------- Products ----------
 
-const NEW_PRODUCT = { name: '', name_ar: '', description: '', unit_price: '', is_active: true, maintenance_group: '' };
+const NEW_PRODUCT = { name: '', name_ar: '', description: '', unit_price: '', is_active: true, maintenance_group: '', open_price: false };
 // The groups طلب صيانة وتبديل lists its items under (Maintenance_Invoice_Items.xlsx)
 const MAINTENANCE_GROUPS = ['الفلاتر', 'قطع الغيار', 'الهيد والميديا', 'الخدمات'];
 
@@ -25,12 +27,14 @@ function ProductDrawer({ product, onSaved, onDeleted, onClose }) {
   function submit(e) {
     e?.preventDefault();
     if (!values.name.trim()) return setProblem('اكتب اسم المنتج كما يظهر في الفاتورة.');
-    if (String(values.unit_price).trim() === '' || Number(values.unit_price) < 0) return setProblem('اكتب سعر الوحدة (صفر أو أكثر).');
+    if (!values.open_price && (String(values.unit_price).trim() === '' || Number(values.unit_price) < 0)) return setProblem('اكتب سعر الوحدة (صفر أو أكثر).');
+    if (values.open_price && !values.description.trim()) return setProblem('اكتب نص البند: يبدأ به السطر في الطلب ويظهر في الفاتورة.');
     setProblem('');
     run('save', async () => {
       const body = {
-        name: values.name, name_ar: values.name_ar, description: values.description, unit_price: Number(values.unit_price),
-        is_active: values.is_active, maintenance_group: values.maintenance_group || '',
+        name: values.name, name_ar: values.name_ar, description: values.description,
+        unit_price: values.open_price ? 0 : Number(values.unit_price),
+        is_active: values.is_active, maintenance_group: values.maintenance_group || '', open_price: values.open_price,
       };
       onSaved(product ? await catalogApi.updateProduct(product.id, body) : await catalogApi.createProduct(body));
     });
@@ -78,9 +82,15 @@ function ProductDrawer({ product, onSaved, onDeleted, onClose }) {
         <Field label="الاسم بالعربية" htmlFor="p_name_ar">
           <TextInput id="p_name_ar" value={values.name_ar} onChange={(e) => set('name_ar', e.target.value)} maxLength={200} />
         </Field>
+        <Checkbox checked={values.open_price} onChange={(v) => set('open_price', v)}>
+          بدون سعر ثابت — يُكتب السعر ونص البند في طلب البيع وعرض السعر
+        </Checkbox>
         <div className="fl-grid">
-          <Field label="سعر الوحدة (درهم)" htmlFor="p_price" required>
-            <TextInput id="p_price" type="number" min="0" step="0.01" value={values.unit_price} onChange={(e) => set('unit_price', e.target.value)} />
+          <Field label="سعر الوحدة (درهم)" htmlFor="p_price" required={!values.open_price}
+            hint={values.open_price ? 'يُكتب في كل طلب.' : undefined}>
+            <TextInput id="p_price" type="number" min="0" step="0.01" value={values.open_price ? '' : values.unit_price}
+              disabled={values.open_price} placeholder={values.open_price ? 'يُحدد في الطلب' : undefined}
+              onChange={(e) => set('unit_price', e.target.value)} />
           </Field>
           <Field label="بند صيانة — المجموعة" htmlFor="p_maintenance_group" hint="يظهر في «إضافة بند» بطلب الصيانة والتبديل تحت هذه المجموعة.">
             <Select id="p_maintenance_group" value={values.maintenance_group || ''} onChange={(e) => set('maintenance_group', e.target.value)}>
@@ -89,7 +99,8 @@ function ProductDrawer({ product, onSaved, onDeleted, onClose }) {
             </Select>
           </Field>
         </div>
-        <Field label="الوصف" htmlFor="p_description" hint="يظهر مع البند في الفاتورة.">
+        <Field label={values.open_price ? 'نص البند' : 'الوصف'} htmlFor="p_description" required={values.open_price}
+          hint={values.open_price ? 'يبدأ به السطر في الطلب، ويمكن تعديله هناك. يظهر مع البند في الفاتورة.' : 'يظهر مع البند في الفاتورة.'}>
           <TextArea id="p_description" rows={2} value={values.description} onChange={(e) => set('description', e.target.value)} maxLength={2000} />
         </Field>
         {product && (
@@ -156,8 +167,12 @@ function Products({ products, onChange, toast }) {
                     <td className="fl-cell--wrap fl-cell--minor" data-label="التصنيف">{product.category || '—'}</td>
                     <td className="fl-cell--wrap fl-cell--minor" data-label="بند صيانة">{product.maintenance_group || '—'}</td>
                     <td className="fl-cell--nowrap" data-label="سعر الوحدة" data-fl-num>
-                      <bdi dir="ltr">{money(product.unit_price)}</bdi>
-                      <span className="fl-cell__sub">{product.price_includes_tax ? 'شامل' : 'غير شامل'} <bdi dir="ltr">{money(product.tax_rate * 100)}%</bdi></span>
+                      {product.open_price ? <Badge tone="info">يُحدد في الطلب</Badge> : (
+                        <>
+                          <bdi dir="ltr">{money(product.unit_price)}</bdi>
+                          <span className="fl-cell__sub">{product.price_includes_tax ? 'شامل' : 'غير شامل'} <bdi dir="ltr">{money(product.tax_rate * 100)}%</bdi></span>
+                        </>
+                      )}
                     </td>
                     <td data-label="المخزون" data-fl-num>{product.stock_balance ?? '—'}</td>
                     <td className="fl-cell--minor" data-label="في كم باقة" data-fl-num>{product.package_count}</td>
@@ -189,11 +204,13 @@ function lineTotal(line, product) {
   return Math.round((gross - Number(line.discount || 0)) * 100) / 100;
 }
 
-function PackageDrawer({ pack, products, onSaved, onDeleted, onClose }) {
+// termId: the term the package prints (none: '')
+function PackageDrawer({ pack, products, terms, termId: savedTermId, onSaved, onDeleted, onClose }) {
   const [values, setValues] = useState(pack ? { name: pack.name, color: pack.color, is_active: pack.is_active } : { name: '', color: '', is_active: true });
   // Each line gets a key of its own so React keeps the right inputs when one is removed
   const [lines, setLines] = useState(() => (pack ? pack.items.map((item, index) => ({ ...item, key: index })) : []));
   const [nextKey, setNextKey] = useState(pack ? pack.items.length : 0);
+  const [termId, setTermId] = useState(savedTermId ? String(savedTermId) : '');
   const [adding, setAdding] = useState('');
   const { error, busy, run } = useAction();
   const [confirmDialog, confirm] = useConfirm();
@@ -207,7 +224,7 @@ function PackageDrawer({ pack, products, onSaved, onDeleted, onClose }) {
     const product = byId[productId];
     if (!product) return;
     setLines((current) => [...current, {
-      key: nextKey, product_id: product.id, quantity: 1, unit_price: product.unit_price,
+      key: nextKey, product_id: product.id, quantity: 1, unit_price: product.open_price ? 0 : product.unit_price,
       price_includes_tax: product.price_includes_tax, discount: 0,
     }]);
     setNextKey(nextKey + 1);
@@ -228,7 +245,10 @@ function PackageDrawer({ pack, products, onSaved, onDeleted, onClose }) {
           price_includes_tax: line.price_includes_tax, discount: Number(line.discount || 0),
         })),
       };
-      onSaved(pack ? await catalogApi.updatePackage(pack.id, body) : await catalogApi.createPackage(body));
+      const saved = pack ? await catalogApi.updatePackage(pack.id, body) : await catalogApi.createPackage(body);
+      // Its terms are kept apart from the package itself (modules/terms), so saved after it
+      if (termId !== (savedTermId ? String(savedTermId) : '')) await termsApi.setPackageTerm(saved.id, termId ? Number(termId) : null);
+      onSaved(saved);
     });
   }
 
@@ -276,6 +296,13 @@ function PackageDrawer({ pack, products, onSaved, onDeleted, onClose }) {
           </Field>
         </div>
         <Checkbox checked={values.is_active} onChange={(v) => set('is_active', v)}>مفعّلة</Checkbox>
+        <Field label="الشروط والأحكام" htmlFor="k_terms"
+          hint="تُطبع في آخر صفحة من فاتورة طلب البيع وعرض السعر. إن كانت في الطلب عدة باقات لها شروط، تُطبع شروط أول باقة أُضيفت.">
+          <Select id="k_terms" value={termId} onChange={(e) => setTermId(e.target.value)}>
+            <option value="">لا تُطبع شروط</option>
+            {terms.map((term) => <option key={term.id} value={String(term.id)}>{term.label}</option>)}
+          </Select>
+        </Field>
         <Field label="المنتجات داخل الباقة">
           {lines.length > 0 && (
             <div className="fl-table-wrap fl-lines fl-stacked">
@@ -290,16 +317,20 @@ function PackageDrawer({ pack, products, onSaved, onDeleted, onClose }) {
                         <tr key={line.key}>
                           <td className="fl-cell--wrap"><bdi>{label}</bdi>{product?.name_ar && <span className="fl-cell__sub">{product.name_ar}</span>}</td>
                           <td data-label="الكمية"><input className="fl-mini" type="number" min="1" max="9999" step="1" value={line.quantity} onChange={(e) => setLine(line.key, 'quantity', e.target.value)} aria-label={`كمية ${label}`} /></td>
-                          <td data-label="سعر الوحدة"><input className="fl-mini" type="number" min="0" step="0.01" value={line.unit_price} onChange={(e) => setLine(line.key, 'unit_price', e.target.value)} aria-label={`سعر ${label}`} /></td>
+                          <td data-label="سعر الوحدة">
+                            {product?.open_price ? <Badge tone="info">يُحدد في الطلب</Badge> : (
+                              <input className="fl-mini" type="number" min="0" step="0.01" value={line.unit_price} onChange={(e) => setLine(line.key, 'unit_price', e.target.value)} aria-label={`سعر ${label}`} />
+                            )}
+                          </td>
                           <td data-label="شامل الضريبة"><input type="checkbox" className="fl-mini-check" checked={line.price_includes_tax} onChange={(e) => setLine(line.key, 'price_includes_tax', e.target.checked)} aria-label={`سعر ${label} شامل الضريبة`} /></td>
-                          <td data-label="خصم البند"><input className="fl-mini" type="number" min="0" step="0.01" value={line.discount} onChange={(e) => setLine(line.key, 'discount', e.target.value)} aria-label={`خصم ${label}`} /></td>
+                          <td data-label="خصم البند">{product?.open_price ? '—' : <input className="fl-mini" type="number" min="0" step="0.01" value={line.discount} onChange={(e) => setLine(line.key, 'discount', e.target.value)} aria-label={`خصم ${label}`} />}</td>
                           <td data-label="الإجمالي" data-fl-num><bdi dir="ltr">{money(lineTotal(line, product))}</bdi></td>
                           <td className="fl-cell--actions"><Button size="sm" variant="ghost" icon="trash" iconOnly label={`إزالة ${label}`} onClick={() => setLines((current) => current.filter((l) => l.key !== line.key))} /></td>
                         </tr>
                       );
                     })}
                   </tbody>
-                  <tfoot><tr><td colSpan={5}>إجمالي الباقة شامل الضريبة</td><td data-fl-num><bdi dir="ltr">{money(total)}</bdi></td><td /></tr></tfoot>
+                  <tfoot><tr><td colSpan={5}>إجمالي الباقة شامل الضريبة{lines.some((line) => byId[line.product_id]?.open_price) ? '، دون ما يُسعَّر في الطلب' : ''}</td><td data-fl-num><bdi dir="ltr">{money(total)}</bdi></td><td /></tr></tfoot>
                 </table>
               </div>
             </div>
@@ -309,7 +340,7 @@ function PackageDrawer({ pack, products, onSaved, onDeleted, onClose }) {
           <Select id="k_add" value={adding} onChange={(e) => addLine(Number(e.target.value))}>
             <option value="">اختر منتجًا…</option>
             {available.map((product) => (
-              <option key={product.id} value={product.id}>{product.name}{product.name_ar ? ` — ${product.name_ar}` : ''} ({money(product.unit_price)})</option>
+              <option key={product.id} value={product.id}>{product.name}{product.name_ar ? ` — ${product.name_ar}` : ''} ({product.open_price ? 'يُحدد في الطلب' : money(product.unit_price)})</option>
             ))}
           </Select>
         </Field>
@@ -319,7 +350,7 @@ function PackageDrawer({ pack, products, onSaved, onDeleted, onClose }) {
   );
 }
 
-function PackageRow({ pack, open, onToggle, onEdit }) {
+function PackageRow({ pack, termLabel, open, onToggle, onEdit }) {
   return (
     <>
       <tr className={pack.is_active ? undefined : 'fl-row--off'}>
@@ -328,6 +359,7 @@ function PackageRow({ pack, open, onToggle, onEdit }) {
         <td data-label="اللون">{pack.color || '—'}</td>
         <td data-label="عدد المنتجات" data-fl-num>{pack.items.length}</td>
         <td data-label="الإجمالي شامل الضريبة" data-fl-num><bdi dir="ltr">{money(pack.total)}</bdi></td>
+        <td className="fl-cell--wrap fl-cell--minor" data-label="الشروط والأحكام">{termLabel || '—'}</td>
         <td data-label="الحالة">{pack.is_active ? <Badge tone="success">مفعّلة</Badge> : <Badge>موقوفة</Badge>}</td>
         <td className="fl-cell--actions">
           <Button size="sm" variant="tertiary" iconEnd={open ? 'chevron-up' : 'chevron-down'} aria-expanded={open} onClick={onToggle}>{open ? 'إخفاء' : 'المنتجات'}</Button>
@@ -336,7 +368,7 @@ function PackageRow({ pack, open, onToggle, onEdit }) {
       </tr>
       {open && (
         <tr className="fl-row--detail">
-          <td colSpan={7}>
+          <td colSpan={8}>
             <div className="fl-table-wrap fl-stacked">
               <div className="fl-table-scroll">
                 <table className="fl-table">
@@ -347,7 +379,7 @@ function PackageRow({ pack, open, onToggle, onEdit }) {
                         <td className="fl-cell--wrap"><bdi>{item.product_name}</bdi></td>
                         <td className="fl-cell--full" data-label="بالعربية">{item.product_name_ar || '—'}</td>
                         <td data-label="الكمية" data-fl-num>{item.quantity}</td>
-                        <td data-label="سعر الوحدة"><bdi dir="ltr">{money(item.unit_price)}</bdi> {item.price_includes_tax ? '' : '+ ضريبة'}</td>
+                        <td data-label="سعر الوحدة">{item.open_price ? <Badge tone="info">يُحدد في الطلب</Badge> : <><bdi dir="ltr">{money(item.unit_price)}</bdi> {item.price_includes_tax ? '' : '+ ضريبة'}</>}</td>
                         <td data-label="خصم البند"><bdi dir="ltr">{item.discount ? money(item.discount) : '—'}</bdi></td>
                         <td data-label="الإجمالي" data-fl-num><bdi dir="ltr">{money(item.total)}</bdi></td>
                       </tr>
@@ -363,7 +395,7 @@ function PackageRow({ pack, open, onToggle, onEdit }) {
   );
 }
 
-function Packages({ packages, products, onChange, toast }) {
+function Packages({ packages, products, terms, packageTerms, onChange, toast }) {
   const [panel, setPanel] = useState(null);
   const [search, setSearch] = useState('');
   const [openId, setOpenId] = useState(null);
@@ -378,6 +410,7 @@ function Packages({ packages, products, onChange, toast }) {
   }
 
   const shown = useMemo(() => packages.filter((pack) => matchesQuery(search, pack.name, pack.code, pack.color)), [packages, search]);
+  const termLabel = Object.fromEntries(terms.map((term) => [term.id, term.label]));
   return (
     <>
       <div className="fl-row fl-row--spread">
@@ -390,10 +423,10 @@ function Packages({ packages, products, onChange, toast }) {
         <div className="fl-table-wrap fl-stacked">
           <div className="fl-table-scroll">
             <table className="fl-table">
-              <thead><tr><th>الكود</th><th>الباقة</th><th>اللون</th><th>عدد المنتجات</th><th>الإجمالي شامل الضريبة</th><th>الحالة</th><th>الإجراء</th></tr></thead>
+              <thead><tr><th>الكود</th><th>الباقة</th><th>اللون</th><th>عدد المنتجات</th><th>الإجمالي شامل الضريبة</th><th>الشروط والأحكام</th><th>الحالة</th><th>الإجراء</th></tr></thead>
               <tbody>
                 {shown.slice((page - 1) * pageSize, page * pageSize).map((pack) => (
-                  <PackageRow key={pack.id} pack={pack} open={openId === pack.id} onToggle={() => setOpenId(openId === pack.id ? null : pack.id)}
+                  <PackageRow key={pack.id} pack={pack} termLabel={termLabel[packageTerms[pack.id]]} open={openId === pack.id} onToggle={() => setOpenId(openId === pack.id ? null : pack.id)}
                     onEdit={() => setPanel({ pack })} />
                 ))}
               </tbody>
@@ -404,7 +437,8 @@ function Packages({ packages, products, onChange, toast }) {
       )}
       {panel && (
         <PackageDrawer
-          key={panel.pack?.id ?? 'new'} pack={panel.pack} products={products} onClose={() => setPanel(null)}
+          key={panel.pack?.id ?? 'new'} pack={panel.pack} products={products} terms={terms}
+          termId={panel.pack ? packageTerms[panel.pack.id] : undefined} onClose={() => setPanel(null)}
           onSaved={(saved) => done(`تم حفظ الباقة ${saved.name}.`)}
           onDeleted={(deleted) => done(`تم حذف الباقة ${deleted.name}.`)}
         />
@@ -420,30 +454,42 @@ export default function Catalog() {
   const toast = useToast();
   const [products, setProducts] = useState(null);
   const [packages, setPackages] = useState(null);
+  const [terms, setTerms] = useState(null);
+  // { package id: term id }: the term each package prints
+  const [packageTerms, setPackageTerms] = useState(null);
   const [error, setError] = useState('');
 
-  // A change to a product shows in the packages that contain it, so both lists are reloaded together
+  // A change to a product shows in the packages that contain it, and a package's terms in the
+  // terms' counts, so everything is reloaded together
   function load() {
-    Promise.all([catalogApi.listProducts(), catalogApi.listPackages()])
-      .then(([loadedProducts, loadedPackages]) => {
+    Promise.all([catalogApi.listProducts(), catalogApi.listPackages(), termsApi.listTerms(), termsApi.packageTerms()])
+      .then(([loadedProducts, loadedPackages, loadedTerms, loadedPackageTerms]) => {
         setProducts(loadedProducts);
         setPackages(loadedPackages);
+        setTerms(loadedTerms);
+        setPackageTerms(loadedPackageTerms);
       })
       .catch((err) => setError(err.message));
   }
   useEffect(load, []);
 
   const header = <PageHeader title="المنتجات والباقات" subtitle="المنتج وحدة واحدة لا يدخل فيها شيء آخر. الباقة منتج أو أكثر تُباع معًا." />;
-  if (!products || !packages) return <div className="fl-stack">{header}{error ? <Alert tone="error">{error}</Alert> : <Skeleton lines={6} />}</div>;
+  if (!products || !packages || !terms || !packageTerms) return <div className="fl-stack">{header}{error ? <Alert tone="error">{error}</Alert> : <Skeleton lines={6} />}</div>;
   return (
     <div className="fl-stack">
       {header}
       {error && <Alert tone="error">{error}</Alert>}
       <Tabs label="المنتجات والباقات" value={tab} onChange={setTab}
-        tabs={[{ value: 'products', label: 'المنتجات', count: products.length }, { value: 'packages', label: 'الباقات', count: packages.length }]} />
-      {tab === 'products'
-        ? <Products products={products} onChange={load} toast={toast} />
-        : <Packages packages={packages} products={products} onChange={load} toast={toast} />}
+        tabs={[
+          { value: 'products', label: 'المنتجات', count: products.length },
+          { value: 'packages', label: 'الباقات', count: packages.length },
+          { value: 'terms', label: 'الشروط والأحكام', count: terms.length },
+        ]} />
+      {tab === 'products' && <Products products={products} onChange={load} toast={toast} />}
+      {tab === 'packages' && (
+        <Packages packages={packages} products={products} terms={terms} packageTerms={packageTerms} onChange={load} toast={toast} />
+      )}
+      {tab === 'terms' && <TermsTab terms={terms} onChange={load} toast={toast} />}
     </div>
   );
 }

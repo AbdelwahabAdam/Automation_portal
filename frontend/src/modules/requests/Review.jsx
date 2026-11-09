@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import * as reviewApi from '../../api/review.js';
 import {
   Alert, Button, EmptyState, Field, Filters, PageHeader, SearchInput, Select, Skeleton, Tabs, TextInput, useWidth,
 } from '../../ds/index.jsx';
-import { localDay } from '../../lib/format.js';
 import { matchesQuery } from '../../ds/match.js';
+import { BASIS_LABELS, basisDate, inPeriod } from './queue.js';
 import RequestList, { TABLE_MIN_WIDTH } from './RequestList.jsx';
 
 const TABS = [
@@ -30,33 +30,50 @@ export default function Review({ user, sales, onOpen }) {
   const [error, setError] = useState('');
   const [params, setParams] = useSearchParams();
   const [query, setQuery] = useState('');
-  const [employee, setEmployee] = useState('');
-  const [formType, setFormType] = useState('');
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [area, areaWidth] = useWidth();
   const tab = TABS.some((t) => t.value === params.get('tab')) ? params.get('tab') : 'submitted';
+  // The filters live in the URL, so a card on لوحة المتابعة can open this screen on exactly the
+  // requests it counted, and coming back here finds the screen as it was left.
+  const employee = params.get('employee') || '';
+  const formType = params.get('form') || '';
+  const from = params.get('from') || '';
+  const to = params.get('to') || '';
+  // Which moment the dates are read on: when it was first sent, approved, first decided on —
+  // or, without one, the screen's own date as always
+  const basis = BASIS_LABELS[params.get('basis')] ? params.get('basis') : '';
+  // Opened from لوحة المتابعة, which counts only the forms this user may decide on
+  const scope = params.get('scope') === 'review' ? 'review' : '';
+  const change = (values) => setParams((current) => {
+    const next = new URLSearchParams(current);
+    for (const [name, value] of Object.entries(values)) {
+      if (value) next.set(name, value);
+      else next.delete(name);
+    }
+    return next;
+  }, { replace: true });
+  const shownDate = (r) => (basis ? basisDate(r, basis) : dateOf(r));
+  const dateLabel = basis ? BASIS_LABELS[basis] : (tab === 'draft' ? 'آخر حفظ' : 'تاريخ الإرسال');
 
-  const load = () => reviewApi.queue().then(setRequests).catch((err) => setError(err.message));
-  useEffect(() => { load(); }, []);
+  const load = useCallback(
+    () => reviewApi.queue(scope).then(setRequests).catch((err) => setError(err.message)), [scope],
+  );
+  useEffect(() => { load(); }, [load]);
   // Drafts are saved, sent and deleted all day; the counts follow without reloading the page
   useEffect(() => {
     const timer = setInterval(load, REFRESH_MS);
     return () => clearInterval(timer);
-  }, []);
-  useEffect(() => setPage(1), [tab, query, employee, formType, from, to, pageSize]);
+  }, [load]);
+  useEffect(() => setPage(1), [tab, query, employee, formType, from, to, basis, pageSize]);
 
-  const filtered = useMemo(() => (requests || []).filter((r) => {
-    // The day it was sent as the manager sees it, not the UTC one
-    const day = localDay(dateOf(r));
-    return inTab(r, tab)
+  const filtered = useMemo(() => (requests || []).filter((r) => (
+    inTab(r, tab)
       && (!employee || String(r.created_by_id) === employee)
       && (!formType || r.form_type === formType)
-      && (!from || day >= from) && (!to || day <= to)
-      && matchesQuery(query, [r.id, r.data.customer_name, r.data.phone, r.data.client_code].filter(Boolean).join(' '));
-  }), [requests, tab, employee, formType, from, to, query]);
+      && inPeriod(r, basis, from, to)
+      && matchesQuery(query, [r.id, r.data.customer_name, r.data.phone, r.data.client_code].filter(Boolean).join(' '))
+  )), [requests, tab, employee, formType, from, to, basis, query]);
 
   const header = <PageHeader title="مراجعة الطلبات" subtitle="راجع الطلبات المرسلة واعتمدها أو أعدها للموظف مع سبب التعديل" />;
   if (sales.error || error) return <div className="fl-stack">{header}<Alert tone="error">{sales.error || error}</Alert></div>;
@@ -89,7 +106,8 @@ export default function Review({ user, sales, onOpen }) {
     list = (
       <RequestList
         rows={shown} total={filtered.length} wide={areaWidth >= TABLE_MIN_WIDTH} labels={labels} actions={action}
-        columns={['id', 'type', 'client', 'employee', 'date', 'status']} dateLabel={tab === 'draft' ? 'آخر حفظ' : 'تاريخ الإرسال'} dateOf={dateOf}
+        columns={['id', 'type', 'client', 'employee', 'date', ...(basis === 'decided' ? ['wait'] : []), 'status']}
+        dateLabel={dateLabel} dateOf={shownDate}
         page={page} pageSize={pageSize} onPage={setPage} onPageSize={setPageSize}
       />
     );
@@ -100,7 +118,7 @@ export default function Review({ user, sales, onOpen }) {
       {header}
       <Tabs
         label="حالة الطلب" value={tab}
-        onChange={(value) => setParams(value === 'submitted' ? {} : { tab: value }, { replace: true })}
+        onChange={(value) => change({ tab: value === 'submitted' ? '' : value })}
         tabs={TABS.map((t) => ({ value: t.value, label: t.label, count: requests.filter((r) => inTab(r, t.value)).length }))}
       />
       {tab === 'draft' && draftCounts.length > 0 && (
@@ -110,7 +128,7 @@ export default function Review({ user, sales, onOpen }) {
             {draftCounts.map(([id, [name, count]]) => (
               <Button
                 key={id} size="sm" variant={employee === String(id) ? 'primary' : 'secondary'} aria-pressed={employee === String(id)}
-                onClick={() => setEmployee(employee === String(id) ? '' : String(id))}
+                onClick={() => change({ employee: employee === String(id) ? '' : String(id) })}
               >
                 <bdi>{name}</bdi> <span data-fl-num>({count})</span>
               </Button>
@@ -127,24 +145,24 @@ export default function Review({ user, sales, onOpen }) {
         )}
       >
         <Field label="اسم الموظف" htmlFor="review_employee">
-          <Select id="review_employee" value={employee} onChange={(e) => setEmployee(e.target.value)}>
+          <Select id="review_employee" value={employee} onChange={(e) => change({ employee: e.target.value })}>
             <option value="">كل الموظفين</option>
             {employees.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
           </Select>
         </Field>
         <Field label="نوع النموذج" htmlFor="review_type">
-          <Select id="review_type" value={formType} onChange={(e) => setFormType(e.target.value)}>
+          <Select id="review_type" value={formType} onChange={(e) => change({ form: e.target.value })}>
             <option value="">كل النماذج</option>
             {/* A hidden form is offered only if there are requests made with it */}
             {sales.formTypes.filter((type) => !type.hidden || requests.some((r) => r.form_type === type.key))
               .map((type) => <option key={type.key} value={type.key}>{type.label}</option>)}
           </Select>
         </Field>
-        <Field label={tab === 'draft' ? 'آخر حفظ من' : 'تاريخ الإرسال من'} htmlFor="review_from">
-          <TextInput id="review_from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+        <Field label={`${dateLabel} من`} htmlFor="review_from">
+          <TextInput id="review_from" type="date" value={from} onChange={(e) => change({ from: e.target.value })} />
         </Field>
-        <Field label={tab === 'draft' ? 'آخر حفظ إلى' : 'تاريخ الإرسال إلى'} htmlFor="review_to">
-          <TextInput id="review_to" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+        <Field label={`${dateLabel} إلى`} htmlFor="review_to">
+          <TextInput id="review_to" type="date" value={to} onChange={(e) => change({ to: e.target.value })} />
         </Field>
       </Filters>
       <p className="fl-results">النتائج: {filtered.length} من {requests.filter((r) => inTab(r, tab)).length}</p>

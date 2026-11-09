@@ -53,10 +53,14 @@ ACTIONS = {
     "order_source.create": "إضافة مصدر طلب في دفترة",
     "order_source.update": "تفعيل أو إيقاف مصدر طلب في دفترة",
     "product.daftra_sync": "تحديث منتج من دفترة",
+    "terms.create": "إضافة شروط وأحكام",
+    "terms.delete": "حذف شروط وأحكام",
+    "terms.package": "تغيير شروط باقة",
 }
 
 ENTITY_TYPES = {"user": "مستخدم", "role": "دور", "request": "طلب", "attachment": "مرفق", "product": "منتج",
-                "package": "باقة", "client": "عميل", "order_source": "مصدر طلب"}
+                "package": "باقة", "client": "عميل", "order_source": "مصدر طلب",
+                "terms": "شروط وأحكام"}
 
 # Labels for the keys that appear in the before/after values of an entry.
 # A function, not a table: the forms register themselves as they are imported, so reading them

@@ -17,7 +17,7 @@ from fastapi.responses import JSONResponse
 
 from . import forms, jobs
 from .modules import (audit, catalog, clients, form_engine, identity, lookups, notifications, requests,
-                      system)
+                      system, terms)
 from .core.config import settings
 from .core.context import Actor
 from .core.errors import DomainError
@@ -81,6 +81,6 @@ async def domain_error(request: Request, error: DomainError) -> JSONResponse:
     return JSONResponse({"detail": error.body()}, status_code=error.status_code)
 
 
-for module in (identity, requests, clients, lookups, catalog, jobs,
+for module in (identity, requests, clients, lookups, catalog, terms, jobs,
                audit, notifications, system):
     app.include_router(module.router)

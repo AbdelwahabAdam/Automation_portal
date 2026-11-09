@@ -50,6 +50,8 @@ class RequestOut(BaseModel):
     daftra_estimate_no: str | None
     daftra_error: str | None
     daftra_synced_at: datetime | None
+    # The terms its invoice or estimate printed, e.g. «شروط وأحكام الضمان — الإصدار 1»
+    printed_terms: str | None = None
 
 
 class DecisionIn(BaseModel):
