@@ -148,12 +148,35 @@ def products_named(name: str) -> list[dict]:
             and str(row.get("type")) == str(PRODUCT_SERVICE) and str(row.get("status") or "0") == "0"]
 
 
+#: The account number of the treasuries whose Daftra name does not say which account they are —
+#: two ADIB accounts read alike in a dropdown. Keyed by the name Daftra holds, compared without
+#: case or spacing: renamed there, a treasury simply stops being numbered here rather than breaking.
+#: Nothing is written to Daftra; this is only how the forms name them.
+TREASURY_NUMBERS = {
+    "ADIB BANK NEW CURRENT ACCOUNT": "5433",
+    "NEW ADIB": "8032",
+    "MAIN BANK ADCB": "20001",
+}
+_TREASURY_NUMBERS = {squash(name).casefold(): number for name, number in TREASURY_NUMBERS.items()}
+
+
+def treasury_label(name: str) -> str:
+    """«ADIB BANK NEW CURRENT ACCOUNT — 5433»: the account number, for the ones that need it.
+
+    A name that already ends in its number is left alone, so adding the number in Daftra later
+    does not print it twice.
+    """
+    number = _TREASURY_NUMBERS.get(name.casefold())
+    return f"{name} — {number}" if number and not name.endswith(number) else name
+
+
 def list_treasuries() -> list[dict]:
     """Active treasuries and bank accounts a payment can be received into."""
     def load():
         rows = all_records("treasuries", "Treasury")
         return sorted(
-            ({"id": int(row["id"]), "name": squash(row.get("name"))} for row in rows if row.get("active") == "1"),
+            ({"id": int(row["id"]), "name": treasury_label(squash(row.get("name")))}
+             for row in rows if row.get("active") == "1"),
             key=lambda row: row["name"],
         )
 

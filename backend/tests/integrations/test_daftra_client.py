@@ -105,6 +105,28 @@ def test_lists_are_cached_and_kept_when_daftra_is_down(fake_daftra):
     assert [t["id"] for t in daftra.list_treasuries()] == [13, 9]
 
 
+def test_a_treasury_that_needs_its_account_number_is_named_with_it(fake_daftra):
+    """Two ADIB accounts read alike in a dropdown, so the forms add the number Daftra leaves out."""
+    fake_daftra.treasuries = [
+        {"id": "13", "name": "ADIB BANK NEW CURRENT ACCOUNT", "active": "1"},
+        {"id": "21", "name": "new adib", "active": "1"},
+        {"id": "22", "name": "MAIN BANK ADCB — 20001", "active": "1"},
+        {"id": "9", "name": "خزينه المكتب", "active": "1"},
+        # Not in the list and not active: named as Daftra names it, and left out
+        {"id": "16", "name": "GEIDEA POS", "active": "1"},
+        {"id": "17", "name": "MAIN BANK ADCB", "active": "0"},
+    ]
+    daftra.cache.forget("treasuries")
+    named = {row["id"]: row["name"] for row in daftra.list_treasuries()}
+    assert named[13] == "ADIB BANK NEW CURRENT ACCOUNT — 5433"
+    # Matched whatever the case: Daftra holds it lowercase here
+    assert named[21] == "new adib — 8032"
+    # Already numbered in Daftra: not numbered twice
+    assert named[22] == "MAIN BANK ADCB — 20001"
+    assert named[9] == "خزينه المكتب" and named[16] == "GEIDEA POS"
+    assert 17 not in named
+
+
 # The spellings Daftra's own data uses for the same place, and the two fields the other way round
 @pytest.mark.parametrize("city, state, emirate, area", [
     ("دبى", "الخوانيج 2", "دبي", "الخوانيج 2"),          # the neighbourhood is kept as it is
