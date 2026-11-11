@@ -197,8 +197,32 @@ test('evaluateForm reports what is missing or wrong', () => {
   assert.equal(errors.order_lines, 'مطلوب');
   assert.equal(errors.approved_by, 'مطلوب');
   assert.equal(errors.proof, 'أرفق ملفًا واحدًا على الأقل');
-  assert.equal(errors.total_amount, 'neg');
-  assert.equal(errors.paid_amount, 'all');
+  // No products is the missing field: the totals worked out from it are not marked as well
+  assert.equal(errors.total_amount, undefined);
+  assert.equal(errors.paid_amount, undefined);
+});
+
+test('evaluateForm still reports a wrong total once nothing it is worked out from is missing', () => {
+  const values = {
+    request_date: today(), phone: '0501234567', kind: 'x', treasury: '13', order_lines: lines,
+    discount_amount: '999999', approved_by: 'M', paid_amount: '1',
+  };
+  const { errors } = evaluateForm(form, values, { proof: 1 }, { products: [{ id: 3, price: 50 }] });
+  assert.deepEqual(errors, { total_amount: 'neg' });
+});
+
+test('a required field left empty is the only one marked', () => {
+  const complete = {
+    request_date: today(), phone: '0501234567', kind: 'x', treasury: '13', order_lines: lines,
+    discount_amount: '200', approved_by: 'M', paid_amount: '6050',
+  };
+  const catalog = { products: [{ id: 3, price: 50 }] };
+  assert.deepEqual(evaluateForm(form, complete, { proof: 1 }, catalog).errors, {});
+  for (const name of ['request_date', 'phone', 'kind', 'treasury', 'order_lines', 'approved_by', 'paid_amount']) {
+    const values = { ...complete, [name]: name === 'order_lines' ? [] : '' };
+    assert.deepEqual(Object.keys(evaluateForm(form, values, { proof: 1 }, catalog).errors), [name], name);
+  }
+  assert.deepEqual(Object.keys(evaluateForm(form, complete, {}, catalog).errors), ['proof']);
 });
 
 test('initialValues fills the defaults', () => {

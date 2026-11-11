@@ -214,6 +214,9 @@ export function evaluateForm(formType, values, fileCounts = {}, catalog = {}) {
     const priceById = new Map((catalog.products || []).map((p) => [p.id, p.price || 0]));
     const charges = (spec.line_fields || []).filter((d) => d.charge).map((d) => d.name);
     const lines = Array.isArray(values[spec.name]) ? values[spec.name] : [];
+    // No lines is a missing order, not one worth 0: the totals it feeds wait for it, so only the
+    // order itself is marked, not each total worked out from nothing too
+    if (!lines.length) continue;
     const seenGroups = new Set();
     let total = 0;
     for (const line of lines) {
@@ -227,8 +230,13 @@ export function evaluateForm(formType, values, fileCounts = {}, catalog = {}) {
     }
     clean[spec.subtotal_field] = Math.round(total * 100) / 100;
   }
+  const byName = Object.fromEntries(fields.map((s) => [s.name, s]));
+  const requiredInput = (name) => Boolean(byName[name]?.required) && isInput(byName[name]);
   for (const spec of fields.filter((s) => s.computed)) {
     if (spec.name in clean || !spec.computed.length) continue;
+    // Not from a value that is wrong, or required and still empty: that field is marked, and this
+    // one waits for it (else المتبقي would be the whole total, and ask for its due date too)
+    if (spec.computed.some((name) => name in errors || (requiredInput(name) && !(name in clean)))) continue;
     const [first, ...rest] = spec.computed.map((name) => clean[name]);
     if (first === undefined) continue;
     const result = Math.round((first - rest.reduce((sum, v) => sum + (v || 0), 0)) * 100) / 100;
@@ -237,7 +245,8 @@ export function evaluateForm(formType, values, fileCounts = {}, catalog = {}) {
   }
   // A field that must equal another (e.g. the amount paid must be the whole total)
   for (const spec of fields.filter((s) => s.must_equal)) {
-    if (spec.name in clean && spec.must_equal in clean && !errors[spec.name]
+    // Not against a value that is itself wrong (a negative total): that one is marked instead
+    if (spec.name in clean && spec.must_equal in clean && !errors[spec.name] && !errors[spec.must_equal]
         && Math.abs(clean[spec.name] - clean[spec.must_equal]) > 0.005) {
       errors[spec.name] = spec.must_equal_message || 'القيمتان يجب أن تتساويا';
     }

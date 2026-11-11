@@ -1,6 +1,14 @@
-# Production web server (frontend/Dockerfile.prod). Plain HTTP on port 80; to get HTTPS once the portal
-# has a domain, replace ":80" with the domain name and open port 443: Caddy fetches the certificate itself.
-:80 {
+# Production web server (frontend/Dockerfile.prod). The portal answers on its own name over HTTPS:
+# Caddy fetches the certificate from Let's Encrypt itself and sends plain HTTP on to it. That needs
+# port 80 reachable from anywhere (the certificate is issued over it) and port 443 published, and the
+# certificate must be kept in a volume — asking for a new one on every deploy runs into Let's
+# Encrypt's weekly limit. docker-compose.prod.yml does both.
+{
+	# Where Let's Encrypt writes about a certificate that is about to expire
+	email admin@futurelifehome.com
+}
+
+portal.futurelifehome.com {
 	encode gzip
 
 	# Uploads go up to 20 MB (backend MAX_UPLOAD_BYTES)
@@ -24,5 +32,18 @@
 		X-Frame-Options DENY
 		Referrer-Policy strict-origin-when-cross-origin
 		-Server
+	}
+}
+
+# Only for the deploy's own health check and anything else on the server itself: Caddy answers a
+# named site, so http://127.0.0.1/ no longer matches one. Published to the server's loopback only
+# (docker-compose.prod.yml), so nothing outside the machine can reach this port.
+:8080 {
+	handle /api/* {
+		reverse_proxy backend:8001
+	}
+
+	handle {
+		respond "portal" 200
 	}
 }

@@ -28,7 +28,8 @@
 
 - name: Wait until the portal answers
   ansible.builtin.uri:
-    url: http://127.0.0.1/api/auth/me
+    # The loopback port, not the site: the web server answers its own name now (frontend/Caddyfile)
+    url: http://127.0.0.1:8080/api/auth/me
     status_code: 401
   register: portal_up
   retries: 30

@@ -64,10 +64,21 @@ services:
       dockerfile: Dockerfile.prod
     restart: unless-stopped
     ports:
+      # 80 carries the certificate's own check and redirects visitors to 443
       - "80:80"
+      - "443:443"
+      # The deploy's health check, on the server's loopback only — never reachable from outside
+      - "127.0.0.1:8080:8080"
+    volumes:
+      # The certificate Caddy was issued. Without this it is lost on every deploy and asked for
+      # again, which runs into Let's Encrypt's limit of five identical certificates a week.
+      - caddy_data:/data
+      - caddy_config:/config
     depends_on:
       - backend
 
 volumes:
   portal_db:
   backend_uploads:
+  caddy_data:
+  caddy_config:

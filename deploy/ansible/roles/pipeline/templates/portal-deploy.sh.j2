@@ -15,10 +15,12 @@ echo "=== $(date '+%Y-%m-%d %H:%M:%S %z') deploy started by ${SUDO_USER:-root}"
 
 compose() { docker compose -f docker-compose.prod.yml "$@"; }
 
-# Waits for the portal to answer; 401 is the right answer to an unauthenticated request
+# Waits for the portal to answer; 401 is the right answer to an unauthenticated request.
+# Port 8080, not 80: the web server answers its own name now, so a request to 127.0.0.1 matches no
+# site of its. 8080 is published to this machine's loopback only (docker-compose.prod.yml).
 wait_until_up() {
   for _ in $(seq 1 {{ portal_health_tries }}); do
-    [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1/api/auth/me)" = "401" ] && return 0
+    [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:8080/api/auth/me)" = "401" ] && return 0
     sleep {{ portal_health_wait }}
   done
   return 1

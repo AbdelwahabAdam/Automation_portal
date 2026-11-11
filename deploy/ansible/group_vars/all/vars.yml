@@ -5,8 +5,9 @@ portal_repo: https://github.com/AbdelwahabAdam/Automation_portal.git
 portal_version: main
 portal_dir: /opt/portal
 
-# The address users open the portal at; also used in the links sent by email
-portal_public_url: "http://{{ ansible_host }}"
+# The address users open the portal at; also used in the links sent by email. Its name, not its
+# address: the links are opened by people, and the portal answers on https now (frontend/Caddyfile).
+portal_public_url: "https://portal.futurelifehome.com"
 portal_timezone: Asia/Dubai
 # Admins log in with a code emailed after the password; needs working email
 portal_require_admin_mfa: true

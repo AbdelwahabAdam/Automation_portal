@@ -28,7 +28,8 @@ def warm_daftra_cache(db, who) -> dict:
         try:
             from . import import_client_categories
 
-            import_client_categories.import_client_categories(db, who)
+            # Opens a session of its own and commits it
+            import_client_categories.import_categories()
             loaded.append("client_categories")
         except daftra.DaftraError:
             pass

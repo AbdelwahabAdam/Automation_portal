@@ -33,7 +33,7 @@ resource "aws_key_pair" "deploy" {
 
 resource "aws_security_group" "portal" {
   name        = "${var.name}-sg"
-  description = "FutureLife portal: web on port 80, SSH from the allowed addresses only"
+  description = "FutureLife portal: web on ports 80 and 443, SSH from the allowed addresses only"
   vpc_id      = data.aws_vpc.default.id
 
   ingress {
@@ -45,9 +45,19 @@ resource "aws_security_group" "portal" {
   }
 
   ingress {
-    description = "Portal (HTTP)"
+    # Also how the certificate is issued: Let's Encrypt reaches the portal on this port, so it
+    # stays open to everyone even when the portal itself is not
+    description = "Portal (HTTP, and the certificate's own check)"
     from_port   = 80
     to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = var.web_allowed_cidrs
+  }
+
+  ingress {
+    description = "Portal (HTTPS)"
+    from_port   = 443
+    to_port     = 443
     protocol    = "tcp"
     cidr_blocks = var.web_allowed_cidrs
   }
