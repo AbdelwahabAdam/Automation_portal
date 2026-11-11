@@ -294,7 +294,7 @@ export default function Dashboard({ onOpenRequest, onOpenList }) {
                 {tab === 'all' ? 'كل الطلبات المرسلة تمت مراجعتها.' : 'جرّب تبويبًا آخر أو غيّر الفلاتر.'}
               </EmptyState>
             ) : (
-              <div className="fl-table-wrap">
+              <div className="fl-table-wrap fl-stacked">
                 <div className="fl-table-scroll fl-table-scroll--bounded">
                   <table className="fl-table fl-table--sticky">
                     <thead>

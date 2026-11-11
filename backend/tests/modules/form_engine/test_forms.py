@@ -444,7 +444,8 @@ def test_a_request_saved_as_a_company_is_still_a_business_to_daftra():
 def test_only_forms_that_create_a_daftra_client_ask_for_an_email():
     # Only the forms whose approval creates a client in Daftra ask; a renewal is for a client Daftra has
     asking = {key for key in keys() if "email" in {s["name"] for s in form_fields(key)}}
-    assert asking == {"new_sale", "maintenance", "quotation"}
+    # طلب بيع - دفع إلكتروني asks every client for one, since its invoice is emailed to them
+    assert asking == {"new_sale", "online_sale", "maintenance", "quotation"}
 
 
 def test_installation_days_is_any_whole_number_of_days():

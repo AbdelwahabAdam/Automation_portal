@@ -47,7 +47,9 @@ def _seed_data(db) -> dict:
             "address": {"city": first.emirate, "state": first.area,
                         "address1": first.street, "address2": first.house} if first else {},
         })
-    products = [{"daftra_id": product.daftra_id, "name": product.name, "unit_price": str(product.unit_price)}
+    products = [{"daftra_id": product.daftra_id, "name": product.name, "unit_price": str(product.unit_price),
+                 "description": product.description, "product_code": product.product_code or "",
+                 "file_id": product.file_id}
                 for product in db.scalars(select(Product).where(Product.daftra_id.is_not(None)))]
     categories = [{"daftra_id": category.id, "name": category.name}
                   for category in db.scalars(select(ClientCategory))]

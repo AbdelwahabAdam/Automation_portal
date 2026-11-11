@@ -18,12 +18,12 @@ from .options import (CASH, CASH_PAYMENT, COLORS, CUSTOMER_TYPE_CODES, CUSTOMER_
                       installation_work, package_colors, package_quantity)
 from .registry import (all_forms, clear, find, form_fields, forms_for, get, keys, known, may,
                        register, visible_forms)
-from .spec import ApprovalContext, CheckContext, FormSpec
+from .spec import ApprovalContext, CheckContext, FormAction, FormSpec
 from .validation import DAFTRA_LIST_TYPES, is_input, sanitize_draft, validate_submission
 
 __all__ = [
     # what a form is, and how it joins in
-    "ApprovalContext", "CheckContext", "FormSpec", "all_forms", "clear", "find", "form_fields",
+    "ApprovalContext", "CheckContext", "FormAction", "FormSpec", "all_forms", "clear", "find", "form_fields",
     "forms_for", "get", "keys", "known", "may", "register", "visible_forms",
     # the building blocks a form's fields are written with
     "INSCRIPTION", "NOTES", "OPEN_PRICE_FIELDS", "address", "amounts", "attachments", "client", "client_kind", "discount_fields", "f", "files",

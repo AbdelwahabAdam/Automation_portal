@@ -33,7 +33,7 @@ def client_match(client: Client) -> dict:
         "daftra_id": client.daftra_id, "client_code": client.client_code, "customer_name": client.customer_name,
         "phone": client.phone, "phone2": client.phone2, "emirate": last.emirate if last else "",
         # As Daftra has them: the form shows them, and a change made there goes back to Daftra
-        "customer_type": client.customer_type, "gender": client.gender,
+        "customer_type": client.customer_type, "gender": client.gender, "email": client.email,
         "street": last.street if last else "", "house": last.house if last else "",
         "location_url": last.link if last else "",
         "addresses": [address_out(a) for a in addresses],

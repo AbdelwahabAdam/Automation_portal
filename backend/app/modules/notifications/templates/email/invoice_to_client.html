@@ -1,0 +1,77 @@
+{# To a client: their invoice, as Daftra's own invoice email lays it out. Not on base.html, whose
+   footer speaks of the portal: this one is from the company. Tables and inline styles only. #}
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="supported-color-schemes" content="light">
+  <title>الفاتورة #{{ invoice_no }}</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f1f2f6;">
+  <div style="display: none; max-height: 0; overflow: hidden; opacity: 0; color: transparent;">الفاتورة #{{ invoice_no }} من {{ company }} — المبلغ المستحق {{ due }} د.إ</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f1f2f6" style="background-color: #f1f2f6;">
+    <tr>
+      <td align="center" style="padding: 24px 12px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff"
+               style="max-width: 560px; background-color: #ffffff; border-top: 4px solid #4a2d7f; border-bottom: 4px solid #1f5fbf;">
+          <tr>
+            <td dir="rtl" align="right" style="padding: 28px 28px 8px; font-family: Tahoma, 'Segoe UI', Arial, sans-serif;">
+              <div dir="ltr" style="font-family: Georgia, 'Times New Roman', serif; font-size: 24px; font-weight: bold; color: #4a2d7f; text-align: right;">Future Life</div>
+              <div dir="ltr" style="font-size: 11px; color: #7a6aa0; text-align: right;">Water with future technology</div>
+            </td>
+          </tr>
+          <tr>
+            <td dir="rtl" align="right" style="padding: 18px 28px 0; font-family: Tahoma, 'Segoe UI', Arial, sans-serif; color: #1f2937;">
+              <div style="font-size: 17px; font-weight: bold;">الفاتورة #{{ invoice_no }}</div>
+              <div dir="ltr" style="font-size: 15px; font-weight: bold; text-align: right;">من {{ company }}</div>
+              <p style="margin: 18px 0 4px; font-size: 14px;">مرحباً <strong>{{ client_name }}</strong>،</p>
+              <p style="margin: 0 0 18px; font-size: 14px;">الرجاء تفقد الفاتورة المرفقة <strong>#{{ invoice_no }}</strong></p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 0 28px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+                     style="border: 1px solid #e3e5ec; border-radius: 6px; font-family: Tahoma, 'Segoe UI', Arial, sans-serif; font-size: 14px;">
+                <tr>
+                  <td dir="rtl" align="right" style="padding: 12px 14px; color: #4b5563; border-bottom: 1px solid #e3e5ec;">الفاتورة مستحقة الدفع بتاريخ:</td>
+                  <td dir="ltr" align="left" style="padding: 12px 14px; color: #111827; font-weight: bold; border-bottom: 1px solid #e3e5ec;">{{ due_date }}</td>
+                </tr>
+                <tr>
+                  <td dir="rtl" align="right" style="padding: 12px 14px; color: #4b5563; border-bottom: 1px solid #e3e5ec;">إجمالي الفاتورة:</td>
+                  <td dir="rtl" align="left" style="padding: 12px 14px; color: #111827; font-weight: bold; border-bottom: 1px solid #e3e5ec;">{{ total }} د.إ</td>
+                </tr>
+                <tr>
+                  <td dir="rtl" align="right" style="padding: 12px 14px; color: #4b5563;">المبلغ المستحق:</td>
+                  <td dir="rtl" align="left" style="padding: 12px 14px; color: #dc2626; font-weight: bold; font-size: 16px;">{{ due }} د.إ</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td dir="rtl" align="right" style="padding: 20px 28px 0; font-family: Tahoma, 'Segoe UI', Arial, sans-serif; font-size: 13px; line-height: 1.8; color: #374151;">
+              يمكنك عرض الفاتورة عبر الإنترنت، تحميلها على جهازك أو طبعها مباشرة بجانب خيارات أخرى عبر الرابط التالي:
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="padding: 18px 28px 22px;">
+              <a href="{{ link }}" target="_blank"
+                 style="display: inline-block; background-color: #1f5fbf; color: #ffffff; text-decoration: none; font-family: Tahoma, 'Segoe UI', Arial, sans-serif; font-size: 15px; font-weight: bold; padding: 13px 56px; border-radius: 4px;">شاهد الفاتورة</a>
+            </td>
+          </tr>
+          <tr>
+            <td dir="rtl" align="right" style="padding: 0 28px 26px; font-family: Tahoma, 'Segoe UI', Arial, sans-serif; font-size: 13px; line-height: 1.7; color: #1f2937; border-top: 1px solid #eef0f4;">
+              <div style="padding-top: 16px;">مع التقدير</div>
+              <div dir="ltr" style="font-weight: bold; text-align: right;">{{ company }}</div>
+              {% for line in company_address %}<div dir="ltr" style="text-align: right;">{{ line }}</div>{% endfor %}
+              <div dir="ltr" style="text-align: right;"><a href="tel:{{ company_phone }}" style="color: #1f5fbf;">{{ company_phone }}</a></div>
+              <div dir="ltr" style="text-align: right;">payment link <a href="{{ link }}" target="_blank" style="color: #1f5fbf; word-break: break-all;">{{ link }}</a></div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

@@ -199,8 +199,17 @@ class FakeDaftra:
             for product in data.get("products", ()):
                 if str(product["daftra_id"]) in known_products:
                     continue
-                self.products.append({"id": str(product["daftra_id"]), "name": product.get("name") or "",
-                                      "unit_price": str(product.get("unit_price") or 0), "active": "1"})
+                # A service, as every product the catalog links to is, with the code and the
+                # default image Daftra answers with — what the edit drawer shows beside the number
+                self.products.append({
+                    "id": str(product["daftra_id"]), "name": product.get("name") or "",
+                    "unit_price": str(product.get("unit_price") or 0), "active": "1",
+                    "type": "2", "status": "0", "description": product.get("description") or "",
+                    "product_code": str(product.get("product_code") or ""),
+                    "ProductImageS3": ([{"id": str(product["file_id"]), "default": "1",
+                                         "file_full_path": "", "file": f'{product["file_id"]}.jpg'}]
+                                       if product.get("file_id") else []),
+                })
                 added["products"] += 1
             known_categories = {int(row["id"]) for row in self.categories}
             for category in data.get("categories", ()):
@@ -454,6 +463,8 @@ class FakeDaftra:
         return {**{k: v for k, v in invoice.items() if k not in ("payments", "documents", "initial_paid")},
                 "summary_unpaid": str(round(total - paid, 2)),
                 "invoice_pdf_url": f"https://fake.daftra.test/invoices/view/{invoice['id']}.pdf?hash=x",
+                # The preview a client opens without logging in, as Daftra answers it
+                "invoice_html_url": f"https://fake.daftra.test/invoices/preview/{invoice['id']}?hash=x",
                 "Client": {"client_number": client.get("client_number", "")},
                 "InvoicePayment": [{"id": str(p["id"]), "notes": p["notes"]} for p in invoice["payments"]],
                 "InvoiceDocument": [{"id": str(i + 1), "invoice_id": invoice["id"], "document_id": str(d)}

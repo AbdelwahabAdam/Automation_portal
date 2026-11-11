@@ -140,4 +140,5 @@ def mine(db: Session, user) -> list[Request]:
 
 def my_counts(db: Session, user) -> dict:
     """How many of the user's requests are in each status, e.g. for «المسودات 3» on the forms page."""
-    return {"draft": 0, "submitted": 0, "returned": 0, "approved": 0, **repo.counts_by_status(db, user.id)}
+    return {"draft": 0, "submitted": 0, "returned": 0, "approved": 0, "awaiting_payment": 0,
+            **repo.counts_by_status(db, user.id)}

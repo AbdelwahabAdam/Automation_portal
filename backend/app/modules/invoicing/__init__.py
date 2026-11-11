@@ -15,6 +15,7 @@ from .common import (INVOICE_ATTACHMENT_FIELD, RECEIPT_ATTACHMENT_FIELD, TOTAL_T
                      WORK_ORDER_ATTACHMENT_FIELD, attach_pdf, daftra_failed, form_notes,
                      made_before_the_request, marker, money, payment_inputs, reports_daftra_errors,
                      sales_person)
+from .client_email import email_invoice_to_client
 from .estimate import ESTIMATE_ATTACHMENT_FIELD, ensure_estimate, find_estimate, get_estimate, save_estimate_pdf
 from .invoice import (ensure_invoice, ensure_payment, finish, get_invoice, invoice_items, payment_of,
                       save_invoice_pdf, save_receipt_pdf)
@@ -24,7 +25,7 @@ from .work_order import ensure_work_order, find_work_order, work_order_values
 __all__ = [
     "ESTIMATE_ATTACHMENT_FIELD", "INVOICE_ATTACHMENT_FIELD", "PAYMENT_METHOD_KEYS",
     "RECEIPT_ATTACHMENT_FIELD", "TOTAL_TOLERANCE", "WORK_ORDER_ATTACHMENT_FIELD", "attach_pdf",
-    "daftra_failed", "ensure_estimate", "ensure_invoice", "ensure_payment", "ensure_work_order",
+    "daftra_failed", "email_invoice_to_client", "ensure_estimate", "ensure_invoice", "ensure_payment", "ensure_work_order",
     "find_estimate", "find_work_order", "finish", "form_notes", "get_estimate", "get_invoice", "invoice_items",
     "made_before_the_request", "marker", "money", "payment_inputs", "payment_of",
     "reports_daftra_errors", "sales_person", "save_estimate_pdf", "save_invoice_pdf",

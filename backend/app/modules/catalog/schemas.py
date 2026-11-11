@@ -17,6 +17,9 @@ class ProductIn(BaseModel):
     open_price: bool = False
     # Offered as an item on طلب صيانة وتبديل under this group; empty: not offered there
     maintenance_group: str = Field("", max_length=50)
+    # The Daftra product this one is linked to. Sent by the edit drawer, where it can be pointed
+    # at another number; left out means «leave the link as it is», never «unlink».
+    daftra_id: int | None = Field(None, ge=1)
 
 
 class PackageItemIn(BaseModel):

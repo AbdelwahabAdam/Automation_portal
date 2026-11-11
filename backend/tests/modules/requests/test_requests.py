@@ -10,7 +10,7 @@ from ...conftest import VISIBLE_FORMS, auth, make_user, may_fill
 def test_form_types_list_hides_the_hidden_forms(client, sales):
     types = client.get("/api/form-types", headers=auth(sales)).json()
     shown = {t["key"] for t in types if not t["hidden"]}
-    assert shown == {"new_sale", "contract_renewal", "balance_payment", "maintenance", "quotation",
+    assert shown == {"new_sale", "online_sale", "contract_renewal", "balance_payment", "maintenance", "quotation",
                      "tech_extra_works"}
 
 
@@ -189,4 +189,4 @@ def test_my_request_counts(client, db, sales):
     other = make_user(db, "sales2", permissions=may_fill(*VISIBLE_FORMS))
     create(client, other, {"customer_name": "c"})
     counts = client.get("/api/requests/mine/counts", headers=auth(sales)).json()
-    assert counts == {"draft": 2, "submitted": 1, "returned": 0, "approved": 0}
+    assert counts == {"draft": 2, "submitted": 1, "returned": 0, "approved": 0, "awaiting_payment": 0}

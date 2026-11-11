@@ -4,7 +4,7 @@ import * as requestsApi from '../../api/requests.js';
 import * as reviewApi from '../../api/review.js';
 import { FileRow } from './attachments.jsx';
 import {
-  ActionBar, Alert, Badge, Button, Card, Dialog, Field, Icon, Loading, PageHeader, StatusBadge, TextArea,
+  ActionBar, Alert, Badge, Button, Card, Dialog, Field, Icon, Loading, PageHeader, StatusBadge, TextArea, TextInput,
   useToast,
 } from '../../ds/index.jsx';
 import { formatAmount, formatDate, formatDay, formatMoney } from '../../lib/format.js';
@@ -217,6 +217,67 @@ function ReviewActions({ request, own, daftraNote, onDone }) {
   );
 }
 
+// What can be done to an approved request in its current status: the form's own actions (its
+// definition's "actions", e.g. «إنشاء أمر الشغل» on one waiting for its payment). Each asks for its
+// fields, if any, and says what it will do before it runs. The server decides who may.
+function FormActions({ request, actions, onDone }) {
+  const offered = (actions || []).filter((action) => action.statuses.includes(request.status));
+  // null | the action being asked about
+  const [asking, setAsking] = useState(null);
+  const [values, setValues] = useState({});
+  const [errors, setErrors] = useState({});
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  function ask(action) {
+    setAsking(action);
+    setValues({});
+    setErrors({});
+    setError('');
+  }
+
+  async function run() {
+    setBusy(true);
+    setError('');
+    try {
+      await requestsApi.runAction(request.id, asking.key, values);
+      setAsking(null);
+      onDone(`تم: ${asking.label}.`);
+    } catch (err) {
+      if (err.fieldErrors) setErrors(err.fieldErrors);
+      else setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!offered.length) return null;
+  const missing = asking && asking.fields.some((spec) => spec.required && !String(values[spec.name] ?? '').trim());
+  return (
+    <>
+      <ActionBar message={error && !asking && <Alert tone="error">{error}</Alert>}>
+        {offered.map((action, index) => (
+          <Button key={action.key} variant={index === 0 ? 'primary' : 'secondary'} onClick={() => ask(action)}>{action.label}</Button>
+        ))}
+      </ActionBar>
+      {asking && (
+        <Dialog title={`${asking.label}؟`} confirmLabel={asking.label} busy={busy} confirmDisabled={missing}
+          onConfirm={run} onCancel={() => setAsking(null)}>
+          {asking.confirm && <p>{asking.confirm}</p>}
+          {asking.fields.map((spec) => (
+            <Field key={spec.name} label={spec.label} htmlFor={`action-${spec.name}`} required={spec.required} error={errors[spec.name]}>
+              <TextInput id={`action-${spec.name}`} type={spec.type === 'number' ? 'number' : 'text'} inputMode={spec.type === 'number' ? 'numeric' : undefined}
+                min={spec.min} max={spec.max} placeholder={spec.placeholder} value={values[spec.name] ?? ''}
+                invalid={Boolean(errors[spec.name])} onChange={(e) => setValues((current) => ({ ...current, [spec.name]: e.target.value }))} />
+            </Field>
+          ))}
+          {error && <Alert tone="error">{error}</Alert>}
+        </Dialog>
+      )}
+    </>
+  );
+}
+
 // One request, read-only. With review set, a manager can approve or return it.
 export default function RequestView({ requestId, formTypes, onBack, ownerName: given, review, actions }) {
   const [request, setRequest] = useState(null);
@@ -224,12 +285,14 @@ export default function RequestView({ requestId, formTypes, onBack, ownerName: g
   const ownerName = given ?? (review && request ? request.created_by_name : null);
   const [events, setEvents] = useState([]);
   const [error, setError] = useState('');
+  const toast = useToast();
 
-  useEffect(() => {
+  function load() {
     Promise.all([requestsApi.getRequest(requestId), requestsApi.requestHistory(requestId)])
       .then(([loaded, history]) => { setRequest(loaded); setEvents(history); })
       .catch((err) => setError(err.message));
-  }, [requestId]);
+  }
+  useEffect(load, [requestId]);
 
   const back = <Button className="fl-back" variant="tertiary" icon="arrow-start" onClick={onBack}>رجوع</Button>;
   if (error) return <div className="fl-stack">{back}<Alert tone="error">{error}</Alert></div>;
@@ -358,6 +421,7 @@ export default function RequestView({ requestId, formTypes, onBack, ownerName: g
         );
       })}
       {review && <ReviewActions request={request} own={review.own(request)} daftraNote={formType.daftra_note} onDone={review.onDone} />}
+      <FormActions request={request} actions={formType.actions} onDone={(message) => { toast(message); load(); }} />
     </div>
     {/* Beside the sections on a wide screen, under them on a narrow one */}
     <div className="fl-viewlayout__side fl-stack">

@@ -6,6 +6,9 @@ export const myRequests = () => api('/requests/mine');
 export const myCounts = () => api('/requests/mine/counts');
 export const getRequest = (id) => api(`/requests/${id}`);
 export const requestHistory = (id) => api(`/requests/${id}/history`);
+// One of the form's actions after approval (its definition's "actions"), e.g. «إنشاء أمر الشغل»
+export const runAction = (id, action, values = {}) =>
+  api(`/requests/${id}/actions/${action}`, { method: 'POST', body: { values } });
 export const createRequest = (body) => api('/requests', { method: 'POST', body });
 export const updateRequest = (id, body) => api(`/requests/${id}`, { method: 'PUT', body });
 export const deleteRequest = (id) => api(`/requests/${id}`, { method: 'DELETE' });

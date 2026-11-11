@@ -300,8 +300,12 @@ input.fl-input[type="date"] { min-block-size: calc(var(--fl-field-height) - 2px)
   color: var(--fl-color-text-primary); text-decoration: none; text-align: start; font: inherit; cursor: pointer;
   transition: border-color var(--fl-motion-duration-fast), background var(--fl-motion-duration-fast);
 }
-.fl-catalog-item:hover { border-color: var(--fl-color-border-control-hover); background: var(--fl-color-background-hover); }
-.fl-catalog-item:active { background: var(--fl-color-background-pressed); }
+.fl-catalog-item:hover:not(:disabled) { border-color: var(--fl-color-border-control-hover); background: var(--fl-color-background-hover); }
+.fl-catalog-item:active:not(:disabled) { background: var(--fl-color-background-pressed); }
+/* A form that is not open for use yet: there to be seen, not to be started */
+.fl-catalog-item--off { cursor: not-allowed; background: var(--fl-color-background-disabled); border-color: var(--fl-color-border-disabled); }
+.fl-catalog-item--off .fl-catalog-item__title, .fl-catalog-item--off .fl-catalog-item__desc { color: var(--fl-color-text-disabled); }
+.fl-catalog-item--off .fl-tile { background: var(--fl-color-background-subtle); color: var(--fl-color-icon-disabled); }
 .fl-tile { flex: 0 0 auto; display: flex; align-items: center; justify-content: center; inline-size: 40px; block-size: 40px; border-radius: var(--fl-radius-md); background: var(--fl-color-background-selected); color: var(--fl-color-icon-selected); }
 .fl-catalog-item__text { flex: 1 1 auto; min-inline-size: 0; display: flex; flex-direction: column; gap: 2px; }
 .fl-catalog-item__title { font-size: var(--fl-type-body-size); line-height: 1.5; font-weight: var(--fl-font-weight-semibold); overflow-wrap: anywhere; }
@@ -740,6 +744,8 @@ body.fl-keyboard .fl-toasts { inset-block-end: var(--fl-space-4); }
      is the row's name. Nothing scrolls sideways. Wider screens keep the table. */
   .fl-stacked.fl-table-wrap { border: 0; border-radius: 0; background: none; overflow: visible; }
   .fl-stacked > .fl-table-scroll { overflow: visible; }
+  /* The bounded box is the desktop table's; stacked cards are read by scrolling the page */
+  .fl-stacked > .fl-table-scroll--bounded { max-block-size: none; }
   .fl-stacked .fl-table, .fl-stacked .fl-table tbody, .fl-stacked .fl-table tfoot { display: block; }
   .fl-stacked .fl-table thead { display: none; }
   .fl-stacked .fl-table tr {
@@ -911,3 +917,25 @@ body.fl-keyboard .fl-toasts { inset-block-end: var(--fl-space-4); }
   .fl-filterbar .fl-filters__search { flex: 1 1 100%; }
   .fl-filterbar .fl-filters > .fl-field { flex: 1 1 100%; }
 }
+
+/* The Daftra product behind the number in the product drawer: its picture and what it is called */
+.fl-linkcard {
+  display: flex; gap: var(--fl-space-4); align-items: flex-start;
+  margin-block-start: var(--fl-space-2); padding: var(--fl-space-3);
+  border: var(--fl-border-width-default) solid var(--fl-color-border-subtle);
+  border-radius: var(--fl-radius-md); background: var(--fl-color-background-subtle);
+  min-block-size: 84px;
+}
+.fl-linkcard__shot {
+  flex: 0 0 auto; inline-size: 64px; block-size: 64px; border-radius: var(--fl-radius-sm);
+  border: var(--fl-border-width-default) solid var(--fl-color-border-subtle);
+  background: var(--fl-color-background-surface); overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+}
+.fl-linkcard__shot img { inline-size: 100%; block-size: 100%; object-fit: contain; }
+.fl-linkcard__shot--none {
+  flex-direction: column; gap: 2px; border-style: dashed; background: transparent;
+  color: var(--fl-color-text-secondary); font-size: var(--fl-font-size-xs, 11px);
+}
+.fl-linkcard__body { display: flex; flex-direction: column; gap: 2px; min-inline-size: 0; }
+.fl-linkcard__desc { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }

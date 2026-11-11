@@ -76,7 +76,9 @@ def outbox(monkeypatch):
     sent = []
     monkeypatch.setattr(settings, "smtp_host", "smtp.test")
     monkeypatch.setattr(settings, "mail_from", "Portal <portal@test>")
-    catch = lambda to, subject, text, html: sent.append({"to": to, "subject": subject, "text": text})  # noqa: E731
+    def catch(to, subject, text, html, attachments=()):
+        sent.append({"to": to, "subject": subject, "text": text, "html": html,
+                     "attachments": [(name, mime) for name, _, mime in attachments]})
     # The senders inside the module call `service.send`; callers outside reach the same function
     # through the package, which bound it at import, so both names are caught.
     monkeypatch.setattr(mail.service, "send", catch)
@@ -123,7 +125,7 @@ def may_review(*form_keys) -> list[str]:
 
 
 # The forms a request can be made from, which is what the old «النماذج» page opened
-VISIBLE_FORMS = ("new_sale", "contract_renewal", "maintenance", "balance_payment", "quotation",
+VISIBLE_FORMS = ("new_sale", "online_sale", "contract_renewal", "maintenance", "balance_payment", "quotation",
                  "tech_extra_works")
 
 

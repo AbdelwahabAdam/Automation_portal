@@ -366,6 +366,11 @@ def update_client(daftra_client_id: int, data: dict, db: Session | None = None):
     kind = CUSTOMER_TYPE_CODES.get(data.get("customer_type") or "")
     if kind and str(saved.get("type") or "") != str(kind):
         wanted["type"] = kind
+    # البريد الإلكتروني, the same way: only a form that asks for it of a client already in Daftra
+    # sends one (طلب بيع - دفع إلكتروني, whose invoice is emailed to it)
+    email = str(data.get("email") or "").strip()
+    if email and email.lower() != str(saved.get("email") or "").strip().lower():
+        wanted["email"] = email
     wanted.update(address_change(saved, address_fields(data)))
     # The coordinates live in a custom field, which is saved separately from the client's own fields
     if custom == {key: str(held.get(key) or "") for key in custom} and not wanted:
@@ -388,6 +393,8 @@ def _keep_local(db: Session | None, daftra_client_id: int, client: dict):
     if local is None:
         return
     local.customer_type, local.gender = kind_labels(client).values()
+    if str(client.get("email") or "").strip():
+        local.email = str(client["email"]).strip()
     phone2 = local_phone(client.get("phone2") or "")
     if phone2 and phone2 != local.phone:
         local.phone2 = phone2

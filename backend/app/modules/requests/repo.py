@@ -84,6 +84,8 @@ def save_file(db: Session, request, field: str, filename: str, content: bytes,
 PENDING = ("submitted", "returned")
 #: The two ways a review ends, either of which is the decision an employee waited for
 DECISIONS = ("approved", "returned")
+#: A request a reviewer approved: done, or waiting on what comes after approval (its payment)
+APPROVED = ("approved", "awaiting_payment")
 
 
 def _scoped(stmt, form_types: list[str], employee_id: int | None):
@@ -122,7 +124,7 @@ def approved_in(db: Session, form_types: list[str], employee_id: int | None, beg
     """Requests approved inside the period, whenever they were sent. Approval is the end of a
     request's life, so `reviewed_at` is the moment it was approved."""
     stmt = (select(func.count()).select_from(Request)
-            .where(Request.status == "approved", Request.reviewed_at >= begins, Request.reviewed_at < ends))
+            .where(Request.status.in_(APPROVED), Request.reviewed_at >= begins, Request.reviewed_at < ends))
     return db.scalar(_scoped(stmt, form_types, employee_id))
 
 
@@ -231,7 +233,7 @@ def approved_by_day(db: Session, form_types: list[str], employee_id: int | None,
     """{day: how many were approved that day}."""
     day = _uae_day(Request.reviewed_at)
     stmt = (select(day, func.count()).select_from(Request)
-            .where(Request.status == "approved", Request.reviewed_at >= begins, Request.reviewed_at < ends)
+            .where(Request.status.in_(APPROVED), Request.reviewed_at >= begins, Request.reviewed_at < ends)
             .group_by(day))
     return {day.isoformat(): count for day, count in db.execute(_scoped(stmt, form_types, employee_id)).all()}
 
@@ -248,6 +250,6 @@ def submitted_by_form(db: Session, form_types: list[str], employee_id: int | Non
 def approved_by_form(db: Session, form_types: list[str], employee_id: int | None, begins, ends) -> dict:
     """{form key: how many of it were approved in the period}."""
     stmt = (select(Request.form_type, func.count()).select_from(Request)
-            .where(Request.status == "approved", Request.reviewed_at >= begins, Request.reviewed_at < ends)
+            .where(Request.status.in_(APPROVED), Request.reviewed_at >= begins, Request.reviewed_at < ends)
             .group_by(Request.form_type))
     return dict(db.execute(_scoped(stmt, form_types, employee_id)).all())

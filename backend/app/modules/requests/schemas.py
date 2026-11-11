@@ -59,5 +59,10 @@ class DecisionIn(BaseModel):
     revision: int
 
 
+class ActionIn(BaseModel):
+    # What the action asks for (its fields), by name
+    values: dict = Field(default_factory=dict)
+
+
 class ReturnIn(DecisionIn):
     reason: str = Field(min_length=1, max_length=2000)

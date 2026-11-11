@@ -73,6 +73,13 @@ def delete_draft(request: Request = Depends(own_unsent_draft), who: Actor = Depe
     drafts.delete(db, who, request)
 
 
+@router.post("/requests/{request_id}/actions/{action}")
+def run_action(request_id: int, action: str, body: schemas.ActionIn, who: Actor = Depends(acting(get_current_user)),
+               db: Session = Depends(get_db)):
+    """One of the form's actions after approval (its FormSpec.actions), e.g. «إنشاء أمر الشغل»."""
+    return review.run_action(db, who, request_id, action, body.values)
+
+
 @router.get("/requests/{request_id}/history")
 def request_history(request: Request = Depends(viewable_request)):
     return review.history(request)

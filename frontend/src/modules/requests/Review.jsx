@@ -11,6 +11,7 @@ import RequestList, { TABLE_MIN_WIDTH } from './RequestList.jsx';
 const TABS = [
   { value: 'submitted', label: 'قيد المراجعة' },
   { value: 'returned', label: 'تحتاج تعديل' },
+  { value: 'awaiting_payment', label: 'بانتظار الدفع' },
   { value: 'approved', label: 'المعتمدة' },
   // The employees' forms not sent yet, for the manager to follow; they can only be read
   { value: 'draft', label: 'المسودات' },

@@ -380,6 +380,8 @@ const REQUEST_STATUS = {
   submitted: ['info', 'send', 'قيد المراجعة'],
   returned: ['warning', 'arrow-start', 'تحتاج تعديل'],
   approved: ['success', 'check-circle', 'معتمد'],
+  // Approved, its invoice emailed to the client, and waiting for them to pay it
+  awaiting_payment: ['warning', 'mail', 'بانتظار الدفع'],
 };
 
 export function StatusBadge({ status }) {

@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from ....core.config import settings
 from ....core.context import Actor
-from ....core.errors import DomainError, Invalid, SyncError
+from ....core.errors import Conflict, DomainError, Forbidden, Invalid, NotFound, SyncError
 from ....core.permissions import REVIEW
 from ....core.text import display_name
 from ... import form_engine, notifications
@@ -33,6 +33,7 @@ EVENT_LABELS = {
     "resubmitted": "إعادة الإرسال بعد التعديل",
     "returned": "إعادة للتعديل",
     "approved": "اعتماد الطلب",
+    "invoice_emailed": "إرسال الفاتورة للعميل بالبريد",
 }
 # Shorter than this is not a reason the employee can act on
 MIN_REASON = 5
@@ -84,8 +85,11 @@ def queue(db: Session, user, scope: str = "") -> list[dict]:
 
 
 def history(request: Request) -> list[dict]:
+    # A form's own action (FormSpec.actions) is named by the form
+    spec = form_engine.find(request.form_type)
+    named = {action.key: action.label for action in spec.actions} if spec is not None else {}
     return [
-        {"at": event.at, "kind": event.kind, "label": EVENT_LABELS.get(event.kind, event.kind),
+        {"at": event.at, "kind": event.kind, "label": EVENT_LABELS.get(event.kind) or named.get(event.kind, event.kind),
          "username": event.username, "revision": event.revision, "note": event.note}
         for event in request.events
     ]
@@ -149,7 +153,8 @@ def approve(db: Session, who: Actor, request_id: int, revision: int) -> dict:
             message = f"خطأ غير متوقع أثناء الإنشاء في دفترة: {error}"
             record_failure(db, who, request, message)
             raise Unexpected(message) from error
-    request.status = "approved"
+    # Most forms end here; one with more to wait for (e.g. its payment) says where it goes instead
+    request.status = spec.approved_status if spec is not None else "approved"
     request.returned_reason = None
     request.reviewed_by = user
     request.reviewed_at = datetime.now(timezone.utc)
@@ -157,7 +162,7 @@ def approve(db: Session, who: Actor, request_id: int, revision: int) -> dict:
     db.flush()
     emailed = notify_owner(request, user, approved=True)
     audit_log(db, who, "request.approve", "request", request.id, request_label(request),
-              after={"status": "approved", "email_sent": emailed, **summary})
+              after={"status": request.status, "email_sent": emailed, **summary})
     db.commit()
     return review_out(request)
 
@@ -178,6 +183,37 @@ def return_to_owner(db: Session, who: Actor, request_id: int, revision: int, raw
     emailed = notify_owner(request, user, approved=False)
     audit_log(db, who, "request.return", "request", request.id, request_label(request),
               after={"status": "returned", "reason": reason, "email_sent": emailed})
+    db.commit()
+    return review_out(request)
+
+
+def run_action(db: Session, who: Actor, request_id: int, key: str, values: dict) -> dict:
+    """Runs one of the form's actions on an approved request (e.g. «إنشاء أمر الشغل» while it waits
+    for its payment). Its owner or a reviewer of its form may; it must be in a status the action is
+    offered in. A Daftra failure leaves the request as it was, with the reason on it."""
+    user = who.user
+    request = repo.lock(db, request_id)
+    if request is None or not access.can_view(request, user):
+        raise NotFound("الطلب غير موجود")
+    spec = form_engine.find(request.form_type)
+    action = spec.action(key) if spec is not None else None
+    if action is None:
+        raise NotFound("الإجراء غير موجود")
+    if request.created_by_id != user.id and not access.can_review(request, user):
+        raise Forbidden("هذا الإجراء لصاحب الطلب أو لمن يراجع هذا النموذج")
+    if request.status not in action.statuses:
+        raise Conflict("لا يمكن هذا الإجراء على الطلب في حالته الحالية. حدّث الصفحة.")
+    try:
+        summary = action.run(form_engine.ApprovalContext(request=request, db=db, reviewer=user), values or {})
+        request.daftra_error = None
+    except SyncError as error:
+        record_failure(db, who, request, str(error))
+        raise
+    if action.then_status:
+        request.status = action.then_status
+    add_event(db, request, user, action.key, summary.pop("note", None) if isinstance(summary, dict) else None)
+    audit_log(db, who, f"request.action.{action.key}", "request", request.id, request_label(request),
+              after={"status": request.status, **(summary or {})})
     db.commit()
     return review_out(request)
 

@@ -11,12 +11,15 @@ from sqlalchemy.orm import Session
 
 from ...core.context import Actor
 from ...core.errors import Conflict, Invalid, NotFound
+from ...core.text import squash
 from ..audit import changes
 from ..audit import log as audit_log
 from . import repo
-from .in_daftra import delete_in_daftra, edit_in_daftra, place_in_daftra
+from .in_daftra import (delete_in_daftra, edit_in_daftra, is_service, place_in_daftra,
+                        product_image, read_in_daftra)
 from .models import Package, PackageItem, Product
 from .schemas import PackageIn, ProductIn
+from .sync import daftra_price
 
 CENT = Decimal("0.01")
 
@@ -103,24 +106,81 @@ def product_by_id(db: Session, product_id: int) -> Product:
     return product
 
 
-def apply_product(db: Session, product: Product, body: ProductIn):
-    name = " ".join(body.name.split())
-    if not name:
-        raise Invalid("اكتب اسم المنتج")
-    taken = repo.product_named(db, name)
-    if taken is not None and taken is not product:
-        raise Conflict("يوجد منتج بنفس الاسم")
-    product.name = name
+def apply_product(db: Session, product: Product, body: ProductIn, from_daftra: bool = False):
+    """from_daftra: the save has just pointed the product at another Daftra product and taken that
+    one's name, price and description, so what the drawer still showed for those is passed over."""
+    if not from_daftra:
+        name = " ".join(body.name.split())
+        if not name:
+            raise Invalid("اكتب اسم المنتج")
+        taken = repo.product_named(db, name)
+        if taken is not None and taken is not product:
+            raise Conflict("يوجد منتج بنفس الاسم")
+        product.name = name
+        product.description = body.description.strip()
     product.name_ar = body.name_ar.strip()
-    product.description = body.description.strip()
     product.open_price = body.open_price
     # Its price is typed on each order line, and its text starts the line: so it has no price of its
     # own, and must have a text
-    product.unit_price = 0 if body.open_price else body.unit_price
+    product.unit_price = 0 if body.open_price else (product.unit_price if from_daftra else body.unit_price)
     if body.open_price and not product.description:
         raise Invalid("اكتب نص البند: يبدأ به السطر في الطلب ويظهر في الفاتورة")
     product.is_active = body.is_active
     product.maintenance_group = body.maintenance_group.strip() or None
+
+
+def relink_product(db: Session, product: Product, daftra_id: int):
+    """Points the product at another Daftra product, and takes that one's name, price, description,
+    code and picture.
+
+    Changing the number is a correction — «this row was pointing at the wrong product» — so Daftra
+    is what is right and the catalog row follows it, the same way «مزامنة من دفترة» would. The
+    picture goes with it: `file_id` is what the work order prints, and the old one belongs to the
+    product that is no longer linked. Nothing is sent to Daftra: neither product is changed there.
+    """
+    taken = repo.product_with_daftra_id(db, daftra_id)
+    if taken is not None and taken is not product:
+        raise Conflict(f"منتج دفترة رقم {daftra_id} مربوط بمنتج آخر: «{taken.name}»")
+    source = read_in_daftra(daftra_id)
+    if not is_service(source):
+        raise Conflict(f"منتج دفترة رقم {daftra_id} منتج مخزون لا خدمة، فلا يُربط به. "
+                       "منتجات الكتالوج تُربط بالخدمات.")
+    name = squash(source.get("name"))
+    if name:
+        clash = repo.product_named(db, name)
+        if clash is not None and clash is not product:
+            raise Conflict(f"اسمه في دفترة «{name}» مستخدم لمنتج آخر في البوابة، فلم يُربط.")
+        product.name = name
+    price = daftra_price(source.get("unit_price"))
+    if price is not None:
+        product.unit_price = price
+    description = (source.get("description") or "").strip()
+    if description:
+        product.description = description
+    picture = product_image(daftra_id, source)
+    product.file_id = picture["file_id"] if picture else None
+    product.product_code = source.get("product_code") or ""
+    product.barcode = source.get("barcode") or None
+    product.daftra_id = daftra_id
+
+
+def daftra_product(db: Session, daftra_id: int) -> dict:
+    """A Daftra product as the edit drawer shows it beside the number: what the link would become."""
+    source = read_in_daftra(daftra_id)
+    picture = product_image(daftra_id, source)
+    holder = repo.product_with_daftra_id(db, daftra_id)
+    price = daftra_price(source.get("unit_price"))
+    return {
+        "daftra_id": daftra_id,
+        "name": squash(source.get("name")),
+        "unit_price": float(price) if price is not None else None,
+        "description": (source.get("description") or "").strip(),
+        "product_code": source.get("product_code") or "",
+        "is_service": is_service(source),
+        "file_id": picture["file_id"] if picture else None,
+        "image_url": picture["url"] if picture else "",
+        "linked_to": {"id": holder.id, "name": holder.name} if holder is not None else None,
+    }
 
 
 def listed_products(db: Session) -> list[dict]:
@@ -141,10 +201,16 @@ def create_product(db: Session, who: Actor, body: ProductIn) -> dict:
 
 def update_product(db: Session, who: Actor, product: Product, body: ProductIn) -> dict:
     before = product_snapshot(product)
-    apply_product(db, product, body)
+    # A save that points the product at another Daftra product reads from Daftra instead of
+    # writing to it: the new product keeps its own name, price and description, and ours take them
+    relinking = body.daftra_id is not None and body.daftra_id != product.daftra_id
+    if relinking:
+        relink_product(db, product, body.daftra_id)
+    apply_product(db, product, body, from_daftra=relinking)
     old, new = changes(before, product_snapshot(product))
     # Daftra first: if it refuses, nothing here is saved either
-    edit_in_daftra(product, new)
+    if not relinking:
+        edit_in_daftra(product, new)
     if new:
         audit_log(db, who, "product.update", "product", product.id, product.name, old, new)
     db.commit()

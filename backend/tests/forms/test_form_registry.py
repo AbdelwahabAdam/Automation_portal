@@ -9,15 +9,15 @@ from app.modules.form_engine import all_forms, find, get, keys, visible_forms
 # Every form, in the order they appear in النماذج. Add a form here when its folder is added;
 # never rename one.
 FORMS = [
-    "new_sale", "contract_renewal", "maintenance", "balance_payment", "quotation", "quote_to_invoice",
+    "new_sale", "online_sale", "contract_renewal", "maintenance", "balance_payment", "quotation", "quote_to_invoice",
     "order_addition", "order_modification", "return_refund", "tech_cash_collection", "reinstallation",
     "data_entry_error", "pre_sale_inspection", "installation_completed", "contract_service_done",
     "open_ticket", "close_ticket", "daily_visits", "tech_extra_works",
 ]
 # The forms a new request can be made from
-VISIBLE = ["new_sale", "contract_renewal", "maintenance", "balance_payment", "quotation", "tech_extra_works"]
+VISIBLE = ["new_sale", "online_sale", "contract_renewal", "maintenance", "balance_payment", "quotation", "tech_extra_works"]
 # The forms approving creates something in Daftra for
-INVOICED = ["new_sale", "contract_renewal", "maintenance", "balance_payment", "quotation", "tech_extra_works"]
+INVOICED = ["new_sale", "online_sale", "contract_renewal", "maintenance", "balance_payment", "quotation", "tech_extra_works"]
 
 
 def test_every_form_is_registered_once_in_order():
@@ -49,10 +49,18 @@ def test_every_invoiced_form_says_what_approving_creates():
 
 def test_the_api_shape_is_what_the_screens_read():
     shape = get("new_sale").as_api()
-    assert set(shape) == {"key", "label", "icon", "description", "sections", "invoiced", "daftra_note", "hidden"}
-    assert shape["invoiced"] is True and shape["hidden"] is False
-    # A form nobody may fill yet: hidden, and the screens grey it out rather than offer it
+    assert set(shape) == {"key", "label", "icon", "description", "sections", "invoiced", "daftra_note", "hidden",
+                          "disabled", "actions"}
+    assert shape["invoiced"] is True and shape["hidden"] is False and shape["disabled"] is False
+    # A form that takes no new requests at all: left out of the catalog
     assert get("quote_to_invoice").as_api()["hidden"] is True
+
+
+def test_a_form_that_is_not_open_yet_is_shown_but_cannot_be_started():
+    """ready=False: in the catalog, greyed out. Unlike hidden, which leaves it out altogether."""
+    online = get("online_sale").as_api()
+    assert online["disabled"] is True and online["hidden"] is False
+    assert [form.key for form in all_forms() if not form.ready] == ["online_sale"]
 
 
 def test_a_form_that_is_not_registered_is_not_invented():

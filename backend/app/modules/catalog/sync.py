@@ -18,7 +18,9 @@ from ..audit import log as audit_log
 from .models import Product
 
 
-def _price(raw) -> Decimal | None:
+def daftra_price(raw) -> Decimal | None:
+    """What Daftra holds as the price, or None when it holds nothing usable. A zero never
+    replaces a price of ours: most of Daftra's products are unpriced placeholders."""
     try:
         price = Decimal(str(raw)).quantize(Decimal("0.01"))
     except (InvalidOperation, TypeError, ValueError):
@@ -50,7 +52,7 @@ def sync_from_daftra(db: Session, who: Actor) -> dict:
                 before["name"], after["name"] = product.name, name
                 product.name = name
 
-        price = _price(source.get("unit_price"))
+        price = daftra_price(source.get("unit_price"))
         if price is not None and price != product.unit_price:
             before["unit_price"], after["unit_price"] = float(product.unit_price), float(price)
             product.unit_price = price

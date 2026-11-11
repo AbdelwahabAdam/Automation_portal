@@ -11,6 +11,9 @@ export const updateProduct = (id, body) => api(`/admin/products/${id}`, { method
 export const deleteProduct = (id, fromDaftra = false) =>
   api(`/admin/products/${id}${fromDaftra ? '?from_daftra=true' : ''}`, { method: 'DELETE' });
 
+// One Daftra product, for the number field in the product drawer
+export const daftraProduct = (daftraId) => api(`/admin/daftra-products/${daftraId}`);
+
 export const listPackages = () => api('/admin/packages');
 export const createPackage = (body) => api('/admin/packages', { method: 'POST', body });
 export const updatePackage = (id, body) => api(`/admin/packages/${id}`, { method: 'PUT', body });

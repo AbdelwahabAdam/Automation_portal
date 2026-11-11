@@ -70,7 +70,7 @@ def test_roles(client, db, admin, sales):
     assert new_sale["keys"] == {"submit": "form.new_sale.submit", "view": "form.new_sale.view",
                                "review": "form.new_sale.review"}
     # Every form is offered, including the hidden ones, and the two admin-only keys are not
-    assert len(offered["forms"]) == 19
+    assert len(offered["forms"]) == 20
     assert {p["key"] for p in offered["admin_pages"]}.isdisjoint({"admin.users", "admin.roles"})
 
 

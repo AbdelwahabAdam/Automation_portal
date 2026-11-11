@@ -3,7 +3,7 @@ with it when the admin asks for that."""
 
 from sqlalchemy.orm import Session
 
-from ...core.errors import Conflict, ExternalFailure
+from ...core.errors import Conflict, ExternalFailure, Invalid
 from ...integrations import daftra
 from . import repo
 from .models import Product
@@ -41,6 +41,42 @@ def place_in_daftra(db: Session, product: Product):
         raise Conflict(f"منتج دفترة رقم {daftra_id} مربوط بمنتج آخر: «{taken.name}»")
     product.daftra_id = daftra_id
     product.product_code = source.get("product_code") or ""
+
+
+def read_in_daftra(daftra_id: int) -> dict:
+    """The Daftra product of that number, for looking at it or linking a catalog product to it."""
+    try:
+        return daftra.get(f"products/{daftra_id}.json")["data"]["Product"]
+    except daftra.NotFound:
+        raise Invalid(f"لا يوجد منتج في دفترة بالرقم {daftra_id}")
+    except daftra.DaftraError:
+        raise ExternalFailure("تعذر الوصول إلى دفترة الآن. حاول مرة أخرى.")
+
+
+def is_service(source: dict) -> bool:
+    """A service, which is what the portal's products are linked to; the rest track stock."""
+    return str(source.get("type")) == str(daftra.PRODUCT_SERVICE)
+
+
+def _default_image(source: dict) -> dict | None:
+    images = [image for image in source.get("ProductImageS3") or [] if str(image.get("id") or "").isdigit()]
+    if not images:
+        return None
+    best = next((image for image in images if str(image.get("default") or "") == "1"), images[0])
+    return {"file_id": int(best["id"]), "url": best.get("file_full_path") or ""}
+
+
+def product_image(daftra_id: int, source: dict) -> dict | None:
+    """The default picture of a Daftra product: the file id the work order prints, and a link to it.
+
+    Read from the product itself where it carries its images, and from the account's product list
+    (cached) where it does not — one answer carries them and the other has been seen without them.
+    """
+    found = _default_image(source)
+    if found:
+        return found
+    listed = next((row for row in daftra.list_products() if str(row.get("id") or "") == str(daftra_id)), None)
+    return _default_image(listed or {})
 
 
 def edit_in_daftra(product: Product, changed: dict):

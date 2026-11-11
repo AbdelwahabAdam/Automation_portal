@@ -37,6 +37,9 @@ ACTIONS = {
     "request.approve": "اعتماد طلب",
     "request.daftra_failed": "تعذر إنشاء الفاتورة في دفترة",
     "request.return": "إعادة طلب للتعديل",
+    # A form's actions after approval (FormSpec.actions), logged as request.action.<key>
+    "request.action.create_work_order": "إنشاء أمر الشغل لطلب بانتظار الدفع",
+    "request.action.resend_invoice_email": "إعادة إرسال الفاتورة للعميل بالبريد",
     "client.address.add": "إضافة عنوان لعميل",
     "attachment.upload": "رفع مرفق",
     "attachment.download": "فتح مرفق",
@@ -142,6 +145,7 @@ _OWN_VALUE_LABELS = {
     "submitted": "قيد المراجعة",
     "returned": "تحتاج تعديل",
     "approved": "معتمد",
+    "awaiting_payment": "بانتظار الدفع",
 }
 
 # What other modules add about themselves (e.g. notifications' email names)

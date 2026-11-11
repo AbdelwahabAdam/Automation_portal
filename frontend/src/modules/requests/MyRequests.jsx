@@ -12,6 +12,7 @@ const TABS = [
   { value: 'draft', label: 'المسودات', test: (r) => r.status === 'draft' },
   { value: 'returned', label: 'تحتاج تعديل', test: (r) => r.status === 'returned' },
   { value: 'submitted', label: 'قيد المراجعة', test: (r) => r.status === 'submitted' },
+  { value: 'awaiting_payment', label: 'بانتظار الدفع', test: (r) => r.status === 'awaiting_payment' },
   { value: 'approved', label: 'المعتمدة', test: (r) => r.status === 'approved' },
 ];
 

@@ -8,7 +8,8 @@ import { coordinatesFromLink, normalizePhone } from '../validation.js';
 // Form fields that an existing Daftra client can fill. المنطقة is not one: whatever a client's saved
 // address says, it is the التصنيف, and the form works that out for itself.
 // نوع العميل and الجنس as Daftra has them: changed here, approving puts the change on the client
-const CLIENT_FIELDS = ['client_code', 'customer_name', 'phone', 'phone2', 'customer_type', 'gender', 'emirate', 'street', 'house', 'location_url'];
+// البريد only where the form asks for it of every client (طلب بيع - دفع إلكتروني); elsewhere it is a new client's alone
+const CLIENT_FIELDS = ['client_code', 'customer_name', 'phone', 'phone2', 'customer_type', 'gender', 'email', 'emirate', 'street', 'house', 'location_url'];
 const ADDRESS_FIELDS = ['emirate', 'street', 'house', 'location_url'];
 // Belongs to the address as much as the fields above: the coordinates come from its link, and
 // التصنيف decides its المنطقة and الإمارة. A new address starts without any of them.

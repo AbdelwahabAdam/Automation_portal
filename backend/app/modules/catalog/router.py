@@ -57,6 +57,13 @@ def delete_product(from_daftra: bool = False, product: Product = Depends(existin
     service.delete_product(db, who, product, from_daftra)
 
 
+@admin_router.get("/daftra-products/{daftra_id}")
+def daftra_product(daftra_id: int, db: Session = Depends(get_db)):
+    """One Daftra product, beside the number in the edit drawer: its name, price and picture, and
+    whether another catalog product already holds it."""
+    return service.daftra_product(db, daftra_id)
+
+
 @admin_router.get("/packages")
 def list_packages(db: Session = Depends(get_db)):
     return service.listed_packages(db)

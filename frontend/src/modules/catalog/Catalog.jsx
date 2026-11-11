@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import * as catalogApi from '../../api/catalog.js';
 import * as termsApi from '../../api/terms.js';
+import { DaftraLink } from './DaftraLink.jsx';
 import { TermsTab } from './Terms.jsx';
 import {
   Alert, Badge, Button, Checkbox, Drawer, EmptyState, Field, Loading, PageHeader, Pager, SearchInput, Select, Tabs, TextArea, TextInput,
@@ -17,7 +18,8 @@ const NEW_PRODUCT = { name: '', name_ar: '', description: '', unit_price: '', is
 const MAINTENANCE_GROUPS = ['الفلاتر', 'قطع الغيار', 'الهيد والميديا', 'الخدمات'];
 
 function ProductDrawer({ product, onSaved, onDeleted, onClose }) {
-  const [values, setValues] = useState(product || NEW_PRODUCT);
+  // daftra_id is held as typed text, so a half-typed number is not read as one
+  const [values, setValues] = useState(product ? { ...product, daftra_id: String(product.daftra_id ?? '') } : NEW_PRODUCT);
   const { error, busy, run } = useAction();
   const [confirmDialog, confirm] = useConfirm();
   // What is missing before the product can be saved, said here rather than by the server
@@ -29,12 +31,16 @@ function ProductDrawer({ product, onSaved, onDeleted, onClose }) {
     if (!values.name.trim()) return setProblem('اكتب اسم المنتج كما يظهر في الفاتورة.');
     if (!values.open_price && (String(values.unit_price).trim() === '' || Number(values.unit_price) < 0)) return setProblem('اكتب سعر الوحدة (صفر أو أكثر).');
     if (values.open_price && !values.description.trim()) return setProblem('اكتب نص البند: يبدأ به السطر في الطلب ويظهر في الفاتورة.');
+    const number = String(values.daftra_id ?? '').trim();
+    if (product && (product.daftra_id || number) && !/^[1-9]\d*$/.test(number)) return setProblem('اكتب رقم المنتج في دفترة بالأرقام. لا يمكن فك ربط منتج عن دفترة من هنا.');
     setProblem('');
     run('save', async () => {
       const body = {
         name: values.name, name_ar: values.name_ar, description: values.description,
         unit_price: values.open_price ? 0 : Number(values.unit_price),
         is_active: values.is_active, maintenance_group: values.maintenance_group || '', open_price: values.open_price,
+        // Only on an edit: a new product is given its Daftra product when it is created there
+        ...(product && number ? { daftra_id: Number(number) } : {}),
       };
       onSaved(product ? await catalogApi.updateProduct(product.id, body) : await catalogApi.createProduct(body));
     });
@@ -106,11 +112,8 @@ function ProductDrawer({ product, onSaved, onDeleted, onClose }) {
         {product && (
           <>
             <Checkbox checked={values.is_active} onChange={(v) => set('is_active', v)}>مفعّل</Checkbox>
-            <p className="fl-field__hint">
-              {product.daftra_id
-                ? <>في دفترة: رقم <bdi dir="ltr">{product.daftra_id}</bdi>{product.product_code && <>، كود <bdi dir="ltr">{product.product_code}</bdi></>}</>
-                : 'غير مربوط بمنتج في دفترة.'}
-            </p>
+            <DaftraLink value={values.daftra_id} saved={product.daftra_id} productId={product.id}
+              onChange={(typed) => set('daftra_id', typed)} />
           </>
         )}
       </form>

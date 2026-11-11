@@ -49,7 +49,8 @@ def connect() -> smtplib.SMTP:
     return server
 
 
-def send(to: str, subject: str, text: str, html: str):
+def send(to: str, subject: str, text: str, html: str, attachments: list[tuple[str, bytes, str]] = ()):
+    """attachments: (filename, content, MIME type) each, e.g. an invoice's PDF."""
     if not is_configured():
         raise MailError("Email is not configured")
     message = EmailMessage()
@@ -58,6 +59,9 @@ def send(to: str, subject: str, text: str, html: str):
     message["Subject"] = subject
     message.set_content(text)
     message.add_alternative(html, subtype="html")
+    for filename, content, mime in attachments:
+        maintype, _, subtype = mime.partition("/")
+        message.add_attachment(content, maintype=maintype, subtype=subtype or "octet-stream", filename=filename)
     try:
         with connect() as server:
             if settings.smtp_user:
@@ -74,11 +78,22 @@ EMAILS = {
     "login_code": {"label": "رمز التحقق عند الدخول", "subject": "{code} رمز التحقق — {portal_name}"},
     "request_returned": {"label": "إعادة طلب للتعديل", "subject": "الطلب رقم {request_id} يحتاج تعديلًا — {portal_name}"},
     "request_approved": {"label": "اعتماد طلب", "subject": "تم اعتماد الطلب رقم {request_id} — {portal_name}"},
+    # To the client, not to a user: their invoice, how much is due and the link to see it
+    "invoice_to_client": {"label": "إرسال الفاتورة للعميل", "subject": "الفاتورة #{invoice_no} من {company}"},
+}
+
+# How the company signs what goes to its clients
+COMPANY = {
+    "company": "FUTURE LIFE L.L.C O.P.C",
+    "company_address": ["United Arab Emirates – Al Ain City – Downtown – Hessa Bint Mohammed Street",
+                        "Opposite ADCB Bank and Al Ain Post Office", "ALAIN, Abu Dhabi 15975"],
+    "company_phone": "+971557404950",
 }
 
 
 def compose(name: str, **values) -> tuple[str, str, str]:
     """The subject, plain-text body and HTML body of one email."""
+    values = {**COMPANY, **values}
     subject = EMAILS[name]["subject"].format(portal_name=PORTAL_NAME, **values)
     return subject, *render(name, **values)
 
@@ -101,6 +116,8 @@ def compose_sample(name: str, to: str, full_name: str) -> tuple[str, str, str]:
         "link": f"{settings.public_url.rstrip('/')}/set-password?token=sample", "code": "123456", "minutes": 10,
         "request_id": 1234, "form_label": "طلب بيع لعميل جديد", "customer_name": "عميل تجريبي", "reviewer": "مدير المبيعات",
         "reason": "رقم هاتف العميل ناقص، وصورة إثبات الدفع غير واضحة. صحّح البيانات وأعد الإرسال.",
+        "invoice_no": "06538", "client_name": "عميل تجريبي", "due_date": "09/11/2026", "total": "1,250",
+        "due": "1,200",
     }
     if name.startswith("request_"):
         values["link"] = f"{settings.public_url.rstrip('/')}/requests/{values['request_id']}"

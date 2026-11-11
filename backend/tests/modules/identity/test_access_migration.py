@@ -25,8 +25,12 @@ _spec.loader.exec_module(migration)
 def test_the_forms_it_knows_are_the_forms_there_are():
     """A form added after the migration was written must not change what it does, but the list it
     was written against should still be today's — otherwise the mapping has gone stale."""
-    assert migration.FORMS == keys()
+    assert migration.FORMS == [key for key in keys() if key not in ADDED_LATER]
     assert set(migration.VISIBLE) <= set(migration.FORMS)
+
+
+# Forms added after this migration, each with the migration that gives roles access to it
+ADDED_LATER = {"online_sale": "0027_online_sale_access"}
 
 
 def test_a_role_that_opened_the_forms_may_fill_every_visible_one():

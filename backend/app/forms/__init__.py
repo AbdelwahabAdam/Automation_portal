@@ -6,6 +6,7 @@ order they appear in النماذج. To add a form, make its folder and add it h
 
 from . import (
     new_sale,
+    online_sale,
     contract_renewal,
     maintenance,
     balance_payment,
@@ -30,6 +31,7 @@ from . import (
 # they registered; this is only the modules themselves.
 FORMS = (
     new_sale,
+    online_sale,
     contract_renewal,
     maintenance,
     balance_payment,

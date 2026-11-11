@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import * as requestsApi from '../../api/requests.js';
-import { Alert, EmptyState, Icon, Loading, PageHeader, SearchInput } from '../../ds/index.jsx';
+import { Alert, Badge, EmptyState, Icon, Loading, PageHeader, SearchInput } from '../../ds/index.jsx';
 import { matchesQuery } from '../../ds/match.js';
 import { pagePath } from '../../app/nav.js';
 
@@ -64,13 +64,19 @@ export function FormsCatalog({ formTypes, onChoose }) {
               needs no change here */}
           {shown.map((type) => (
             <li key={type.key}>
-              <button type="button" className="fl-catalog-item" onClick={() => onChoose(type.key)}>
+              {/* A form not open yet (`ready=False`) is shown greyed out and cannot be started */}
+              <button
+                type="button" className={type.disabled ? 'fl-catalog-item fl-catalog-item--off' : 'fl-catalog-item'}
+                disabled={type.disabled} onClick={() => onChoose(type.key)}
+              >
                 <span className="fl-tile"><Icon name={type.icon || 'file'} size={20} /></span>
                 <span className="fl-catalog-item__text">
                   <span className="fl-catalog-item__title">{type.label}</span>
                   {type.description && <span className="fl-catalog-item__desc">{type.description}</span>}
                 </span>
-                <span className="fl-catalog-item__chevron"><Icon name="chevron-end" size={18} /></span>
+                {type.disabled
+                  ? <Badge tone="neutral" icon="clock">قريبًا</Badge>
+                  : <span className="fl-catalog-item__chevron"><Icon name="chevron-end" size={18} /></span>}
               </button>
             </li>
           ))}
