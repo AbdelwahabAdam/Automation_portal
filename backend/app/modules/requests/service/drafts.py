@@ -15,11 +15,7 @@ from .. import repo
 from ..labels import request_label
 from ..models import Request
 from . import access, review
-
-
-def filled(data: dict) -> dict:
-    """The answered fields only, so empty ones do not show up as changes in the audit log."""
-    return {key: value for key, value in data.items() if value not in (None, "", [])}
+from .review import filled
 
 
 def daftra_lists(form_type: str, db: Session) -> dict:

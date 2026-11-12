@@ -8,6 +8,9 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ...core.database import Base
 
+#: Deleted by a reviewer: the row stays, hidden everywhere but the activity log and the database
+DELETED = "deleted"
+
 
 class Request(Base):
     __tablename__ = "requests"
@@ -16,6 +19,8 @@ class Request(Base):
     form_type: Mapped[str] = mapped_column(String(50), index=True)
     data: Mapped[dict] = mapped_column(JSONB)
     # draft -> submitted -> returned (to the owner, with a reason) or approved; returned -> submitted again
+    # A reviewer may also delete one still in draft or submitted: it becomes DELETED, which is
+    # hidden from its owner and from المراجعة but keeps the row, so it can be put back.
     status: Mapped[str] = mapped_column(String(30), default="draft", index=True)
     # Goes up each time the request is submitted, so a decision applies to the version that was reviewed
     revision: Mapped[int] = mapped_column(default=0, server_default="0")

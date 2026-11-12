@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import * as reviewApi from '../../api/review.js';
 import {
-  Alert, Button, EmptyState, Field, Filters, PageHeader, SearchInput, Select, Skeleton, Tabs, TextInput, useWidth,
+  Alert, Button, Dialog, EmptyState, Field, Filters, PageHeader, SearchInput, Select, Skeleton, Tabs, TextArea,
+  TextInput, useWidth,
 } from '../../ds/index.jsx';
 import { matchesQuery } from '../../ds/match.js';
 import { BASIS_LABELS, basisDate, inPeriod } from './queue.js';
@@ -23,6 +24,11 @@ const TABS = [
 // the employees' drafts with a count per employee
 const REFRESH_MS = 60 * 1000;
 const inTab = (r, tab) => (tab === 'all' ? r.status !== 'draft' : r.status === tab);
+// What a reviewer of that form may delete: anything not approved. The server checks it again.
+const DELETABLE = ['draft', 'submitted', 'returned'];
+const canDelete = (r) => r.can_review && DELETABLE.includes(r.status);
+// Shorter than this is no reason anyone can act on later; the server asks for the same
+const MIN_REASON = 5;
 // A draft has not been sent: it goes by when it was last saved
 const dateOf = (r) => (r.status === 'draft' ? r.updated_at : r.submitted_at);
 
@@ -33,6 +39,11 @@ export default function Review({ user, sales, onOpen }) {
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  // The request a reviewer is about to delete, why, and what went wrong if it did
+  const [deleting, setDeleting] = useState(null);
+  const [reason, setReason] = useState('');
+  const [deleteError, setDeleteError] = useState('');
+  const [busy, setBusy] = useState(false);
   const [area, areaWidth] = useWidth();
   const tab = TABS.some((t) => t.value === params.get('tab')) ? params.get('tab') : 'submitted';
   // The filters live in the URL, so a card on لوحة المتابعة can open this screen on exactly the
@@ -82,10 +93,17 @@ export default function Review({ user, sales, onOpen }) {
   const labels = Object.fromEntries(sales.formTypes.map((type) => [type.key, type.label]));
   const employees = [...new Map(requests.map((r) => [r.created_by_id, r.created_by_name])).entries()];
   const shown = filtered.slice((page - 1) * pageSize, page * pageSize);
-  const action = (r) => {
-    if (r.status === 'submitted') return <Button size="sm" variant="primary" icon="eye" onClick={() => onOpen(r)}>مراجعة الطلب</Button>;
-    return <Button size="sm" icon="eye" onClick={() => onOpen(r)}>{r.status === 'draft' ? 'عرض المسودة' : 'عرض الطلب'}</Button>;
-  };
+  const action = (r) => (
+    <>
+      {r.status === 'submitted'
+        ? <Button size="sm" variant="primary" icon="eye" onClick={() => onOpen(r)}>مراجعة الطلب</Button>
+        : <Button size="sm" icon="eye" onClick={() => onOpen(r)}>{r.status === 'draft' ? 'عرض المسودة' : 'عرض الطلب'}</Button>}
+      {canDelete(r) && (
+        <Button size="sm" variant="destructive-secondary" icon="trash" aria-label={`حذف الطلب ${r.id}`}
+          onClick={() => { setDeleting(r); setReason(''); setDeleteError(''); }}>حذف</Button>
+      )}
+    </>
+  );
   // Each employee with drafts, and how many, most first
   const draftCounts = [...requests.filter((r) => r.status === 'draft').reduce((counts, r) => {
     const [name, count] = counts.get(r.created_by_id) || [r.created_by_name, 0];
@@ -168,6 +186,38 @@ export default function Review({ user, sales, onOpen }) {
       </Filters>
       <p className="fl-results">النتائج: {filtered.length} من {requests.filter((r) => inTab(r, tab)).length}</p>
       {list}
+      {deleting && (
+        <Dialog
+          title={`حذف الطلب رقم ${deleting.id}؟`} confirmLabel="حذف الطلب" tone="danger" busy={busy}
+          confirmDisabled={reason.trim().length < MIN_REASON}
+          onConfirm={async () => {
+            setBusy(true);
+            setDeleteError('');
+            try {
+              await reviewApi.deleteRequest(deleting.id, reason);
+              setDeleting(null);
+              await load();
+            } catch (err) {
+              setDeleteError(err.message);
+            } finally {
+              setBusy(false);
+            }
+          }}
+          onCancel={() => setDeleting(null)}
+        >
+          <div className="fl-stack fl-stack--sm">
+            <p className="fl-flush">
+              يختفي الطلب من قائمة <bdi>{deleting.created_by_name}</bdi> ومن هذه الصفحة، ويصله بريد بسبب الحذف.
+              يبقى محفوظًا في سجل النشاط ويمكن إرجاعه عند الحاجة.
+            </p>
+            {deleteError && <Alert tone="error">{deleteError}</Alert>}
+            <Field label="سبب الحذف" htmlFor="delete_reason" required hint="يظهر في سجل الطلب ويصل الموظف بالبريد.">
+              <TextArea id="delete_reason" rows={3} value={reason} maxLength={2000}
+                onChange={(e) => setReason(e.target.value)} />
+            </Field>
+          </div>
+        </Dialog>
+      )}
     </div>
   );
 }

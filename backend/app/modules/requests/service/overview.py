@@ -1,11 +1,11 @@
-"""لوحة المتابعة: the five numbers at the top of it, and the work still waiting on someone.
+"""لوحة المتابعة: the six numbers at the top of it, and the work still waiting on someone.
 
 Every number here is about the forms the manager may *review*. Holding عرض on a form shows its
 requests in المراجعة but puts nothing on this page: the page is about decisions that are owed.
 
 The period is read in UAE time, because that is the day the office works to. Both chosen days
-are inside it. Two of the five cards ignore the period on purpose — a backlog is what is waiting
-now, whenever it was sent.
+are inside it. Three of the six cards ignore the period on purpose — a backlog is what is
+waiting now, whenever it was sent.
 """
 
 from datetime import date, datetime, time, timedelta, timezone
@@ -151,6 +151,8 @@ def dashboard(db: Session, user, start: date, end: date, form_type: str = "",
             **period,
             "awaiting_review": repo.waiting_now(db, forms, employee_id, "submitted"),
             "awaiting_updates": repo.waiting_now(db, forms, employee_id, "returned"),
+            # Started and not sent: nobody is waiting on a decision, but the work is unfinished
+            "drafts": repo.waiting_now(db, forms, employee_id, "draft"),
         },
         # The same length of time immediately before, so each card can say which way it is going
         "before": {"from": earlier_start.isoformat(), "to": earlier_end.isoformat(),

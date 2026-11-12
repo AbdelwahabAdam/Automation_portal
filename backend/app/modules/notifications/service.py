@@ -78,6 +78,7 @@ EMAILS = {
     "login_code": {"label": "رمز التحقق عند الدخول", "subject": "{code} رمز التحقق — {portal_name}"},
     "request_returned": {"label": "إعادة طلب للتعديل", "subject": "الطلب رقم {request_id} يحتاج تعديلًا — {portal_name}"},
     "request_approved": {"label": "اعتماد طلب", "subject": "تم اعتماد الطلب رقم {request_id} — {portal_name}"},
+    "request_deleted": {"label": "حذف طلب", "subject": "حُذف الطلب رقم {request_id} — {portal_name}"},
     # To the client, not to a user: their invoice, how much is due and the link to see it
     "invoice_to_client": {"label": "إرسال الفاتورة للعميل", "subject": "الفاتورة #{invoice_no} من {company}"},
 }

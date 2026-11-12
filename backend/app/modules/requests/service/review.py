@@ -22,7 +22,7 @@ from ... import form_engine, notifications
 from ...audit import log as audit_log
 from .. import repo
 from ..labels import request_label
-from ..models import Request, RequestEvent
+from ..models import DELETED, Request, RequestEvent
 from . import access
 
 log = logging.getLogger(__name__)
@@ -33,10 +33,16 @@ EVENT_LABELS = {
     "resubmitted": "إعادة الإرسال بعد التعديل",
     "returned": "إعادة للتعديل",
     "approved": "اعتماد الطلب",
+    "deleted": "حذف الطلب",
     "invoice_emailed": "إرسال الفاتورة للعميل بالبريد",
 }
 # Shorter than this is not a reason the employee can act on
 MIN_REASON = 5
+
+
+def filled(data: dict) -> dict:
+    """The answered fields only, so empty ones do not show up as changes in the audit log."""
+    return {key: value for key, value in (data or {}).items() if value not in (None, "", [])}
 
 
 def form_label(form_type: str) -> str:
@@ -185,6 +191,48 @@ def return_to_owner(db: Session, who: Actor, request_id: int, revision: int, raw
               after={"status": "returned", "reason": reason, "email_sent": emailed})
     db.commit()
     return review_out(request)
+
+
+def notify_deleted(request: Request, reviewer, reason: str) -> bool:
+    """Tells the employee their request was deleted, and why. A failed email never blocks it."""
+    owner = request.created_by
+    if not owner.email or not owner.is_active:
+        return False
+    try:
+        notifications.send(owner.email, *notifications.compose(
+            "request_deleted", full_name=display_name(owner), request_id=request.id,
+            form_label=form_label(request.form_type),
+            customer_name=(request.data or {}).get("customer_name") or "—",
+            reviewer=display_name(reviewer), reason=reason))
+        return True
+    except notifications.MailError:
+        return False
+
+
+def delete_request(db: Session, who: Actor, request_id: int, raw_reason: str) -> dict:
+    """A reviewer deletes a request that has not been approved: a draft of one of their forms, one
+    sent in for review, or one returned to its owner for corrections.
+
+    The row stays, out of everyone's sight: a deleted request is in no list, no count and no
+    chart, and only an admin can still open it. What it was, who deleted it, when and why are in
+    its own history and in سجل النشاط, so it can be put back by hand if it should not have gone.
+    """
+    user = who.user
+    reason = raw_reason.strip()
+    if len(reason) < MIN_REASON:
+        raise Invalid("اكتب سبب الحذف بوضوح، فهو ما يُرجع إليه لاحقًا")
+    request = access.deletable(db, request_id, user)
+    was = request.status
+    request.status = DELETED
+    add_event(db, request, user, "deleted", reason)
+    db.flush()
+    emailed = notify_deleted(request, user, reason)
+    audit_log(db, who, "request.delete_by_reviewer", "request", request.id, request_label(request),
+              before={"status": was, "form_type": request.form_type, "owner": request.created_by_name,
+                      **filled(request.data)},
+              after={"status": DELETED, "reason": reason, "email_sent": emailed})
+    db.commit()
+    return {"id": request.id, "status": request.status, "email_sent": emailed}
 
 
 def run_action(db: Session, who: Actor, request_id: int, key: str, values: dict) -> dict:

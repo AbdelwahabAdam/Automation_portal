@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% from "_macros.html" import note %}
+{% block title %}طلب محذوف{% endblock %}
+{% block preheader %}حذف {{ reviewer }} الطلب رقم {{ request_id }}: {{ reason }}{% endblock %}
+{% block heading %}حُذف الطلب رقم {{ request_id }}{% endblock %}
+{% block content %}
+<p style="margin: 0 0 12px;">مرحبًا {{ full_name }}،</p>
+<p style="margin: 0 0 16px;">حذف <strong>{{ reviewer }}</strong> طلبك، فلم يعد يظهر في قائمة طلباتك.</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border: 1px solid #e5e7ef; border-radius: 8px;">
+  <tr>
+    <td style="padding: 12px 16px; font-family: Tahoma, 'Segoe UI', Arial, sans-serif; font-size: 13px; color: #6b7280; border-bottom: 1px solid #e5e7ef; width: 34%;">النموذج</td>
+    <td style="padding: 12px 16px; font-family: Tahoma, 'Segoe UI', Arial, sans-serif; font-size: 14px; color: #1f2937; border-bottom: 1px solid #e5e7ef;">{{ form_label }}</td>
+  </tr>
+  <tr>
+    <td style="padding: 12px 16px; font-family: Tahoma, 'Segoe UI', Arial, sans-serif; font-size: 13px; color: #6b7280;">العميل</td>
+    <td style="padding: 12px 16px; font-family: Tahoma, 'Segoe UI', Arial, sans-serif; font-size: 14px; color: #1f2937;">{{ customer_name }}</td>
+  </tr>
+</table>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 20px 0 0;">
+  <tr>
+    <td bgcolor="#fdf2f2" style="padding: 14px 16px; border-right: 4px solid #b91c1c; border-radius: 6px; font-family: Tahoma, 'Segoe UI', Arial, sans-serif; font-size: 14px; line-height: 1.8; color: #8f1d1d;">
+      <strong style="display: block; margin-bottom: 4px;">سبب الحذف</strong>{{ reason }}
+    </td>
+  </tr>
+</table>
+{{ note("إن كان الحذف في غير محله، راجع من حذفه أو مدير النظام؛ الطلب محفوظ ويمكن إرجاعه.") }}
+{% endblock %}

@@ -9,7 +9,7 @@ from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.orm import Session, selectinload
 
 from ...core.config import UPLOAD_DIR
-from .models import Attachment, Request, RequestDocument, RequestEvent
+from .models import DELETED, Attachment, Request, RequestDocument, RequestEvent
 
 
 def count_by_owner(db: Session, user_id: int) -> int:
@@ -18,8 +18,9 @@ def count_by_owner(db: Session, user_id: int) -> int:
 
 
 def by_owner(db: Session, user_id: int, limit: int = 200) -> list[Request]:
+    """Their own requests, newest first. One a reviewer deleted is gone from this list."""
     return list(db.scalars(
-        select(Request).where(Request.created_by_id == user_id)
+        select(Request).where(Request.created_by_id == user_id, Request.status != DELETED)
         .options(selectinload(Request.attachments), selectinload(Request.documents))
         .order_by(Request.updated_at.desc()).limit(limit)
     ))
@@ -27,7 +28,8 @@ def by_owner(db: Session, user_id: int, limit: int = 200) -> list[Request]:
 
 def counts_by_status(db: Session, user_id: int) -> dict:
     rows = db.execute(
-        select(Request.status, func.count()).where(Request.created_by_id == user_id).group_by(Request.status)
+        select(Request.status, func.count())
+        .where(Request.created_by_id == user_id, Request.status != DELETED).group_by(Request.status)
     )
     return dict(rows.all())
 
@@ -38,7 +40,7 @@ def queue(db: Session, form_types: list[str], limit: int = 1000) -> list[Request
     if not form_types:
         return []
     return list(db.scalars(
-        select(Request).where(Request.form_type.in_(form_types))
+        select(Request).where(Request.form_type.in_(form_types), Request.status != DELETED)
         .options(selectinload(Request.created_by), selectinload(Request.reviewed_by),
                  selectinload(Request.documents))
         .order_by(func.coalesce(Request.submitted_at, Request.updated_at).desc()).limit(limit)
@@ -91,9 +93,10 @@ APPROVED = ("approved", "awaiting_payment")
 def _scoped(stmt, form_types: list[str], employee_id: int | None):
     """Narrows a query to the forms the manager may review and, if one is picked, to one employee.
 
-    The employee is the request's own — who wrote it — never whoever reviewed it.
+    The employee is the request's own — who wrote it — never whoever reviewed it. A deleted
+    request counts nowhere on the page: not as sent, not as waiting, not in the trend.
     """
-    stmt = stmt.where(Request.form_type.in_(form_types))
+    stmt = stmt.where(Request.form_type.in_(form_types), Request.status != DELETED)
     return stmt if employee_id is None else stmt.where(Request.created_by_id == employee_id)
 
 
@@ -176,7 +179,7 @@ def owners(db: Session, form_types: list[str]) -> list[Request]:
         return []
     return list(db.scalars(
         select(Request).options(selectinload(Request.created_by))
-        .where(Request.form_type.in_(form_types), Request.status != "draft")
+        .where(Request.form_type.in_(form_types), Request.status.not_in(("draft", DELETED)))
         .ext(distinct_on(Request.created_by_id)).order_by(Request.created_by_id, Request.id)))
 
 

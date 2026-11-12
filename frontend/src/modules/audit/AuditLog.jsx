@@ -7,7 +7,8 @@ import { formatDate } from '../../lib/format.js';
 
 const NO_FILTERS = { user_id: '', action: '', entity_type: '', date_from: '', date_to: '', search: '' };
 const FAILED = new Set(['auth.login_failed']);
-const DELETES = new Set(['user.delete', 'role.delete', 'request.delete', 'attachment.delete', 'product.delete', 'package.delete']);
+const DELETES = new Set(['user.delete', 'role.delete', 'request.delete', 'request.delete_by_reviewer',
+  'attachment.delete', 'product.delete', 'package.delete']);
 
 function queryOf(filters, extra = {}) {
   const filled = Object.entries({ ...filters, ...extra }).filter(([, value]) => value !== '');

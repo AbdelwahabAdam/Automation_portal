@@ -162,10 +162,14 @@ function History({ events }) {
   );
 }
 
-// Approve, or return to the salesperson with a reason; the decision is tied to the revision on screen
+// What a reviewer may delete: anything not approved. The server checks the same.
+const DELETABLE = ['draft', 'submitted', 'returned'];
+
+// Approve, or return to the salesperson with a reason; the decision is tied to the revision on screen.
+// A reviewer of the form may also delete one still waiting, which hides it from its owner too.
 // daftraNote: what approving creates in Daftra, from the form's definition (backend/app/forms/<key>/__init__.py "daftra_note")
-function ReviewActions({ request, own, daftraNote, onDone }) {
-  // null | 'approve' | 'return'
+function ReviewActions({ request, own, mayReview, daftraNote, onDone }) {
+  // null | 'approve' | 'return' | 'delete'
   const [asking, setAsking] = useState(null);
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
@@ -175,6 +179,11 @@ function ReviewActions({ request, own, daftraNote, onDone }) {
     setBusy(true);
     setError('');
     try {
+      if (kind === 'delete') {
+        await reviewApi.deleteRequest(request.id, reason);
+        onDone(`تم حذف الطلب رقم ${request.id}.`);
+        return;
+      }
       const body = kind === 'approve' ? { revision: request.revision } : { revision: request.revision, reason };
       await reviewApi.decide(request.id, kind, body);
       onDone(kind === 'approve' ? `تم اعتماد الطلب رقم ${request.id}.` : `تمت إعادة الطلب رقم ${request.id} للتعديل.`);
@@ -185,18 +194,48 @@ function ReviewActions({ request, own, daftraNote, onDone }) {
     }
   }
 
-  if (request.status !== 'submitted') return null;
+  const sent = request.status === 'submitted';
+  // Deleting is the reviewer's own, and unlike a decision it is allowed on one's own request
+  const mayDelete = mayReview && DELETABLE.includes(request.status);
+  if (!sent && !mayDelete) return null;
   return (
     <>
-      <ActionBar message={(own || error) && (
+      <ActionBar message={((own && sent) || error) && (
         <>
-          {own && <Alert tone="info">هذا طلبك؛ يراجعه مدير آخر.</Alert>}
+          {own && sent && <Alert tone="info">هذا طلبك؛ يراجعه مدير آخر.</Alert>}
           {error && <Alert tone="error">{error}</Alert>}
         </>
       )}>
-        <Button variant="primary" icon="check-circle" disabled={own} onClick={() => setAsking('approve')}>اعتماد الطلب</Button>
-        <Button icon="arrow-start" disabled={own} onClick={() => setAsking('return')}>إعادة للتعديل</Button>
+        {sent && (
+          <>
+            <Button variant="primary" icon="check-circle" disabled={own} onClick={() => setAsking('approve')}>اعتماد الطلب</Button>
+            <Button icon="arrow-start" disabled={own} onClick={() => setAsking('return')}>إعادة للتعديل</Button>
+          </>
+        )}
+        {mayDelete && (
+          <span className="fl-push">
+            <Button variant="destructive-secondary" icon="trash" onClick={() => { setReason(''); setAsking('delete'); }}>
+              حذف الطلب
+            </Button>
+          </span>
+        )}
       </ActionBar>
+      {asking === 'delete' && (
+        <Dialog
+          title={`حذف الطلب رقم ${request.id}؟`} confirmLabel="حذف الطلب" tone="danger" busy={busy}
+          confirmDisabled={reason.trim().length < 5}
+          onConfirm={() => decide('delete')} onCancel={() => setAsking(null)}
+        >
+          <div className="fl-stack fl-stack--sm">
+            <p className="fl-flush">
+              يختفي الطلب من قائمة صاحبه ومن المراجعة، ويصله بريد بسبب الحذف. يبقى محفوظًا في سجل النشاط ويمكن إرجاعه.
+            </p>
+            <Field label="سبب الحذف" htmlFor="delete_reason" required hint="يظهر في سجل الطلب ويصل الموظف بالبريد.">
+              <TextArea id="delete_reason" rows={3} value={reason} onChange={(e) => setReason(e.target.value)} maxLength={2000} />
+            </Field>
+          </div>
+        </Dialog>
+      )}
       {asking === 'approve' && (
         <Dialog title="اعتماد الطلب؟" confirmLabel="اعتماد" busy={busy} onConfirm={() => decide('approve')} onCancel={() => setAsking(null)}>
           بعد الاعتماد لا يمكن تعديل الطلب، ويصل إشعار بالبريد إلى الموظف.
@@ -420,7 +459,10 @@ export default function RequestView({ requestId, formTypes, onBack, ownerName: g
           </Card>
         );
       })}
-      {review && <ReviewActions request={request} own={review.own(request)} daftraNote={formType.daftra_note} onDone={review.onDone} />}
+      {review && (
+        <ReviewActions request={request} own={review.own(request)} mayReview={formType.may_review}
+          daftraNote={formType.daftra_note} onDone={review.onDone} />
+      )}
       <FormActions request={request} actions={formType.actions} onDone={(message) => { toast(message); load(); }} />
     </div>
     {/* Beside the sections on a wide screen, under them on a narrow one */}

@@ -66,3 +66,8 @@ class ActionIn(BaseModel):
 
 class ReturnIn(DecisionIn):
     reason: str = Field(min_length=1, max_length=2000)
+
+
+class DeleteIn(BaseModel):
+    # Why it was deleted: kept in the request's history, in سجل النشاط and in the owner's email
+    reason: str = Field(min_length=1, max_length=2000)

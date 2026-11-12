@@ -36,3 +36,15 @@ def approve(request_id: int, body: schemas.DecisionIn, who: Actor = Depends(acti
 def return_request(request_id: int, body: schemas.ReturnIn, who: Actor = Depends(acting(reviewer)),
                    db: Session = Depends(get_db)):
     return review.return_to_owner(db, who, request_id, body.revision, body.reason)
+
+
+@router.post("/review/requests/{request_id}/delete")
+def delete_request(request_id: int, body: schemas.DeleteIn, who: Actor = Depends(acting(reviewer)),
+                   db: Session = Depends(get_db)):
+    """Deletes a request that has not been approved — a draft, one sent in, or one returned for
+    corrections — with the reason why.
+
+    Only a reviewer of that request's own form may; the request is then hidden from its owner
+    and from المراجعة, and its owner is told by email.
+    """
+    return review.delete_request(db, who, request_id, body.reason)

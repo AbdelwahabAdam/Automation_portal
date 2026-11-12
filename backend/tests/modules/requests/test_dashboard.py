@@ -58,7 +58,7 @@ def cards(client, user, **params):
     return ask(client, user, **params)["cards"]
 
 
-def test_the_five_cards_count_their_own_periods(client, db, sales, manager):
+def test_the_six_cards_count_their_own_periods(client, db, sales, manager):
     # Sent and approved inside the period: counted by both
     make(db, sales, sent=at(2, 9), decided=at(2, 12), decided_by=manager, status="approved")
     # Sent before the period, approved inside it: approved only
@@ -69,8 +69,10 @@ def test_the_five_cards_count_their_own_periods(client, db, sales, manager):
     # Returned to the employee and not sent again
     make(db, sales, sent=at(4, 9), decided=at(4, 15), decided_by=manager, status="returned",
          decision="returned", reason="استكمال عنوان العميل")
+    # One the employee is still writing: waiting on nobody, but not sent either
+    make(db, sales, sent=None, status="draft")
     assert cards(client, manager) == {
-        "submitted": 3, "approved": 2, "awaiting_review": 1, "awaiting_updates": 1,
+        "submitted": 3, "approved": 2, "awaiting_review": 1, "awaiting_updates": 1, "drafts": 1,
         # Waits of 3h, 96h and 6h: the middle one. A return is a decision too.
         "review_hours": 6.0, "review_count": 3,
     }
@@ -108,7 +110,8 @@ def test_the_review_time_is_the_middle_of_an_even_number_of_waits(client, db, sa
 
 def test_an_empty_month_counts_nothing_and_says_so(client, db, manager):
     assert cards(client, manager) == {"submitted": 0, "approved": 0, "awaiting_review": 0,
-                                      "awaiting_updates": 0, "review_hours": None, "review_count": 0}
+                                      "awaiting_updates": 0, "drafts": 0, "review_hours": None,
+                                      "review_count": 0}
 
 
 def test_the_days_belong_to_the_office_not_to_utc(client, db, sales, manager):

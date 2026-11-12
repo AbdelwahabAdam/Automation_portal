@@ -34,6 +34,7 @@ ACTIONS = {
     "request.update": "تعديل مسودة طلب",
     "request.submit": "إرسال طلب",
     "request.delete": "حذف مسودة طلب",
+    "request.delete_by_reviewer": "حذف طلب (مراجعة)",
     "request.approve": "اعتماد طلب",
     "request.daftra_failed": "تعذر إنشاء الفاتورة في دفترة",
     "request.return": "إعادة طلب للتعديل",

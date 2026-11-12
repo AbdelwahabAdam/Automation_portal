@@ -824,8 +824,10 @@ body.fl-keyboard .fl-toasts { inset-block-end: var(--fl-space-4); }
 
 /* ---------- لوحة المتابعة ---------- */
 /* Five cards in one row on a desktop, folding to two and then one without the page scrolling sideways */
-.fl-stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--fl-space-4); }
-@media (max-width: 1100px) { .fl-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* Six cards, three and three: a row of six is too thin to read a number in, and an uneven
+   last row reads as though a card were missing */
+.fl-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--fl-space-4); }
+@media (max-width: 900px) { .fl-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 560px) { .fl-stats { grid-template-columns: minmax(0, 1fr); } }
 /* While it is reading itself again, the numbers on screen stay put and fade */
 .fl-stats--loading { opacity: 0.6; }

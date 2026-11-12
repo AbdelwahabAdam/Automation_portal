@@ -30,8 +30,8 @@ const TABS = [
   { value: 'returned', label: 'بانتظار التعديل' },
 ];
 
-// The five cards, in the order they are read. `period` says whether the dates apply to it: the
-// two backlog cards are about now, whenever the work was sent.
+// The six cards, in the order they are read. `period` says whether the dates apply to it: the
+// three backlog cards are about now, whenever the work was sent.
 const CARDS = [
   {
     key: 'submitted', title: 'الطلبات المرسلة', icon: 'send', period: true, sub: 'أول إرسال خلال الفترة',
@@ -52,6 +52,11 @@ const CARDS = [
     key: 'awaiting_updates', title: 'بانتظار تعديل الموظف', icon: 'history', period: false, sub: 'أُعيدت ولم تُرسل مجددًا',
     info: 'الطلبات المُعادة إلى الموظف التي لم تُرسل مرة أخرى بعد. لا تتأثر بالفترة الزمنية.',
     opens: { tab: 'returned' },
+  },
+  {
+    key: 'drafts', title: 'المسودات', icon: 'file', period: false, sub: 'بدأها الموظفون ولم تُرسل',
+    info: 'النماذج التي حفظها الموظفون دون إرسالها. لا أحد ينتظر قرارًا عليها، لكنها عمل لم يصل بعد. لا تتأثر بالفترة الزمنية.',
+    opens: { tab: 'draft' },
   },
   {
     key: 'review_hours', title: 'زمن المراجعة', icon: 'clock', period: true, sub: 'الوسيط حتى أول قرار',
@@ -82,7 +87,7 @@ function Delta({ card, cards, before }) {
   );
 }
 
-/** One of the five cards. A card with nothing to show still opens its (empty) list. */
+/** One of the six cards. A card with nothing to show still opens its (empty) list. */
 function StatCard({ card, cards, before, onOpen }) {
   const isTime = card.key === 'review_hours';
   const value = cards[card.key];
@@ -240,7 +245,7 @@ export default function Dashboard({ onOpenRequest, onOpenList }) {
           </Field>
         </Filters>
         <p className="fl-flush fl-small fl-muted">
-          الفترة الزمنية تخص المرسلة والمعتمدة وزمن المراجعة • كارتا الانتظار يعرضان الوضع الحالي
+          الفترة الزمنية تخص المرسلة والمعتمدة وزمن المراجعة • كروت الانتظار والمسودات تعرض الوضع الحالي
         </p>
       </section>
 

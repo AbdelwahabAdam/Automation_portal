@@ -449,7 +449,9 @@ async function discountInitiative(page, prefix) {
 // Every field each visible form defines is on the screen
 async function everyField(page, prefix) {
   const types = await page.evaluate(async (token) => (await fetch('/api/form-types', { headers: { Authorization: `Bearer ${token}` } })).json(), TOKEN);
-  for (const type of types.filter((t) => !t.hidden)) {
+  // A form still being built (its definition's ready=False) has a disabled card on /forms:
+  // nothing opens it, so there are no fields of its to check
+  for (const type of types.filter((t) => !t.hidden && !t.disabled)) {
     await page.goto(`${BASE}/forms`);
     await page.getByText(type.label).first().click();
     await page.getByRole('button', { name: 'فتح كل الأقسام' }).click();

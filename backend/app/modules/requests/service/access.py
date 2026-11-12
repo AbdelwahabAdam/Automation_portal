@@ -9,10 +9,14 @@ from sqlalchemy.orm import Session
 from ....core.errors import Conflict, Forbidden, NotFound
 from ....core.permissions import REVIEW, SUBMIT, VIEW
 from ... import form_engine
-from ..models import Attachment, Request
+from ..models import DELETED, Attachment, Request
 
 # A request its owner may still change: a draft, or one returned for corrections
 EDITABLE = ("draft", "returned")
+# What a reviewer may delete: anything that has not been approved. An approved request has made
+# documents in Daftra — an invoice, a receipt, a work order — so deleting it here would leave
+# them behind with nothing pointing at them.
+DELETABLE = ("draft", "submitted", "returned")
 # What the owner is told when they no longer hold the form they made the request with
 LOST_ACCESS = "لم تعد لديك صلاحية تعبئة هذا النموذج، فلا يمكنك تعديل الطلب. تواصل مع مدير النظام."
 
@@ -23,7 +27,13 @@ def may(user, form_type: str, does: str) -> bool:
 
 def can_view(request: Request, user) -> bool:
     """Its owner always — even after losing the form — and anyone holding view or review on that
-    request's own form. A reviewer only reads a draft; only the owner can change one."""
+    request's own form. A reviewer only reads a draft; only the owner can change one.
+
+    One a reviewer deleted is hidden from everyone but an admin, who can still open it to see
+    what was deleted before putting it back.
+    """
+    if request.status == DELETED:
+        return bool(user.is_admin)
     if request.created_by_id == user.id:
         return True
     return may(user, request.form_type, VIEW) or may(user, request.form_type, REVIEW)
@@ -87,6 +97,25 @@ def viewable_attachment(db: Session, attachment_id: int, user) -> Attachment:
 
 def can_review(request: Request, user) -> bool:
     return may(user, request.form_type, REVIEW)
+
+
+def can_delete(request: Request, user) -> bool:
+    """Deleting is the reviewer's: holding مراجعة on that request's own form, and only while the
+    request is still waiting — a draft or one sent in."""
+    return request.status in DELETABLE and can_review(request, user)
+
+
+def deletable(db: Session, request_id: int, user) -> Request:
+    """The request a reviewer is about to delete, or why they may not."""
+    request = db.get(Request, request_id)
+    if request is None or request.status == DELETED or not can_review(request, user):
+        # Holding no review on that form answers as though it were not there, the same way
+        # deciding does, so the forms a manager does not keep stay invisible to them
+        raise NotFound("الطلب غير موجود")
+    if request.status not in DELETABLE:
+        raise Conflict("لا يمكن حذف طلب معتمد: له فواتير وأوامر عمل في دفترة. "
+                       "يمكن حذف المسودات والطلبات قيد المراجعة والتي تحتاج تعديلًا.")
+    return request
 
 
 def check_can_decide(request: Request, user, revision: int) -> Request:
