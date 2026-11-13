@@ -609,9 +609,9 @@ def test_a_quotation_approved_again_makes_no_second_estimate(client, db, fake_da
     request.forget_document("estimate")
     db.commit()
     # Approving an approved request is refused, so the step is asked to run again on its own
-    from app.forms.quotation import hooks
+    from app.forms.quotation import output
     from app.modules.form_engine import ApprovalContext
-    hooks.on_approve(ApprovalContext(request=request, db=db, reviewer=manager))
+    output.on_approve(ApprovalContext(request=request, db=db, reviewer=manager))
     assert len(fake_daftra.posted("/api2/estimates.json")) == 1
 
 

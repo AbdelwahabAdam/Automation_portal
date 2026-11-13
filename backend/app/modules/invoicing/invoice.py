@@ -13,10 +13,11 @@ from ...core.config import UPLOAD_DIR, settings
 from ...integrations.daftra import DaftraError, NotFound
 from ..form_engine import NO_INSCRIPTION, package_quantity
 from ..catalog import Product
-from ...core.text import day_month_year, squash
+from ...core.text import day_month_year
 from .common import (INVOICE_ATTACHMENT_FIELD, RECEIPT_ATTACHMENT_FIELD, TOTAL_TOLERANCE, 
-                     attach_pdf, made_before_the_request, marker, money, printed_terms, sales_person,
-                     sales_person_name, terms_to_print)
+                     attach_pdf, made_before_the_request, marker, money, printed_terms,
+                     staff_name)
+from .documents import Invoice, Receipt
 
 
 def invoice_address(data: dict) -> dict:
@@ -91,15 +92,16 @@ def find_invoice(request) -> int | None:
                  and not made_before_the_request(request, row["Invoice"].get("created"))), None)
 
 
-def ensure_invoice(request, items: list[dict], staff_id: int) -> dict:
-    """Sends no «notes»: Daftra shows them in the invoice's الشروط والأحكام box, which holds only
+def make_invoice(request, doc: Invoice) -> dict:
+    """The request's invoice in Daftra, made once however often the request is approved.
+
+    Sends no «notes»: Daftra shows them in the invoice's الشروط والأحكام box, which holds only
     the terms its packages print (html_notes, see modules/terms), or nothing. The form's ملاحظات
     stay on the request in the portal.
 
-    staff_id: the salesperson who sent the request. Daftra shows them twice, as it does on the
-    receipt: «بيعت بواسطة» (sales_person_id) and «أنشئ بواسطة» (staff_id). Without the second one
+    doc.sales_person: the salesperson who sent the request. Daftra shows them twice, as it does on
+    the receipt: «بيعت بواسطة» (sales_person_id) and «أنشئ بواسطة» (staff_id). Without the second one
     Daftra writes the API key's own identity there, which reads «The API»."""
-    data = request.data
     invoice = None
     if request.daftra_invoice_id is not None:
         try:
@@ -121,30 +123,30 @@ def ensure_invoice(request, items: list[dict], staff_id: int) -> dict:
         if request.daftra_invoice_id is None:
             fields = {
                 # Offline like every invoice on the account: not emailed, so the client needs no email
-                "client_id": request.daftra_client_id, "date": data.get("request_date"), "draft": 0, "is_offline": 1,
+                "client_id": request.daftra_client_id, "date": doc.date, "draft": 0, "is_offline": 1,
                 "currency_code": "AED", "store_id": settings.daftra_store_id, "branch_id": settings.daftra_branch_id,
-                "sales_person_id": staff_id, "staff_id": staff_id, "po_number": marker(request),
+                "sales_person_id": doc.sales_person, "staff_id": doc.sales_person, "po_number": marker(request),
                 # The address this request is for, printed on the invoice. Without it the invoice
                 # carries whatever the client record holds, which may be another of their addresses
                 # or nothing at all. Sent only when the form has one, so it can never blank it.
-                **invoice_address(data),
+                **doc.address,
                 # Left out rather than sent empty when the form does not ask for it, or does not insist
-                **({"order_source_id": data["order_source"]} if data.get("order_source") else {}),
+                **({"order_source_id": doc.order_source} if doc.order_source else {}),
             }
-            discount = money(data.get("discount_amount"))
+            discount = money(doc.discount)
             if discount > 0:
-                fields["adjustment_label"] = data.get("discount_label") or "خصم"
+                fields["adjustment_label"] = doc.discount_label or "خصم"
                 fields["adjustment_value"] = float(-discount)
-            term = terms_to_print(request)
+            term = doc.terms
             if term is not None:
                 fields["html_notes"] = printed_terms.as_html(term.body)
             request.save_document(
-                "invoice", daftra.create("invoices.json", {"Invoice": fields, "InvoiceItem": items}))
+                "invoice", daftra.create("invoices.json", {"Invoice": fields, "InvoiceItem": list(doc.items)}))
             request.printed_terms_id, request.printed_terms = (term.id, term.label) if term else (None, None)
         invoice = get_invoice(request.daftra_invoice_id)
     request.save_document("invoice", request.daftra_invoice_id, invoice.get("no") or "")
 
-    expected, actual = money(data.get("total_amount")), money(invoice.get("summary_total"))
+    expected, actual = money(doc.total), money(invoice.get("summary_total"))
     if abs(expected - actual) > TOTAL_TOLERANCE:
         raise SyncError(
             f"أُنشئت الفاتورة {request.daftra_invoice_no} في دفترة لكن إجماليها {actual} لا يساوي إجمالي الطلب "
@@ -213,22 +215,23 @@ def payment_of(request, invoice: dict) -> int | None:
                  if (p.get("notes") or "").strip().splitlines()[:1] == [marker(request)]), None)
 
 
-def ensure_payment(request, invoice: dict, paid: Decimal, method: str, notes: str = ""):
-    """notes: for a form whose only record in Daftra is this payment, so its ملاحظات has a home.
-    The marker stays the first line, which is what finds the payment again."""
-    data = request.data
+def make_payment(request, invoice: dict, receipt: Receipt):
+    """The receipt (سند قبض) against the request's invoice, made once.
+
+    receipt.notes: for a form whose only record in Daftra is this payment, so its ملاحظات has a
+    home. The marker stays the first line, which is what finds the payment again."""
     existing = payment_of(request, invoice)
     if existing:
         request.save_document("payment", existing)
     else:
         fields = {
-            "invoice_id": request.daftra_invoice_id, "amount": float(paid), "payment_method": method,
-            "treasury_id": data.get("treasury"), "date": data.get("payment_date"),
-            "transaction_id": data.get("payment_reference") or "",
-            "notes": "\n".join([marker(request), *([notes] if notes else [])]),
+            "invoice_id": request.daftra_invoice_id, "amount": float(receipt.paid),
+            "payment_method": receipt.method_key, "treasury_id": receipt.treasury, "date": receipt.date,
+            "transaction_id": receipt.reference or "",
+            "notes": "\n".join([marker(request), *([receipt.notes] if receipt.notes else [])]),
             # Daftra prints this staff member as the receipt's المستلم: the salesperson who sent the
             # request, not the manager approving it. Without one it prints "API", so one is required.
-            "staff_id": sales_person(request),
+            "staff_id": receipt.received_by,
         }
         request.save_document("payment",
                               daftra.create("invoice_payments.json", {"InvoicePayment": fields}))
@@ -236,19 +239,18 @@ def ensure_payment(request, invoice: dict, paid: Decimal, method: str, notes: st
     request.save_document("payment", request.daftra_payment_id, row.get("code") or "")
 
 
-def save_receipt_pdf(request, invoice: dict, paid: Decimal, db: Session) -> bool:
+def save_receipt_pdf(request, invoice: dict, receipt: Receipt, db: Session) -> bool:
     """Attaches the receipt PDF once. Like the invoice PDF, failing to make it does not stop the approval."""
     if not request.daftra_receipt_no or any(a.field == RECEIPT_ATTACHMENT_FIELD for a in request.attachments):
         return bool(request.daftra_receipt_no)
-    data = request.data
-    day = str(data.get("payment_date") or "")
+    day = str(receipt.date or "")
     try:
         content = printouts.receipt(
-            number=request.daftra_receipt_no, date=day_month_year(day),
-            client=squash(data.get("customer_name")),
-            amount=f"{paid:,.2f}".removesuffix(".00"), method=data.get("payment_method") or "",
-            invoice_no=request.daftra_invoice_no or "", receiver=sales_person_name(request),
-            treasury=data.get("treasury_name") or "",
+            number=request.daftra_receipt_no, date=day_month_year(day), client=receipt.client_name,
+            amount=f"{receipt.paid:,.2f}".removesuffix(".00"), method=receipt.method or "",
+            invoice_no=request.daftra_invoice_no or "",
+            receiver=staff_name(receipt.received_by, request.created_by),
+            treasury=receipt.treasury_name or "",
         )
     except printouts.PrintoutError:
         return False
@@ -256,18 +258,18 @@ def save_receipt_pdf(request, invoice: dict, paid: Decimal, db: Session) -> bool
     return True
 
 
-def finish(request, invoice: dict, paid: Decimal, method: str | None, db: Session,
-           payment_notes: str = "") -> dict:
+def finish_invoice(request, invoice: dict, receipt: Receipt | None, db: Session) -> dict:
     """The steps every request shares once its invoice exists: the payment, the receipt, both PDFs.
 
-    payment_notes: passed on to the payment, for a form that makes no invoice of its own."""
+    receipt None: nothing was paid now, so no payment is made and no receipt drawn."""
+    paid = receipt.paid if receipt is not None else Decimal(0)
     if paid > 0 and request.daftra_payment_id is None:
-        ensure_payment(request, invoice, paid, method, notes=payment_notes)
+        make_payment(request, invoice, receipt)
         invoice = get_invoice(request.daftra_invoice_id)
     # Daftra draws the PDF from the invoice as it stands, so it is taken after the payment: taken
     # before, «مدفوع» reads 0 and «الرصيد المستحق» the whole total, whatever the client just paid
     pdf_saved = save_invoice_pdf(request, invoice, db)
-    receipt_saved = paid > 0 and save_receipt_pdf(request, invoice, paid, db)
+    receipt_saved = paid > 0 and save_receipt_pdf(request, invoice, receipt, db)
     return {"daftra_invoice_no": request.daftra_invoice_no, "daftra_receipt_no": request.daftra_receipt_no,
             "invoice_pdf_saved": pdf_saved, "receipt_pdf_saved": receipt_saved,
             "payment_proof_sent": send_payment_proof(request, invoice)}

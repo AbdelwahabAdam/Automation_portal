@@ -1,0 +1,365 @@
+{
+ "actions": [],
+ "daftra_note": "",
+ "description": "تسجيل طلب إعادة تركيب",
+ "disabled": false,
+ "hidden": true,
+ "icon": "refresh",
+ "invoiced": false,
+ "key": "reinstallation",
+ "label": "طلب إعادة تركيب",
+ "sections": [
+  {
+   "fields": [
+    {
+     "default": "today",
+     "label": "تاريخ الطلب",
+     "name": "request_date",
+     "not_future": true,
+     "required": true,
+     "type": "date"
+    },
+    {
+     "label": "اسم الموظف",
+     "name": "employee_name",
+     "required": false,
+     "type": "auto_user"
+    },
+    {
+     "label": "مصدر الطلب",
+     "name": "source",
+     "options": [
+      "ماركتنج",
+      "عميل شركة",
+      "عميل جديد",
+      "عميل سابق",
+      "مكتب",
+      "الموقع",
+      "أخرى"
+     ],
+     "required": true,
+     "type": "select"
+    }
+   ],
+   "note": null,
+   "title": "بيانات الطلب"
+  },
+  {
+   "fields": [
+    {
+     "label": "رقم الهاتف",
+     "name": "phone",
+     "required": true,
+     "type": "phone"
+    },
+    {
+     "label": "رقم مسؤول اخر",
+     "name": "phone2",
+     "required": false,
+     "type": "phone"
+    },
+    {
+     "label": "كود العميل",
+     "name": "client_code",
+     "pattern": "^\\d{1,6}$",
+     "pattern_message": "أرقام فقط، حتى 6 خانات",
+     "required": true,
+     "type": "text"
+    },
+    {
+     "label": "اسم العميل",
+     "max_length": 150,
+     "name": "customer_name",
+     "required": true,
+     "type": "text"
+    },
+    {
+     "dropdown": true,
+     "label": "نوع العميل",
+     "name": "customer_type",
+     "options": [
+      "فرد",
+      "تجاري"
+     ],
+     "required": false,
+     "type": "select"
+    },
+    {
+     "dropdown": true,
+     "label": "الجنس",
+     "name": "gender",
+     "options": [
+      "ذكر",
+      "أنثى"
+     ],
+     "required": false,
+     "type": "select"
+    }
+   ],
+   "note": null,
+   "title": "بيانات العميل"
+  },
+  {
+   "fields": [
+    {
+     "label": "التصنيف",
+     "name": "category",
+     "required": true,
+     "type": "daftra_client_category"
+    },
+    {
+     "from_category": "category",
+     "label": "المنطقة",
+     "max_length": 100,
+     "name": "area",
+     "readonly": true,
+     "required": true,
+     "type": "text"
+    },
+    {
+     "label": "الإمارة",
+     "name": "emirate",
+     "options": [
+      "أبوظبي",
+      "العين",
+      "دبي",
+      "الشارقة",
+      "عجمان",
+      "أم القيوين",
+      "رأس الخيمة",
+      "الفجيرة"
+     ],
+     "required": true,
+     "type": "select"
+    },
+    {
+     "label": "الشارع",
+     "name": "street",
+     "required": false,
+     "type": "text"
+    },
+    {
+     "label": "رقم البيت / اسم الموقع",
+     "name": "house",
+     "required": false,
+     "type": "text"
+    },
+    {
+     "label": "موقع العميل",
+     "max_length": 255,
+     "name": "location_url",
+     "pattern": "^https?://\\S+$",
+     "pattern_message": "الصق رابط الموقع من خرائط جوجل",
+     "placeholder": "https://maps.app.goo.gl/…",
+     "required": true,
+     "type": "text"
+    },
+    {
+     "coordinates_from": "location_url",
+     "label": "الإحداثيات",
+     "ltr": true,
+     "max_length": 100,
+     "name": "coordinates",
+     "placeholder": "مثال: 24.178700, 55.604510",
+     "required": true,
+     "type": "text"
+    }
+   ],
+   "note": null,
+   "title": "عنوان التركيب الجديد"
+  },
+  {
+   "fields": [
+    {
+     "label": "رقم الطلب الأصلي، إن توفر",
+     "name": "original_order",
+     "required": false,
+     "type": "text"
+    },
+    {
+     "label": "رقم الفاتورة الأصلية، إن توفر",
+     "name": "original_invoice",
+     "required": false,
+     "type": "text"
+    },
+    {
+     "label": "رقم أمر الشغل، إن توفر",
+     "name": "work_order",
+     "required": false,
+     "type": "text"
+    },
+    {
+     "label": "المنتج / الجهاز المطلوب إعادة تركيبه",
+     "name": "product_name",
+     "required": true,
+     "type": "product"
+    },
+    {
+     "label": "سبب إعادة التركيب",
+     "name": "reinstall_reason",
+     "options": [
+      "نقل إلى عنوان جديد",
+      "إعادة تركيب بعد صيانة",
+      "تركيب سابق غير سليم",
+      "أخرى"
+     ],
+     "required": true,
+     "type": "select"
+    },
+    {
+     "label": "تفاصيل السبب",
+     "name": "reason_details",
+     "required": true,
+     "type": "textarea"
+    },
+    {
+     "label": "مكان الجهاز الحالي، إن اختلف عن العنوان الجديد",
+     "name": "current_location",
+     "required": false,
+     "type": "text"
+    },
+    {
+     "label": "الموعد المفضل للتركيب",
+     "name": "preferred_date",
+     "required": false,
+     "type": "date"
+    },
+    {
+     "label": "أعمال إضافية مطلوبة، إن وجدت (تمديدات، قاعدة، فك)",
+     "name": "extra_works",
+     "required": false,
+     "type": "textarea"
+    }
+   ],
+   "note": null,
+   "title": "تفاصيل الطلب"
+  },
+  {
+   "fields": [
+    {
+     "label": "تغطية الخدمة",
+     "name": "coverage",
+     "options": [
+      "مدفوعة",
+      "مجانية / مشمولة",
+      "تحتاج مراجعة"
+     ],
+     "required": true,
+     "type": "select"
+    },
+    {
+     "label": "قيمة الخدمة شامل الضريبة",
+     "min": 0,
+     "money": true,
+     "name": "total_amount",
+     "required": false,
+     "required_if": {
+      "equals": "مدفوعة",
+      "field": "coverage"
+     },
+     "type": "number"
+    },
+    {
+     "label": "المبلغ المدفوع فعليًا الآن",
+     "min": 0,
+     "money": true,
+     "name": "paid_amount",
+     "required": false,
+     "type": "number"
+    }
+   ],
+   "note": null,
+   "title": "قيمة الطلب"
+  },
+  {
+   "fields": [
+    {
+     "label": "طريقة الدفع",
+     "name": "payment_method",
+     "options": [
+      "تحويل بنكي",
+      "نقدًا",
+      "ماكينة POS",
+      "تابي",
+      "تمارا",
+      "طلب من الموقع"
+     ],
+     "required": false,
+     "required_if": {
+      "field": "paid_amount",
+      "gt": 0
+     },
+     "type": "select"
+    },
+    {
+     "default": "today",
+     "label": "تاريخ الدفع",
+     "name": "payment_date",
+     "not_future": true,
+     "required": false,
+     "required_if": {
+      "field": "paid_amount",
+      "gt": 0
+     },
+     "type": "date"
+    },
+    {
+     "label": "رقم التحويل / طلب تابي / السند الورقي",
+     "name": "payment_reference",
+     "required": false,
+     "required_if": {
+      "field": "paid_amount",
+      "gt": 0
+     },
+     "type": "text"
+    },
+    {
+     "label": "اسم المحصل، في حالة الدفع النقدي",
+     "name": "collector_name",
+     "required": false,
+     "required_if": {
+      "equals": "نقدًا",
+      "field": "payment_method"
+     },
+     "type": "staff"
+    }
+   ],
+   "note": null,
+   "title": "تفاصيل الدفعة"
+  },
+  {
+   "fields": [
+    {
+     "label": "إثبات الدفع، إن وُجدت دفعة",
+     "name": "payment_proof",
+     "required": false,
+     "required_if": {
+      "field": "paid_amount",
+      "gt": 0
+     },
+     "type": "files"
+    },
+    {
+     "label": "صور الموقع الجديد، إن توفرت",
+     "name": "site_photos",
+     "required": false,
+     "type": "files"
+    }
+   ],
+   "note": null,
+   "title": "المرفقات"
+  },
+  {
+   "fields": [
+    {
+     "label": "أي اتفاق خاص أو ملاحظات إضافية",
+     "name": "notes",
+     "required": false,
+     "type": "textarea"
+    }
+   ],
+   "note": null,
+   "title": "ملاحظات"
+  }
+ ]
+}

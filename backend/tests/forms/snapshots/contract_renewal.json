@@ -1,0 +1,355 @@
+{
+ "actions": [],
+ "daftra_note": "ويُحدَّث تصنيف العميل في دفترة، وتُنشأ فاتورة التجديد وسند القبض بالمبلغ المدفوع.",
+ "description": "تجديد عقد الصيانة",
+ "disabled": false,
+ "hidden": false,
+ "icon": "calendar",
+ "invoiced": true,
+ "key": "contract_renewal",
+ "label": "طلب تجديد عقد الصيانة السنوي",
+ "sections": [
+  {
+   "fields": [
+    {
+     "default": "today",
+     "label": "تاريخ الطلب",
+     "name": "request_date",
+     "not_future": true,
+     "required": true,
+     "type": "date"
+    },
+    {
+     "label": "اسم الموظف",
+     "name": "employee_name",
+     "required": false,
+     "type": "auto_user"
+    },
+    {
+     "label": "مصدر الطلب في دفترة",
+     "name": "order_source",
+     "required": true,
+     "type": "daftra_order_source"
+    }
+   ],
+   "note": null,
+   "title": "بيانات الطلب"
+  },
+  {
+   "fields": [
+    {
+     "label": "رقم الهاتف",
+     "name": "phone",
+     "required": true,
+     "type": "phone"
+    },
+    {
+     "label": "رقم مسؤول اخر",
+     "name": "phone2",
+     "required": false,
+     "type": "phone"
+    },
+    {
+     "label": "كود العميل، إن وجد",
+     "name": "client_code",
+     "pattern": "^\\d{1,6}$",
+     "pattern_message": "أرقام فقط، حتى 6 خانات",
+     "required": false,
+     "type": "text"
+    },
+    {
+     "label": "اسم العميل المطلوب على الفاتورة",
+     "max_length": 150,
+     "name": "customer_name",
+     "required": true,
+     "type": "text"
+    },
+    {
+     "dropdown": true,
+     "label": "نوع العميل",
+     "name": "customer_type",
+     "options": [
+      "فرد",
+      "تجاري"
+     ],
+     "required": false,
+     "type": "select"
+    },
+    {
+     "dropdown": true,
+     "label": "الجنس",
+     "name": "gender",
+     "options": [
+      "ذكر",
+      "أنثى"
+     ],
+     "required": false,
+     "type": "select"
+    }
+   ],
+   "note": "التجديد لعميل موجود في دفترة فقط؛ ابحث عنه برقم الهاتف أو الكود.",
+   "title": "بيانات العميل"
+  },
+  {
+   "fields": [
+    {
+     "label": "التصنيف",
+     "name": "category",
+     "required": true,
+     "type": "daftra_client_category"
+    },
+    {
+     "from_category": "category",
+     "label": "المنطقة",
+     "max_length": 100,
+     "name": "area",
+     "readonly": true,
+     "required": true,
+     "type": "text"
+    },
+    {
+     "label": "الإمارة",
+     "name": "emirate",
+     "options": [
+      "أبوظبي",
+      "العين",
+      "دبي",
+      "الشارقة",
+      "عجمان",
+      "أم القيوين",
+      "رأس الخيمة",
+      "الفجيرة"
+     ],
+     "required": true,
+     "type": "select"
+    },
+    {
+     "label": "الشارع",
+     "name": "street",
+     "required": false,
+     "type": "text"
+    },
+    {
+     "label": "رقم البيت / اسم الموقع",
+     "name": "house",
+     "required": false,
+     "type": "text"
+    },
+    {
+     "label": "موقع العميل",
+     "max_length": 255,
+     "name": "location_url",
+     "pattern": "^https?://\\S+$",
+     "pattern_message": "الصق رابط الموقع من خرائط جوجل",
+     "placeholder": "https://maps.app.goo.gl/…",
+     "required": true,
+     "type": "text"
+    },
+    {
+     "coordinates_from": "location_url",
+     "label": "الإحداثيات",
+     "ltr": true,
+     "max_length": 100,
+     "name": "coordinates",
+     "placeholder": "مثال: 24.178700, 55.604510",
+     "required": true,
+     "type": "text"
+    }
+   ],
+   "note": null,
+   "title": "عنوان الخدمة"
+  },
+  {
+   "fields": [
+    {
+     "label": "نوع البرادة",
+     "name": "cooler_type",
+     "required": true,
+     "type": "text"
+    },
+    {
+     "label": "ملاحظات على حالة البرادة، إن وجدت",
+     "name": "cooler_notes",
+     "required": false,
+     "type": "textarea"
+    }
+   ],
+   "note": "الخدمة: تجديد عقد لمدة سنة، تبديل الفلاتر كل 3 شهور مع صيانة البرادة.",
+   "title": "تفاصيل الطلب"
+  },
+  {
+   "fields": [
+    {
+     "default": "1680",
+     "label": "سعر تجديد العقد قبل الخصم، شامل الضريبة",
+     "min": 0,
+     "money": true,
+     "name": "subtotal_amount",
+     "positive": true,
+     "required": true,
+     "type": "number"
+    },
+    {
+     "computed": [
+      "subtotal_amount",
+      "discount_amount"
+     ],
+     "label": "قيمة الطلب النهائية بعد الخصم، شامل الضريبة",
+     "money": true,
+     "name": "total_amount",
+     "negative_message": "قيمة الخصم أكبر من قيمة الطلب قبل الخصم",
+     "required": false,
+     "type": "number"
+    },
+    {
+     "fills": "discount_amount",
+     "fills_by_choice": {
+      "مبادرة دعم سقيا الخير": 1750,
+      "مبادرة دعم نبع المزن": 1275,
+      "مبادرة لك ان تشارك": 1150
+     },
+     "label": "اسم الخصم كما يظهر في الفاتورة",
+     "max_length": 100,
+     "name": "discount_label",
+     "required": false,
+     "required_if": {
+      "field": "discount_amount",
+      "gt": 0
+     },
+     "suggestions": [
+      "مبادرة دعم نبع المزن",
+      "مبادرة دعم سقيا الخير",
+      "مبادرة لك ان تشارك",
+      "خصم من قبل الإدارة"
+     ],
+     "type": "text"
+    },
+    {
+     "label": "قيمة الخصم، إن وجد",
+     "min": 0,
+     "money": true,
+     "name": "discount_amount",
+     "required": false,
+     "type": "number"
+    },
+    {
+     "label": "المبلغ المدفوع فعليًا الآن",
+     "min": 0,
+     "money": true,
+     "name": "paid_amount",
+     "positive": true,
+     "required": true,
+     "type": "number"
+    },
+    {
+     "label": "اسم الشخص الذي اعتمد الخصم",
+     "name": "discount_approved_by",
+     "required": false,
+     "required_if": {
+      "field": "discount_amount",
+      "gt": 0
+     },
+     "type": "staff"
+    },
+    {
+     "computed": [
+      "total_amount",
+      "paid_amount"
+     ],
+     "label": "المبلغ المتبقي",
+     "money": true,
+     "name": "remaining_amount",
+     "negative_message": "المبلغ المدفوع أكبر من قيمة الطلب",
+     "required": false,
+     "type": "number"
+    },
+    {
+     "label": "موعد سداد المتبقي (قسط اتفاقية التقسيط)",
+     "name": "remaining_due_date",
+     "required": false,
+     "required_if": {
+      "field": "remaining_amount",
+      "gt": 0
+     },
+     "type": "date"
+    }
+   ],
+   "note": null,
+   "title": "قيمة الطلب"
+  },
+  {
+   "fields": [
+    {
+     "label": "طريقة الدفع",
+     "name": "payment_method",
+     "options": [
+      "تحويل بنكي",
+      "نقدًا",
+      "ماكينة POS",
+      "تابي",
+      "تمارا",
+      "طلب من الموقع"
+     ],
+     "required": true,
+     "type": "select"
+    },
+    {
+     "label": "الخزينة / الحساب المستلم في دفترة",
+     "name": "treasury",
+     "required": true,
+     "type": "daftra_treasury"
+    },
+    {
+     "default": "today",
+     "label": "تاريخ الدفع",
+     "name": "payment_date",
+     "not_future": true,
+     "required": true,
+     "type": "date"
+    },
+    {
+     "label": "رقم التحويل / طلب تابي / السند الورقي",
+     "name": "payment_reference",
+     "required": true,
+     "type": "text"
+    },
+    {
+     "label": "اسم المحصل، في حالة الدفع النقدي",
+     "name": "collector_name",
+     "required": false,
+     "required_if": {
+      "equals": "نقدًا",
+      "field": "payment_method"
+     },
+     "type": "staff"
+    }
+   ],
+   "note": null,
+   "title": "تفاصيل الدفعة"
+  },
+  {
+   "fields": [
+    {
+     "label": "إثبات الدفع",
+     "name": "payment_proof",
+     "required": true,
+     "type": "files"
+    }
+   ],
+   "note": null,
+   "title": "المرفقات"
+  },
+  {
+   "fields": [
+    {
+     "label": "أي اتفاق خاص أو ملاحظات إضافية",
+     "name": "notes",
+     "required": false,
+     "type": "textarea"
+    }
+   ],
+   "note": null,
+   "title": "ملاحظات"
+  }
+ ]
+}

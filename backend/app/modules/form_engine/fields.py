@@ -1,9 +1,8 @@
-"""Building blocks the form definitions are written with: one field, and the sections several forms share."""
+"""Building blocks a form's fields are written with: one field, and the few fields several forms
+share as they are. The sections several forms share are in sections.py, one switch per field."""
 
 from .inscriptions import OTHER_LABEL, inscription_choices
-from .options import (CASH_PAYMENT, CUSTOMER_TYPES, DISCOUNT_AMOUNTS, DISCOUNT_LABELS,
-    DISCOUNTED, EMIRATES,
-    GENDERS, NO_INSCRIPTION, PAYMENT_METHODS, SOURCES, YES_NO)
+from .options import NO_INSCRIPTION, YES_NO
 
 
 def f(name, label, type="text", required=False, **extra):
@@ -33,85 +32,6 @@ def files(name, label, required=False, **extra):
     return f(name, label, "files", required, **extra)
 
 
-def section(title, *fields, note=None):
-    return {"title": title, "note": note, "fields": list(fields)}
-
-
-def need(condition):
-    """required=True, or required only when the condition holds."""
-    return {"required": True} if condition is True else {"required_if": condition}
-
-
-def request_info(date_label="تاريخ الاتفاق مع العميل", invoiced=False, source=True, source_required=True):
-    # invoiced: approving the request creates a Daftra invoice, so the order source is Daftra's own list
-    # source=False: no order source at all (e.g. a payment on an invoice that already has one)
-    # source_required=False: it may be left empty, and the invoice is then made without one
-    source_field = (f("order_source", "مصدر الطلب في دفترة", "daftra_order_source", source_required) if invoiced
-                    else f("source", "مصدر الطلب", "select", source_required, options=SOURCES))
-    return section(
-        "بيانات الطلب",
-        f("request_date", date_label, "date", True, default="today", not_future=True),
-        f("employee_name", "اسم الموظف", "auto_user"),
-        *([source_field] if source else []),
-    )
-
-
-def client_kind():
-    # In every بيانات العميل, never required. They reach Daftra only when approving creates a new
-    # client; one Daftra already has keeps what it holds, and they stay on the request.
-    return [
-        f("customer_type", "نوع العميل", "select", options=list(CUSTOMER_TYPES), dropdown=True),
-        f("gender", "الجنس", "select", options=list(GENDERS), dropdown=True),
-    ]
-
-
-def client(code_required, name_label="اسم العميل المطلوب على الفاتورة", creates_client=False):
-    # creates_client: approving the form creates the client in Daftra when it is new, so the form also
-    # asks what Daftra keeps on a new client. new_client=True: the field is shown, checked and kept
-    # only when the phone search finds no client (validation.validate_submission's new_client);
-    # Daftra already has it for one it finds.
-    new_client = [f("email", "البريد الإلكتروني، إن وجد", "email", new_client=True)] if creates_client else []
-    return section(
-        "بيانات العميل",
-        f("phone", "رقم الهاتف", "phone", True),
-        # Daftra keeps two numbers per client (phone1 and phone2) and half of them have a second.
-        # A client found by the search brings theirs; what is typed here is what they end up with.
-        # It is the number of someone else to reach there, so the work order names it so too.
-        f("phone2", "رقم مسؤول اخر", "phone"),
-        f("client_code", "كود العميل" if code_required else "كود العميل، إن وجد", required=code_required,
-          pattern=r"^\d{1,6}$", pattern_message="أرقام فقط، حتى 6 خانات"),
-        f("customer_name", name_label, required=True, max_length=150),
-        *client_kind(),
-        *new_client,
-    )
-
-
-def address(title="عنوان الخدمة", required=True):
-    # Every form asks for the same address as طلب بيع لعميل جديد, where the coordinates are the
-    # Coordinates a client created in Daftra needs; they fill in from a location link that has them.
-    # التصنيف is the client's category in Daftra (set on the client when a Daftra form is approved);
-    # the three follow and narrow each other as the form is filled in (frontend modules/requests/address.js)
-    return section(
-        title,
-        f("category", "التصنيف", "daftra_client_category", required),
-        # Never typed and never a list: it is the التصنيف itself, so the client reaches Daftra with
-        # its category and its المنطقة saying the same thing. from_category fills it in — in the
-        # browser as the التصنيف is picked, and again here, so what is sent decides it either way.
-        f("area", "المنطقة", "text", required, max_length=100, readonly=True, from_category="category"),
-        f("emirate", "الإمارة", "select", required, options=EMIRATES),
-        f("street", "الشارع"),
-        f("house", "رقم البيت / اسم الموقع"),
-        # A link to the place, as خرائط جوجل shares it. 255 is as long as Daftra's own field.
-        f("location_url", "موقع العميل", "text", required, max_length=255,
-          pattern=r"^https?://\S+$", pattern_message="الصق رابط الموقع من خرائط جوجل",
-          placeholder="https://maps.app.goo.gl/…"),
-        # Daftra demands them on every client. A link carrying a point fills them in; one that does
-        # not — a link shared from a phone keeps the place's name, not where it is — leaves them to type.
-        f("coordinates", "الإحداثيات", required=required, max_length=100, ltr=True,
-          coordinates_from="location_url", placeholder="مثال: 24.178700, 55.604510"),
-    )
-
-
 def original_refs():
     return [
         f("original_order", "رقم الطلب الأصلي، إن توفر"),
@@ -120,95 +40,6 @@ def original_refs():
     ]
 
 
-def discount_fields(label="قيمة الخصم، إن وجد", named=False, between=()):
-    # named: the discount is printed on the Daftra invoice under a name, e.g. «مبادرة دعم نبع المزن».
-    # The name comes first: picking an initiative's fills قيمة الخصم, beside it, with what it takes off.
-    # between: the fields that sit before who approved it (the amount paid, on a form that has one)
-    name = f("discount_label", "اسم الخصم كما يظهر في الفاتورة", required_if=DISCOUNTED, max_length=100,
-             suggestions=DISCOUNT_LABELS, fills="discount_amount", fills_by_choice=DISCOUNT_AMOUNTS)
-    return [
-        *([name] if named else []),
-        money("discount_amount", label),
-        *between,
-        f("discount_approved_by", "اسم الشخص الذي اعتمد الخصم", "staff", required_if=DISCOUNTED),
-    ]
-
-
-def amounts(total_label="قيمة الطلب النهائية بعد الخصم، شامل الضريبة والإضافات",
-            discount_label="قيمة الخصم، إن وجد", paid_label="المبلغ المدفوع فعليًا الآن",
-            remaining_label="المبلغ المتبقي", must_pay=False, auto_total=False, invoiced=False,
-            price_label=None, price_default=None, discounts=True, paid=True):
-    # paid=False: nothing is paid against this form, so what was paid, what is left and when it
-    # falls due are all left out (عرض السعر: an offer, which Daftra records no payment against)
-    # discounts=False: no discount is given on this form at all, so the three fields it takes
-    # (the amount, who approved it and its name on the invoice) are left out and the total is the subtotal
-    # auto_total: the order lines' catalog prices work out the total, instead of the salesperson typing it
-    # price_label: the salesperson types the price before discount (starting at price_default) and the total follows
-    # invoiced: the discount is printed on the Daftra invoice under a name, e.g. «مبادرة دعم نبع المزن»
-    computed_total = auto_total or price_label
-    if auto_total and not discounts:
-        # Nothing is taken off, so the lines' own total is the total: order_lines fills it in
-        # (its subtotal_field names this field), and there is no second amount to show beside it.
-        total_field = f("total_amount", total_label, "number", money=True, computed=[])
-    elif computed_total:
-        total_field = f("total_amount", total_label, "number", money=True,
-                        computed=["subtotal_amount", "discount_amount"],
-                        negative_message="قيمة الخصم أكبر من قيمة الطلب قبل الخصم")
-    else:
-        total_field = money("total_amount", total_label, True)
-    if auto_total and not discounts:
-        subtotal = []
-    elif auto_total:
-        subtotal = [f("subtotal_amount", "قيمة الطلب النهائية قبل الخصم، شامل الضريبة والإضافات", "number",
-                      money=True, computed=[])]
-    elif price_label:
-        subtotal = [money("subtotal_amount", price_label, True, positive=True,
-                          **({"default": str(price_default)} if price_default else {}))]
-    else:
-        subtotal = []
-    paid_field = [money("paid_amount", paid_label, True, positive=must_pay)] if paid else []
-    if discounts and invoiced:
-        discount_and_paid = discount_fields(discount_label, named=True, between=paid_field)
-    else:
-        discount_and_paid = [*(discount_fields(discount_label) if discounts else []), *paid_field]
-    return section(
-        "قيمة الطلب",
-        *subtotal,
-        total_field,
-        *discount_and_paid,
-        *([] if not paid else [
-            f("remaining_amount", remaining_label, "number", money=True, computed=["total_amount", "paid_amount"],
-              negative_message="المبلغ المدفوع أكبر من قيمة الطلب"),
-            # invoiced: what is left becomes a one-installment agreement in Daftra, due on this date
-            f("remaining_due_date", "موعد سداد المتبقي (قسط اتفاقية التقسيط)", "date",
-              required_if={"field": "remaining_amount", "gt": 0})
-            if invoiced else f("remaining_due_date", "موعد سداد المتبقي، إن وجد", "date"),
-        ]),
-    )
-
-
-def payment(title="تفاصيل الدفعة", when=True, invoiced=False, details=True):
-    # invoiced: the payment becomes a Daftra receipt, which needs the treasury it was received into
-    # details=False: طريقة الدفع is asked for and the rest of the payment's details are offered
-    # but never demanded (عرض السعر: how it would be paid, not a payment taken)
-    rest = need(when) if details else {}
-    return section(
-        title,
-        f("payment_method", "طريقة الدفع", "select", options=PAYMENT_METHODS, **need(when)),
-        # Chosen by hand every time: طريقة الدفع does not say which account the money went into
-        *([f("treasury", "الخزينة / الحساب المستلم في دفترة", "daftra_treasury", **rest)] if invoiced else []),
-        # Today, because a payment is nearly always taken on the day the request is written
-        f("payment_date", "تاريخ الدفع", "date", default="today", not_future=True, **rest),
-        f("payment_reference", "رقم التحويل / طلب تابي / السند الورقي", **rest),
-        f("collector_name", "اسم المحصل، في حالة الدفع النقدي", "staff", required_if=CASH_PAYMENT),
-    )
-
-
-def attachments(*fields):
-    return section("المرفقات", *fields)
-
-
-NOTES = section("ملاحظات", f("notes", "أي اتفاق خاص أو ملاحظات إضافية", "textarea"))
 INSCRIPTION = [
     # Picked from the catalogue, whose codes the labels carry; what is saved and engraved is the
     # wording alone, so everything downstream (the invoice's service line, the work order) reads

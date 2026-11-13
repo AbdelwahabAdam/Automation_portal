@@ -1,0 +1,173 @@
+{
+ "actions": [],
+ "daftra_note": "ويُنشأ في دفترة سند قبض بالمبلغ المدفوع على الفاتورة المختارة.",
+ "description": "سداد المبلغ المتبقي على طلب",
+ "disabled": false,
+ "hidden": false,
+ "icon": "send",
+ "invoiced": true,
+ "key": "balance_payment",
+ "label": "طلب تسديد مبلغ متبقي",
+ "sections": [
+  {
+   "fields": [
+    {
+     "default": "today",
+     "label": "تاريخ الطلب",
+     "name": "request_date",
+     "not_future": true,
+     "required": true,
+     "type": "date"
+    },
+    {
+     "label": "اسم الموظف",
+     "name": "employee_name",
+     "required": false,
+     "type": "auto_user"
+    }
+   ],
+   "note": null,
+   "title": "بيانات الطلب"
+  },
+  {
+   "fields": [
+    {
+     "label": "رقم الهاتف",
+     "name": "phone",
+     "required": true,
+     "type": "phone"
+    },
+    {
+     "label": "كود العميل",
+     "name": "client_code",
+     "pattern": "^\\d{1,6}$",
+     "pattern_message": "أرقام فقط، حتى 6 خانات",
+     "required": true,
+     "type": "text"
+    },
+    {
+     "label": "اسم العميل",
+     "max_length": 150,
+     "name": "customer_name",
+     "required": true,
+     "type": "text"
+    },
+    {
+     "dropdown": true,
+     "label": "نوع العميل",
+     "name": "customer_type",
+     "options": [
+      "فرد",
+      "تجاري"
+     ],
+     "required": false,
+     "type": "select"
+    },
+    {
+     "dropdown": true,
+     "label": "الجنس",
+     "name": "gender",
+     "options": [
+      "ذكر",
+      "أنثى"
+     ],
+     "required": false,
+     "type": "select"
+    },
+    {
+     "label": "رقم الفاتورة",
+     "name": "invoice",
+     "required": true,
+     "type": "daftra_client_invoice"
+    }
+   ],
+   "note": "بعد العثور على العميل تظهر فواتيره التي عليها مبلغ متبقٍ، الأحدث أولًا.",
+   "title": "بيانات العميل"
+  },
+  {
+   "fields": [
+    {
+     "label": "المبلغ المدفوع الآن",
+     "min": 0,
+     "money": true,
+     "name": "paid_amount",
+     "positive": true,
+     "required": true,
+     "type": "number"
+    }
+   ],
+   "note": null,
+   "title": "قيمة الطلب"
+  },
+  {
+   "fields": [
+    {
+     "label": "طريقة الدفع",
+     "name": "payment_method",
+     "options": [
+      "تحويل بنكي",
+      "نقدًا",
+      "ماكينة POS",
+      "تابي",
+      "تمارا",
+      "طلب من الموقع"
+     ],
+     "required": true,
+     "type": "select"
+    },
+    {
+     "label": "الخزينة / الحساب المستلم في دفترة",
+     "name": "treasury",
+     "required": true,
+     "type": "daftra_treasury"
+    },
+    {
+     "label": "اسم المحصل",
+     "name": "collector_name",
+     "required": true,
+     "type": "staff"
+    },
+    {
+     "default": "today",
+     "label": "تاريخ التحصيل",
+     "name": "payment_date",
+     "not_future": true,
+     "required": true,
+     "type": "date"
+    },
+    {
+     "label": "رقم التحويل / السند الورقي",
+     "name": "payment_reference",
+     "required": true,
+     "type": "text"
+    }
+   ],
+   "note": null,
+   "title": "تفاصيل الدفعة"
+  },
+  {
+   "fields": [
+    {
+     "label": "صورة التحويل / الإيصال",
+     "name": "payment_proof",
+     "required": true,
+     "type": "files"
+    }
+   ],
+   "note": null,
+   "title": "المرفقات"
+  },
+  {
+   "fields": [
+    {
+     "label": "أي اتفاق خاص أو ملاحظات إضافية",
+     "name": "notes",
+     "required": false,
+     "type": "textarea"
+    }
+   ],
+   "note": null,
+   "title": "ملاحظات"
+  }
+ ]
+}

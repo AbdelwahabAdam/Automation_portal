@@ -6,7 +6,7 @@ from pathlib import Path
 
 from sqlalchemy import text
 
-from app.forms.tech_extra_works.definition import OTHER_WORK_DAFTRA_ID, TECH_SERVICE_DAFTRA_IDS, TECH_SERVICE_PRICES
+from app.forms.tech_extra_works.fields import OTHER_WORK_DAFTRA_ID, TECH_SERVICE_DAFTRA_IDS, TECH_SERVICE_PRICES
 from app.modules.models import Product
 
 # Loaded by file, because a migration is not meant to be imported by name

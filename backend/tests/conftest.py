@@ -28,6 +28,14 @@ from app.integrations.daftra.fake import FakeDaftra  # noqa: E402
 PASSWORD = "secret-pass-1"
 
 
+def pytest_addoption(parser):
+    # Rewrites tests/forms/snapshots/ from the forms as they are now. Only ever run on purpose: a
+    # snapshot is the record of what the form looked like before a change, so it is never written
+    # by a test that happens to find it missing.
+    parser.addoption("--update-snapshots", action="store_true",
+                     help="rewrite the form field snapshots from the current code")
+
+
 @pytest.fixture(scope="session", autouse=True)
 def schema():
     with engine.begin() as connection:

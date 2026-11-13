@@ -1,0 +1,463 @@
+{
+ "actions": [],
+ "daftra_note": "",
+ "description": "تسجيل المرتجع ورد المبلغ",
+ "disabled": false,
+ "hidden": true,
+ "icon": "history",
+ "invoiced": false,
+ "key": "return_refund",
+ "label": "طلب مرتجع ورد مبلغ",
+ "sections": [
+  {
+   "fields": [
+    {
+     "default": "today",
+     "label": "تاريخ الاتفاق مع العميل",
+     "name": "request_date",
+     "not_future": true,
+     "required": true,
+     "type": "date"
+    },
+    {
+     "label": "اسم الموظف",
+     "name": "employee_name",
+     "required": false,
+     "type": "auto_user"
+    },
+    {
+     "label": "مصدر الطلب",
+     "name": "source",
+     "options": [
+      "ماركتنج",
+      "عميل شركة",
+      "عميل جديد",
+      "عميل سابق",
+      "مكتب",
+      "الموقع",
+      "أخرى"
+     ],
+     "required": true,
+     "type": "select"
+    }
+   ],
+   "note": null,
+   "title": "بيانات الطلب"
+  },
+  {
+   "fields": [
+    {
+     "label": "رقم الهاتف",
+     "name": "phone",
+     "required": true,
+     "type": "phone"
+    },
+    {
+     "label": "رقم مسؤول اخر",
+     "name": "phone2",
+     "required": false,
+     "type": "phone"
+    },
+    {
+     "label": "كود العميل",
+     "name": "client_code",
+     "pattern": "^\\d{1,6}$",
+     "pattern_message": "أرقام فقط، حتى 6 خانات",
+     "required": true,
+     "type": "text"
+    },
+    {
+     "label": "اسم العميل المطلوب على الفاتورة",
+     "max_length": 150,
+     "name": "customer_name",
+     "required": true,
+     "type": "text"
+    },
+    {
+     "dropdown": true,
+     "label": "نوع العميل",
+     "name": "customer_type",
+     "options": [
+      "فرد",
+      "تجاري"
+     ],
+     "required": false,
+     "type": "select"
+    },
+    {
+     "dropdown": true,
+     "label": "الجنس",
+     "name": "gender",
+     "options": [
+      "ذكر",
+      "أنثى"
+     ],
+     "required": false,
+     "type": "select"
+    }
+   ],
+   "note": null,
+   "title": "بيانات العميل"
+  },
+  {
+   "fields": [
+    {
+     "label": "التصنيف",
+     "name": "category",
+     "required": true,
+     "type": "daftra_client_category"
+    },
+    {
+     "from_category": "category",
+     "label": "المنطقة",
+     "max_length": 100,
+     "name": "area",
+     "readonly": true,
+     "required": true,
+     "type": "text"
+    },
+    {
+     "label": "الإمارة",
+     "name": "emirate",
+     "options": [
+      "أبوظبي",
+      "العين",
+      "دبي",
+      "الشارقة",
+      "عجمان",
+      "أم القيوين",
+      "رأس الخيمة",
+      "الفجيرة"
+     ],
+     "required": true,
+     "type": "select"
+    },
+    {
+     "label": "الشارع",
+     "name": "street",
+     "required": false,
+     "type": "text"
+    },
+    {
+     "label": "رقم البيت / اسم الموقع",
+     "name": "house",
+     "required": false,
+     "type": "text"
+    },
+    {
+     "label": "موقع العميل",
+     "max_length": 255,
+     "name": "location_url",
+     "pattern": "^https?://\\S+$",
+     "pattern_message": "الصق رابط الموقع من خرائط جوجل",
+     "placeholder": "https://maps.app.goo.gl/…",
+     "required": true,
+     "type": "text"
+    },
+    {
+     "coordinates_from": "location_url",
+     "label": "الإحداثيات",
+     "ltr": true,
+     "max_length": 100,
+     "name": "coordinates",
+     "placeholder": "مثال: 24.178700, 55.604510",
+     "required": true,
+     "type": "text"
+    }
+   ],
+   "note": null,
+   "title": "عنوان الخدمة / استلام المرتجع"
+  },
+  {
+   "fields": [
+    {
+     "label": "رقم الطلب الأصلي، إن توفر",
+     "name": "original_order",
+     "required": false,
+     "type": "text"
+    },
+    {
+     "label": "رقم الفاتورة الأصلية، إن توفر",
+     "name": "original_invoice",
+     "required": false,
+     "type": "text"
+    },
+    {
+     "label": "رقم أمر الشغل، إن توفر",
+     "name": "work_order",
+     "required": false,
+     "type": "text"
+    },
+    {
+     "label": "نوع المرتجع",
+     "name": "return_type",
+     "options": [
+      "كامل الطلب",
+      "جزء من الطلب"
+     ],
+     "required": true,
+     "type": "select"
+    },
+    {
+     "label": "المنتج / الأصناف المطلوب إرجاعها",
+     "name": "returned_items",
+     "required": true,
+     "type": "textarea"
+    },
+    {
+     "label": "الكمية المرتجعة من كل صنف",
+     "name": "returned_quantities",
+     "required": true,
+     "type": "textarea"
+    },
+    {
+     "label": "سبب المرتجع",
+     "name": "return_reason",
+     "required": true,
+     "type": "textarea"
+    },
+    {
+     "label": "حالة المنتج وملاحظات عليه",
+     "name": "product_condition",
+     "required": true,
+     "type": "textarea"
+    },
+    {
+     "label": "حالة استلام المرتجع",
+     "name": "receipt_status",
+     "options": [
+      "لم يُستلم",
+      "تم الاستلام"
+     ],
+     "required": true,
+     "type": "select"
+    },
+    {
+     "label": "تاريخ الاستلام، إن تم",
+     "name": "receipt_date",
+     "not_future": true,
+     "required": false,
+     "required_if": {
+      "equals": "تم الاستلام",
+      "field": "receipt_status"
+     },
+     "type": "date"
+    },
+    {
+     "label": "اسم الموظف الذي استلم المرتجع، إن تم",
+     "name": "received_by",
+     "required": false,
+     "required_if": {
+      "equals": "تم الاستلام",
+      "field": "receipt_status"
+     },
+     "type": "staff"
+    },
+    {
+     "label": "اسم المسؤول الذي اعتمد المرتجع، إن تم اعتماده",
+     "name": "return_approved_by",
+     "required": false,
+     "type": "staff"
+    }
+   ],
+   "note": null,
+   "title": "تفاصيل الطلب"
+  },
+  {
+   "fields": [
+    {
+     "label": "قيمة الطلب النهائية المسجلة على الفاتورة",
+     "min": 0,
+     "money": true,
+     "name": "invoice_total",
+     "required": true,
+     "type": "number"
+    },
+    {
+     "label": "إجمالي المبلغ المدفوع على الطلب الأصلي",
+     "min": 0,
+     "money": true,
+     "name": "total_paid",
+     "required": true,
+     "type": "number"
+    },
+    {
+     "label": "قيمة الأصناف المرتجعة حسب الفاتورة",
+     "min": 0,
+     "money": true,
+     "name": "returned_value",
+     "required": true,
+     "type": "number"
+    },
+    {
+     "label": "قيمة أي استقطاع أو رسوم مرتبطة بالمرتجع، إن وجدت",
+     "min": 0,
+     "money": true,
+     "name": "deduction_amount",
+     "required": false,
+     "type": "number"
+    },
+    {
+     "label": "سبب الاستقطاع واسم المسؤول الذي اعتمده",
+     "name": "deduction_reason",
+     "required": false,
+     "required_if": {
+      "field": "deduction_amount",
+      "gt": 0
+     },
+     "type": "text"
+    },
+    {
+     "label": "المبلغ المعتمد رده للعميل، إن تم تحديده",
+     "min": 0,
+     "money": true,
+     "name": "approved_refund",
+     "required": false,
+     "type": "number"
+    },
+    {
+     "label": "اسم المسؤول الذي اعتمد مبلغ الرد",
+     "name": "refund_approved_by",
+     "required": false,
+     "required_if": {
+      "field": "approved_refund",
+      "gt": 0
+     },
+     "type": "staff"
+    },
+    {
+     "label": "المبلغ المردود فعليًا الآن",
+     "min": 0,
+     "money": true,
+     "name": "refunded_amount",
+     "required": true,
+     "type": "number"
+    },
+    {
+     "computed": [
+      "approved_refund",
+      "refunded_amount"
+     ],
+     "label": "المبلغ المتبقي من مبلغ الرد المعتمد",
+     "money": true,
+     "name": "refund_remaining",
+     "negative_message": "المبلغ المردود أكبر من مبلغ الرد المعتمد",
+     "required": false,
+     "type": "number"
+    },
+    {
+     "label": "موعد رد المتبقي، إن تم تحديده",
+     "name": "refund_remaining_date",
+     "required": false,
+     "type": "date"
+    }
+   ],
+   "note": null,
+   "title": "قيمة الطلب"
+  },
+  {
+   "fields": [
+    {
+     "label": "طريقة رد المبلغ",
+     "name": "refund_method",
+     "options": [
+      "تحويل بنكي",
+      "نقدًا",
+      "تابي",
+      "تمارا",
+      "أخرى"
+     ],
+     "required": false,
+     "required_if": {
+      "field": "refunded_amount",
+      "gt": 0
+     },
+     "type": "select"
+    },
+    {
+     "label": "تاريخ رد المبلغ",
+     "name": "refund_date",
+     "not_future": true,
+     "required": false,
+     "required_if": {
+      "field": "refunded_amount",
+      "gt": 0
+     },
+     "type": "date"
+    },
+    {
+     "label": "رقم التحويل / مرجع عملية الرد / السند",
+     "name": "refund_reference",
+     "required": false,
+     "required_if": {
+      "field": "refunded_amount",
+      "gt": 0
+     },
+     "type": "text"
+    },
+    {
+     "label": "اسم الموظف الذي سلّم المبلغ، في حالة الرد النقدي",
+     "name": "refund_paid_by",
+     "required": false,
+     "required_if": {
+      "equals": "نقدًا",
+      "field": "refund_method"
+     },
+     "type": "staff"
+    }
+   ],
+   "note": null,
+   "title": "تفاصيل رد المبلغ — إن تم"
+  },
+  {
+   "fields": [
+    {
+     "label": "صورة الفاتورة الأصلية، إن توفرت",
+     "name": "invoice_image",
+     "required": false,
+     "type": "files"
+    },
+    {
+     "label": "صور المنتج المرتجع وحالته",
+     "name": "product_photos",
+     "required": true,
+     "type": "files"
+    },
+    {
+     "label": "إثبات استلام المرتجع، إن تم",
+     "name": "receipt_proof",
+     "required": false,
+     "required_if": {
+      "equals": "تم الاستلام",
+      "field": "receipt_status"
+     },
+     "type": "files"
+    },
+    {
+     "label": "إثبات رد المبلغ، إن تم",
+     "name": "refund_proof",
+     "required": false,
+     "required_if": {
+      "field": "refunded_amount",
+      "gt": 0
+     },
+     "type": "files"
+    }
+   ],
+   "note": null,
+   "title": "المرفقات"
+  },
+  {
+   "fields": [
+    {
+     "label": "أي اتفاق خاص أو ملاحظات إضافية",
+     "name": "notes",
+     "required": false,
+     "type": "textarea"
+    }
+   ],
+   "note": null,
+   "title": "ملاحظات"
+  }
+ ]
+}

@@ -1,0 +1,275 @@
+{
+ "actions": [],
+ "daftra_note": "وتُنشأ في دفترة فاتورة الأعمال المختارة، وسند القبض إن وُجدت دفعة. العميل يجب أن يكون مسجلًا في دفترة.",
+ "description": "تسجيل أعمال إضافية للفنيات",
+ "disabled": false,
+ "hidden": false,
+ "icon": "settings",
+ "invoiced": true,
+ "key": "tech_extra_works",
+ "label": "اعمال اضافية (قسم الفنيات)",
+ "sections": [
+  {
+   "fields": [
+    {
+     "default": "today",
+     "label": "تاريخ الطلب",
+     "name": "request_date",
+     "not_future": true,
+     "required": true,
+     "type": "date"
+    },
+    {
+     "label": "اسم الموظف",
+     "name": "employee_name",
+     "required": false,
+     "type": "auto_user"
+    },
+    {
+     "label": "مصدر الطلب في دفترة",
+     "name": "order_source",
+     "required": false,
+     "type": "daftra_order_source"
+    }
+   ],
+   "note": null,
+   "title": "بيانات الطلب"
+  },
+  {
+   "fields": [
+    {
+     "label": "رقم الهاتف",
+     "name": "phone",
+     "required": true,
+     "type": "phone"
+    },
+    {
+     "label": "رقم مسؤول اخر",
+     "name": "phone2",
+     "required": false,
+     "type": "phone"
+    },
+    {
+     "label": "كود العميل، إن وجد",
+     "name": "client_code",
+     "pattern": "^\\d{1,6}$",
+     "pattern_message": "أرقام فقط، حتى 6 خانات",
+     "required": false,
+     "type": "text"
+    },
+    {
+     "label": "اسم العميل المطلوب على الفاتورة",
+     "max_length": 150,
+     "name": "customer_name",
+     "required": true,
+     "type": "text"
+    },
+    {
+     "dropdown": true,
+     "label": "نوع العميل",
+     "name": "customer_type",
+     "options": [
+      "فرد",
+      "تجاري"
+     ],
+     "required": false,
+     "type": "select"
+    },
+    {
+     "dropdown": true,
+     "label": "الجنس",
+     "name": "gender",
+     "options": [
+      "ذكر",
+      "أنثى"
+     ],
+     "required": false,
+     "type": "select"
+    }
+   ],
+   "note": null,
+   "title": "بيانات العميل"
+  },
+  {
+   "fields": [
+    {
+     "fixed_prices": {
+      "212": 6,
+      "418": 7,
+      "433": 10
+     },
+     "item_ids": [
+      212,
+      418,
+      433,
+      194
+     ],
+     "item_labels": {
+      "194": "أخرى",
+      "212": "تمديد المياة",
+      "418": "تمديد الكهرباء",
+      "433": "اعمال باسكو"
+     },
+     "items": "tech_services",
+     "label": "الأعمال المطلوبة",
+     "line_fields": [
+      {
+       "label": "وصف العمل",
+       "max_length": 500,
+       "name": "work_description",
+       "only_for": [
+        194
+       ],
+       "required": true,
+       "type": "text"
+      },
+      {
+       "label": "سعر الوحدة، شامل الضريبة (درهم)",
+       "line_price": true,
+       "min": 0,
+       "money": true,
+       "name": "work_price",
+       "only_for": [
+        194
+       ],
+       "positive": true,
+       "required": true,
+       "type": "number"
+      }
+     ],
+     "name": "order_lines",
+     "required": true,
+     "subtotal_field": "total_amount",
+     "type": "order_lines"
+    },
+    {
+     "label": "الفني (الموظف في دفترة)",
+     "name": "technician",
+     "required": true,
+     "type": "daftra_staff"
+    }
+   ],
+   "note": null,
+   "title": "تفاصيل الطلب"
+  },
+  {
+   "fields": [
+    {
+     "computed": [],
+     "label": "قيمة الأعمال النهائية، شامل الضريبة",
+     "money": true,
+     "name": "total_amount",
+     "required": false,
+     "type": "number"
+    },
+    {
+     "label": "المبلغ المدفوع فعليًا الآن",
+     "min": 0,
+     "money": true,
+     "name": "paid_amount",
+     "positive": false,
+     "required": true,
+     "type": "number"
+    },
+    {
+     "computed": [
+      "total_amount",
+      "paid_amount"
+     ],
+     "label": "المبلغ المتبقي",
+     "money": true,
+     "name": "remaining_amount",
+     "negative_message": "المبلغ المدفوع أكبر من قيمة الطلب",
+     "required": false,
+     "type": "number"
+    },
+    {
+     "label": "موعد سداد المتبقي، إن وجد",
+     "name": "remaining_due_date",
+     "required": false,
+     "type": "date"
+    }
+   ],
+   "note": null,
+   "title": "قيمة الطلب"
+  },
+  {
+   "fields": [
+    {
+     "label": "طريقة الدفع",
+     "name": "payment_method",
+     "options": [
+      "تحويل بنكي",
+      "نقدًا",
+      "ماكينة POS",
+      "تابي",
+      "تمارا",
+      "طلب من الموقع"
+     ],
+     "required": false,
+     "required_if": {
+      "field": "paid_amount",
+      "gt": 0
+     },
+     "type": "select"
+    },
+    {
+     "label": "الخزينة / الحساب المستلم في دفترة",
+     "name": "treasury",
+     "required": false,
+     "required_if": {
+      "field": "paid_amount",
+      "gt": 0
+     },
+     "type": "daftra_treasury"
+    },
+    {
+     "default": "today",
+     "label": "تاريخ الدفع",
+     "name": "payment_date",
+     "not_future": true,
+     "required": false,
+     "required_if": {
+      "field": "paid_amount",
+      "gt": 0
+     },
+     "type": "date"
+    },
+    {
+     "label": "رقم التحويل / طلب تابي / السند الورقي",
+     "name": "payment_reference",
+     "required": false,
+     "required_if": {
+      "field": "paid_amount",
+      "gt": 0
+     },
+     "type": "text"
+    },
+    {
+     "label": "اسم المحصل، في حالة الدفع النقدي",
+     "name": "collector_name",
+     "required": false,
+     "required_if": {
+      "equals": "نقدًا",
+      "field": "payment_method"
+     },
+     "type": "staff"
+    }
+   ],
+   "note": null,
+   "title": "تفاصيل الدفعة"
+  },
+  {
+   "fields": [
+    {
+     "label": "أي اتفاق خاص أو ملاحظات إضافية",
+     "name": "notes",
+     "required": false,
+     "type": "textarea"
+    }
+   ],
+   "note": null,
+   "title": "ملاحظات"
+  }
+ ]
+}

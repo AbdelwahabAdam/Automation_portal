@@ -1,0 +1,187 @@
+{
+ "actions": [],
+ "daftra_note": "",
+ "description": "مطلوب تصحيح",
+ "disabled": false,
+ "hidden": true,
+ "icon": "alert-triangle",
+ "invoiced": false,
+ "key": "data_entry_error",
+ "label": "تبليغ خطأ إدخال بيانات",
+ "sections": [
+  {
+   "fields": [
+    {
+     "default": "today",
+     "label": "تاريخ التبليغ",
+     "name": "request_date",
+     "not_future": true,
+     "required": true,
+     "type": "date"
+    },
+    {
+     "label": "اسم الموظف",
+     "name": "employee_name",
+     "required": false,
+     "type": "auto_user"
+    },
+    {
+     "label": "مصدر الطلب",
+     "name": "source",
+     "options": [
+      "ماركتنج",
+      "عميل شركة",
+      "عميل جديد",
+      "عميل سابق",
+      "مكتب",
+      "الموقع",
+      "أخرى"
+     ],
+     "required": true,
+     "type": "select"
+    }
+   ],
+   "note": null,
+   "title": "بيانات الطلب"
+  },
+  {
+   "fields": [
+    {
+     "label": "رقم الهاتف",
+     "name": "phone",
+     "required": true,
+     "type": "phone"
+    },
+    {
+     "label": "رقم مسؤول اخر",
+     "name": "phone2",
+     "required": false,
+     "type": "phone"
+    },
+    {
+     "label": "كود العميل، إن وجد",
+     "name": "client_code",
+     "pattern": "^\\d{1,6}$",
+     "pattern_message": "أرقام فقط، حتى 6 خانات",
+     "required": false,
+     "type": "text"
+    },
+    {
+     "label": "اسم العميل",
+     "max_length": 150,
+     "name": "customer_name",
+     "required": true,
+     "type": "text"
+    },
+    {
+     "dropdown": true,
+     "label": "نوع العميل",
+     "name": "customer_type",
+     "options": [
+      "فرد",
+      "تجاري"
+     ],
+     "required": false,
+     "type": "select"
+    },
+    {
+     "dropdown": true,
+     "label": "الجنس",
+     "name": "gender",
+     "options": [
+      "ذكر",
+      "أنثى"
+     ],
+     "required": false,
+     "type": "select"
+    }
+   ],
+   "note": null,
+   "title": "بيانات العميل"
+  },
+  {
+   "fields": [
+    {
+     "label": "المستند الذي فيه الخطأ",
+     "name": "document_type",
+     "options": [
+      "فاتورة",
+      "سند قبض",
+      "عرض سعر",
+      "أمر شغل",
+      "بيانات عميل",
+      "أخرى"
+     ],
+     "required": true,
+     "type": "select"
+    },
+    {
+     "label": "رقم المستند",
+     "name": "document_number",
+     "required": true,
+     "type": "text"
+    },
+    {
+     "label": "البيان الخطأ (مثل: اسم العميل، المبلغ، التاريخ)",
+     "name": "error_field",
+     "required": true,
+     "type": "text"
+    },
+    {
+     "label": "القيمة المسجلة الخطأ",
+     "name": "wrong_value",
+     "required": true,
+     "type": "textarea"
+    },
+    {
+     "label": "القيمة الصحيحة",
+     "name": "correct_value",
+     "required": true,
+     "type": "textarea"
+    },
+    {
+     "label": "الأولوية",
+     "name": "urgency",
+     "options": [
+      "عادي",
+      "عاجل"
+     ],
+     "required": true,
+     "type": "select"
+    }
+   ],
+   "note": null,
+   "title": "تفاصيل الخطأ"
+  },
+  {
+   "fields": [
+    {
+     "label": "صورة المستند الذي فيه الخطأ، إن توفرت",
+     "name": "document_image",
+     "required": false,
+     "type": "files"
+    },
+    {
+     "label": "ما يثبت القيمة الصحيحة، إن توفر",
+     "name": "evidence",
+     "required": false,
+     "type": "files"
+    }
+   ],
+   "note": null,
+   "title": "المرفقات"
+  },
+  {
+   "fields": [
+    {
+     "label": "أي اتفاق خاص أو ملاحظات إضافية",
+     "name": "notes",
+     "required": false,
+     "type": "textarea"
+    }
+   ],
+   "note": null,
+   "title": "ملاحظات"
+  }
+ ]
+}

@@ -15,9 +15,8 @@ from ...core.config import settings
 from ...core.errors import SyncError
 from ...integrations import daftra
 from ...integrations.daftra import DaftraError, NotFound
-from .common import (TOTAL_TOLERANCE, attach_pdf, made_before_the_request, marker, money, printed_terms,
-                     terms_to_print)
-from .invoice import invoice_address
+from .common import TOTAL_TOLERANCE, attach_pdf, made_before_the_request, marker, money, printed_terms
+from .documents import Estimate
 
 # The field the estimate's PDF is attached to the request under (not a field of any form)
 ESTIMATE_ATTACHMENT_FIELD = "daftra_estimate"
@@ -40,9 +39,8 @@ def find_estimate(request) -> int | None:
                  and not made_before_the_request(request, row["Estimate"].get("created"))), None)
 
 
-def ensure_estimate(request, items: list[dict], staff_id: int, notes: str = "") -> dict:
+def make_estimate(request, doc: Estimate) -> dict:
     """The request's estimate in Daftra, made once however often the request is approved again."""
-    data = request.data
     estimate = None
     if request.daftra_estimate_id is not None:
         try:
@@ -63,34 +61,34 @@ def ensure_estimate(request, items: list[dict], staff_id: int, notes: str = "") 
                 # Without it the account's own setting applies, and Daftra refuses to save an
                 # estimate for a client with no email: «البريد الإلكتروني مطلوب إذا اخترت أن ترسل
                 # الفاتورة عبر البريد». An invoice is sent the same way, for the same reason.
-                "client_id": request.daftra_client_id, "date": data.get("request_date"), "draft": 0,
+                "client_id": request.daftra_client_id, "date": doc.date, "draft": 0,
                 "is_offline": 1,
                 "currency_code": "AED", "store_id": settings.daftra_store_id,
-                "branch_id": settings.daftra_branch_id, "sales_person_id": staff_id,
+                "branch_id": settings.daftra_branch_id, "sales_person_id": doc.sales_person,
                 "po_number": marker(request),
                 # أنشئ بواسطة as well as بيعت بواسطة; without it, the API key itself
-                "staff_id": staff_id,
+                "staff_id": doc.sales_person,
                 # The address this request is for, printed on the estimate
-                **invoice_address(data),
-                **({"order_source_id": data["order_source"]} if data.get("order_source") else {}),
+                **doc.address,
+                **({"order_source_id": doc.order_source} if doc.order_source else {}),
             }
-            if notes:
-                fields["notes"] = notes
-            discount = money(data.get("discount_amount"))
+            if doc.notes:
+                fields["notes"] = doc.notes
+            discount = money(doc.discount)
             if discount > 0:
-                fields["adjustment_label"] = data.get("discount_label") or "خصم"
+                fields["adjustment_label"] = doc.discount_label or "خصم"
                 fields["adjustment_value"] = float(-discount)
             # Not yet seen on a real estimate: printed on an invoice's last page, and sent the same way
-            term = terms_to_print(request)
+            term = doc.terms
             if term is not None:
                 fields["html_notes"] = printed_terms.as_html(term.body)
             request.save_document(
-                "estimate", daftra.create("estimates.json", {"Invoice": fields, "InvoiceItem": items}))
+                "estimate", daftra.create("estimates.json", {"Invoice": fields, "InvoiceItem": list(doc.items)}))
             request.printed_terms_id, request.printed_terms = (term.id, term.label) if term else (None, None)
         estimate = get_estimate(request.daftra_estimate_id)
     request.save_document("estimate", request.daftra_estimate_id, estimate.get("no") or "")
 
-    expected, actual = money(data.get("total_amount")), money(estimate.get("summary_total"))
+    expected, actual = money(doc.total), money(estimate.get("summary_total"))
     if abs(expected - actual) > TOTAL_TOLERANCE:
         raise SyncError(
             f"أُنشئ عرض السعر {request.daftra_estimate_no} في دفترة لكن إجماليه {actual} لا يساوي إجمالي الطلب "

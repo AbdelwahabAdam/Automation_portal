@@ -1,0 +1,225 @@
+{
+ "actions": [],
+ "daftra_note": "",
+ "description": "تسجيل التحصيل النقدي",
+ "disabled": false,
+ "hidden": true,
+ "icon": "receipt",
+ "invoiced": false,
+ "key": "tech_cash_collection",
+ "label": "تسجيل تحصيل نقدي بواسطة الفني",
+ "sections": [
+  {
+   "fields": [
+    {
+     "default": "today",
+     "label": "تاريخ الطلب",
+     "name": "request_date",
+     "not_future": true,
+     "required": true,
+     "type": "date"
+    },
+    {
+     "label": "اسم الموظف",
+     "name": "employee_name",
+     "required": false,
+     "type": "auto_user"
+    },
+    {
+     "label": "مصدر الطلب",
+     "name": "source",
+     "options": [
+      "ماركتنج",
+      "عميل شركة",
+      "عميل جديد",
+      "عميل سابق",
+      "مكتب",
+      "الموقع",
+      "أخرى"
+     ],
+     "required": true,
+     "type": "select"
+    }
+   ],
+   "note": null,
+   "title": "بيانات الطلب"
+  },
+  {
+   "fields": [
+    {
+     "label": "رقم الهاتف",
+     "name": "phone",
+     "required": true,
+     "type": "phone"
+    },
+    {
+     "label": "رقم مسؤول اخر",
+     "name": "phone2",
+     "required": false,
+     "type": "phone"
+    },
+    {
+     "label": "كود العميل",
+     "name": "client_code",
+     "pattern": "^\\d{1,6}$",
+     "pattern_message": "أرقام فقط، حتى 6 خانات",
+     "required": true,
+     "type": "text"
+    },
+    {
+     "label": "اسم العميل",
+     "max_length": 150,
+     "name": "customer_name",
+     "required": true,
+     "type": "text"
+    },
+    {
+     "dropdown": true,
+     "label": "نوع العميل",
+     "name": "customer_type",
+     "options": [
+      "فرد",
+      "تجاري"
+     ],
+     "required": false,
+     "type": "select"
+    },
+    {
+     "dropdown": true,
+     "label": "الجنس",
+     "name": "gender",
+     "options": [
+      "ذكر",
+      "أنثى"
+     ],
+     "required": false,
+     "type": "select"
+    }
+   ],
+   "note": null,
+   "title": "بيانات العميل"
+  },
+  {
+   "fields": [
+    {
+     "label": "رقم الفاتورة المطلوب السداد عليها، إن توفر",
+     "name": "invoice_number",
+     "required": false,
+     "type": "text"
+    },
+    {
+     "label": "رقم أمر الشغل، إن توفر",
+     "name": "work_order",
+     "required": false,
+     "type": "text"
+    },
+    {
+     "label": "سبب التحصيل",
+     "name": "collection_reason",
+     "options": [
+      "باقي فاتورة",
+      "أعمال إضافية",
+      "أخرى"
+     ],
+     "required": true,
+     "type": "select"
+    },
+    {
+     "label": "المنتج / الخدمة المرتبط بها التحصيل",
+     "name": "product_name",
+     "required": true,
+     "type": "product"
+    }
+   ],
+   "note": null,
+   "title": "تفاصيل الطلب"
+  },
+  {
+   "fields": [
+    {
+     "label": "المبلغ المحصل نقدًا الآن",
+     "min": 0,
+     "money": true,
+     "name": "paid_amount",
+     "positive": true,
+     "required": true,
+     "type": "number"
+    },
+    {
+     "label": "توزيع المبلغ على الفواتير / الأسباب، إن شمل أكثر من فاتورة أو سبب",
+     "name": "amount_distribution",
+     "required": false,
+     "type": "textarea"
+    }
+   ],
+   "note": null,
+   "title": "قيمة الطلب"
+  },
+  {
+   "fields": [
+    {
+     "default": "نقدًا",
+     "label": "طريقة الدفع",
+     "name": "payment_method",
+     "options": [
+      "نقدًا"
+     ],
+     "required": true,
+     "type": "select"
+    },
+    {
+     "default": "today",
+     "label": "تاريخ الدفع",
+     "name": "payment_date",
+     "not_future": true,
+     "required": true,
+     "type": "date"
+    },
+    {
+     "label": "رقم سند القبض الورقي",
+     "name": "paper_receipt_number",
+     "required": true,
+     "type": "text"
+    },
+    {
+     "label": "اسم الفني المحصل",
+     "name": "technician_name",
+     "required": true,
+     "type": "staff"
+    }
+   ],
+   "note": null,
+   "title": "تفاصيل الدفعة"
+  },
+  {
+   "fields": [
+    {
+     "label": "صورة سند القبض الورقي",
+     "name": "receipt_image",
+     "required": true,
+     "type": "files"
+    },
+    {
+     "label": "صورة الفاتورة المرتبطة، إن توفرت",
+     "name": "invoice_image",
+     "required": false,
+     "type": "files"
+    }
+   ],
+   "note": null,
+   "title": "المرفقات"
+  },
+  {
+   "fields": [
+    {
+     "label": "أي اتفاق خاص أو ملاحظات إضافية",
+     "name": "notes",
+     "required": false,
+     "type": "textarea"
+    }
+   ],
+   "note": null,
+   "title": "ملاحظات"
+  }
+ ]
+}

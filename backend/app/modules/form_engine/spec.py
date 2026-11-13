@@ -113,3 +113,8 @@ class ApprovalContext:
     db: Any
     reviewer: Any = None
     """The approving user, the receipt's المستلم."""
+
+    @property
+    def data(self) -> dict:
+        """The request's fields, as the form's output.py reads them: ctx.data["paid_amount"]."""
+        return self.request.data

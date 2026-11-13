@@ -29,8 +29,9 @@ Three ideas carry most of the weight:
 through its `__init__.py`. Not one module per form: all forms share one table, one lifecycle, one
 validator and one review queue.
 
-**Forms are plugins.** Each of the 19 forms is a folder under `app/forms/<key>/` holding its
-fields, and hooks only where it differs from every other form. Nothing outside that folder names
+**Forms are plugins.** Each of the 20 forms is a folder under `app/forms/<key>/` holding what it
+asks (`fields.py`, one switch per field) and, when approving it creates something in Daftra, what
+it sends there (`output.py`, one function per document). Nothing outside that folder names
 a form — a search for a form key elsewhere in `app/` finds nothing. Adding a form is a folder and
 one line; it needs no router, no table, no migration and no frontend change.
 
@@ -214,7 +215,8 @@ POST /api/review/requests/42/approve           HTTP
 modules/requests/router/review.py              transport: reads the input, builds the Actor
 modules/requests/service/review.py             locks the row, checks form.balance_payment.review,
                                                asks the form what to create
-forms/balance_payment/hooks.py                 the form: what this one creates
+forms/balance_payment/output.py                the form: what goes in each document it sends
+modules/invoicing/runner.py                    builds them all, then makes them in order
 modules/invoicing/invoice.py                   the steps: the payment, the receipt, the PDFs
                                                (estimate.py for the offer طلب عرض سعر makes)
 integrations/daftra/resources.py → client.py   the Daftra client
@@ -228,7 +230,7 @@ form or imports `invoicing`.
 
 ## Adding a form
 
-Nineteen forms exist (6 visible, 13 hidden); a twentieth is a folder and one line. **No router, table, migration or
+Twenty forms exist (7 visible, 13 hidden); another is a folder and one line. **No router, table, migration or
 frontend change.**
 
 ### 1. The folder
@@ -236,12 +238,13 @@ frontend change.**
 ```
 app/forms/<key>/
 ├── __init__.py      the FormSpec — what the form is
-├── definition.py    its sections and fields, and any choices only it offers
-└── hooks.py         only if it differs: a check, or what approving it creates
+├── fields.py        what it asks: its sections, one switch per field
+└── output.py        only if approving it creates something in Daftra: one function per document
 ```
 
 The **key is stored on every request made with that form, so it may never be renamed.** Pick it
-once, in `snake_case`.
+once, in `snake_case`. `tests/test_architecture.py` holds every folder to this shape: `fields.py`
+always, `output.py` exactly when the form has an `on_approve`.
 
 ### 2. The `FormSpec`
 
@@ -250,23 +253,22 @@ once, in `snake_case`.
 ```python
 from ...modules.form_engine import FormSpec, register
 
-from . import definition, hooks
+from . import fields, output
 
 register(FormSpec(
     key="site_visit",                # stored on every request: never rename
     label="طلب زيارة موقع",
     icon="map-pin",                  # any name from the design system's icon set
     description="تسجيل طلب زيارة موقع",
-    sections=definition.SECTIONS,
+    sections=fields.SECTIONS,
     visible=True,                    # False: no new requests; old ones still open and reviewable
     daftra_note="ويُنشأ في دفترة ...",  # only if approving creates something there
-    validate=hooks.validate,         # optional
-    on_approve=hooks.on_approve,     # optional
+    validate=fields.validate,        # optional: a check the field rules cannot express
+    on_approve=output.on_approve,    # optional: what approving creates in Daftra
 ))
 ```
 
-A form with neither hook needs only `__init__.py` and `definition.py`, and its `__init__` imports
-just `definition`.
+A form that creates nothing in Daftra has no `output.py`, and its `__init__` imports just `fields`.
 
 | Field | |
 |---|---|
@@ -317,58 +319,92 @@ serves every form from `/forms/<key>`).
 
 ## A form's fields
 
-`definition.py` holds `SECTIONS`: a list of sections, each a list of fields. Everything comes from
-`modules.form_engine` — **that `__init__` is the only way in**, never
-`form_engine.fields` or `form_engine.options`.
+`fields.py` holds `SECTIONS`. Each section is a function with **one keyword argument per field**,
+and each argument is a switch:
+
+| Switch | |
+|---|---|
+| `HIDE` | not on this form at all |
+| `SHOW` | on the form, may be left empty |
+| `REQUIRED` | on the form, must be filled |
+| `REQUIRED_IF(when)` | must be filled when `when` holds, e.g. `REQUIRED_IF(PAID)` |
+| `NEW_CLIENT(switch)` | as `switch`, but only while the phone search has found no client |
+
+Every field of a section must be named — the arguments have no defaults — so a form that forgets
+one, or misspells one, fails when the app starts rather than when someone opens it. What a field
+*is* (its type, pattern, how it is computed) stays inside the section: a form decides whether it
+appears and whether it must be filled.
 
 ```python
-"""The fields of طلب زيارة موقع, as sections (form_engine has the building blocks)."""
+"""What طلب زيارة موقع asks: its sections, with one switch per field."""
 
-from ...modules.form_engine import NOTES, attachments, f, files, money, request_info, section
+from ...modules.form_engine import HIDE, REQUIRED, SHOW, f, files, money, shared, switched
 
 # Choices only this form offers live here, not in the engine's shared options
 VISIT_REASONS = ["معاينة قبل التركيب", "متابعة شكوى", "صيانة دورية"]
 
-SECTIONS = [
-    request_info("تاريخ الزيارة"),
-    section(
+
+def visit(*, reason, technician_name, notes_for_team):
+    """This form's own section: a function like the shared ones, written here."""
+    return switched(
         "بيانات الزيارة",
-        f("reason", "سبب الزيارة", "select", True, options=VISIT_REASONS),
-        f("technician_name", "اسم الفني", "staff", True),
-        f("notes_for_team", "ملاحظات للفريق", "textarea"),
+        (reason, f("reason", "سبب الزيارة", "select", options=VISIT_REASONS)),
+        (technician_name, f("technician_name", "اسم الفني", "staff")),
+        (notes_for_team, f("notes_for_team", "ملاحظات للفريق", "textarea")),
         note="تظهر الملاحظات للفني في أمر الزيارة.",
-    ),
-    section("قيمة الزيارة", money("fee_amount", "قيمة الزيارة")),
-    attachments(files("site_photos", "صور الموقع، إن توفرت")),
-    NOTES,
+    )
+
+
+SECTIONS = [
+    shared.request_info(request_date=REQUIRED, employee_name=SHOW, order_source=HIDE, source=REQUIRED,
+                        labels={"request_date": "تاريخ الزيارة"}),
+    visit(reason=REQUIRED, technician_name=REQUIRED, notes_for_team=SHOW),
+    switched("المرفقات", (SHOW, files("site_photos", "صور الموقع، إن توفرت"))),
+    shared.notes(notes=SHOW),
 ]
 ```
 
-### The builders
+`shared.x` is a section many forms use; a plain function is the form's own. Every form's sections
+are pinned by `tests/forms/snapshots/<key>.json` — the JSON the browser is sent — so a change to
+what a form asks shows in review as a change to its snapshot, rewritten on purpose:
 
-```python
-f(name, label, type="text", required=False, **extra)   # one field
-money(name, label, required=False, **extra)            # a dirham amount (number, min 0, money=True)
-yes_no(name, label, required=True, **extra)            # نعم / لا
-files(name, label, required=False, **extra)            # an upload field
-section(title, *fields, note=None)                     # a section, with an optional note under it
-need(condition)                                        # required=True, or required_if=<condition>
+```
+./run-tests.sh tests/forms/test_fields_snapshot.py --update-snapshots
 ```
 
-### Whole sections several forms share
+### The shared sections
 
-Use these instead of rebuilding them — they keep the forms consistent and carry rules of their own:
+From `form_engine/sections.py`, reached as `shared.x(...)`. Each also takes `labels={field: text}`
+for what a field is called on this form, and `note=`.
 
-| Builder | Gives you |
+| Section | Its fields |
 |---|---|
-| `request_info(date_label, invoiced=False, source=True)` | the request date and مصدر الطلب. `invoiced=True` makes the source Daftra's own list; `source=False` leaves it out |
-| `client(code_required, name_label, creates_client=False)` | phone, client code, name — and, with `creates_client=True`, the extra fields a brand-new Daftra client needs |
-| `address(title, required=True)` | emirate, area, street, house, the map picker and the coordinates |
-| `amounts(...)`, `discount_fields(label)` | the subtotal/discount/total block, with the totals computed |
-| `payment(title, when=True, invoiced=False)` | payment method, treasury, date, reference |
-| `attachments(*files)` | the المرفقات section |
-| `original_refs()` | «الطلب الأصلي» references |
-| `NOTES` | the final free-text section |
+| `shared.request_info` | `request_date`, `employee_name`, `order_source` (Daftra's list), `source` (the portal's) |
+| `shared.client` | `phone`, `phone2`, `client_code`, `customer_name`, `customer_type`, `gender`, `email` — and `placeholders=` |
+| `shared.address` | `category`, `area`, `emirate`, `street`, `house`, `location_url`, `coordinates` — and `title=` |
+| `shared.amounts` | `subtotal_amount`, `total_amount`, `discount_label`, `discount_amount`, `discount_approved_by`, `paid_amount`, `remaining_amount`, `remaining_due_date` — and `must_pay=`, `price_default=`, `paid_default=` |
+| `shared.payment` | `payment_method`, `treasury`, `payment_date`, `payment_reference`, `collector_name` — and `title=` |
+| `shared.notes` | `notes` |
+
+In `shared.amounts` an amount the form works out is `SHOW` and one the salesperson types is
+`REQUIRED`: `subtotal_amount=SHOW` is the order lines' total, `=REQUIRED` a price typed in. A
+combination nothing can be worked out from (a remainder with no amount paid) is refused when the
+form loads. Two labels follow the switch rather than the form, because they say whether the field
+must be filled: «كود العميل» / «كود العميل، إن وجد», and the due date of what is left.
+
+### The builders, for a form's own sections
+
+```python
+switched(title, *(switch, field), note=None)           # a section from switched fields
+switched_fields(*(switch, field))                      # the same, as a list: an order line's line_fields
+f(name, label, type="text", **extra)                   # one field
+money(name, label, **extra)                            # a dirham amount (number, min 0, money=True)
+yes_no(name, label, **extra)                           # نعم / لا
+files(name, label, **extra)                            # an upload field
+original_refs()                                        # the three «الطلب الأصلي» reference fields
+```
+
+A field built here leaves `required` to its switch, so write none on it.
 
 ### Field types
 
@@ -401,9 +437,9 @@ Conditions take `{"field": ..., "equals" | "gt" | "not_in": ...}`. The engine's 
 
 - **More than one form offers it** → `form_engine/options.py`, exported from the engine's
   `__init__` (colours, payment methods, emirates, treasury-by-method).
-- **Only this form offers it** → the form's own `definition.py`, as above.
+- **Only this form offers it** → the form's own `fields.py`, as above.
 
-### Validation happens twice, from one definition
+### Validation happens twice, from one set of fields
 
 `form_engine/validation.py` checks a submission against the definition on the server;
 `frontend/src/modules/requests/validation.js` repeats the same checks in the browser for instant
@@ -412,7 +448,7 @@ taken from the browser.
 
 ### A check the field rules cannot express
 
-Put it in `hooks.py` as `validate`, and point the spec at it:
+It is a rule about the form's fields, so it goes in `fields.py` as `validate`, and the spec points at it:
 
 ```python
 def validate(data: dict, ctx) -> dict:
@@ -434,62 +470,88 @@ Only `balance_payment` has one today.
 
 ## What approving a form creates in Daftra
 
-If approving the form should create something in Daftra, give it an `on_approve` in `hooks.py`.
-Four forms have one — new_sale, contract_renewal, maintenance and balance_payment. This is
-the part to be careful with: it writes real numbered documents into
-the live account.
+If approving the form should create something in Daftra, give it an `output.py`. Seven forms have
+one — new_sale, online_sale, contract_renewal, maintenance, balance_payment, quotation and
+tech_extra_works. This is the part to be careful with: it writes real numbered documents into the
+live account.
 
 ### The shape
 
+One function per document, each returning what goes into it field by field — or `None` when this
+request has none — and the list they are made in:
+
 ```python
-"""What makes طلب زيارة موقع different: what approving it creates in Daftra."""
+"""What approving طلب زيارة موقع sends to Daftra."""
 
-from ...modules.invoicing import (ensure_invoice, finish, invoice_items, payment_inputs,
-                                  reports_daftra_errors, sales_person)
-from ...modules.clients import client_id, update_client
+from ...core.text import squash
+from ...modules.invoicing import (ClientRecord, Invoice, Receipt, approve, money, order_lines, package_terms,
+                                  sales_person, service_address)
 
 
-@reports_daftra_errors
-def on_approve(ctx) -> dict:
-    request, db = ctx.request, ctx.db
-    data = request.data
+def client(ctx):
+    d = ctx.data
+    return ClientRecord(phone=d.get("phone"), client_code=d.get("client_code"), name=d.get("customer_name"),
+                        if_unknown="create", keep_in_step=True)
 
-    # 1. Everything that can be checked is checked before anything is sent
-    items = invoice_items(data, db)
-    staff_id = sales_person(request)
-    paid, method = payment_inputs(data)
 
-    # 2. The client, if this form can bring a new one
-    if request.daftra_client_id is None:
-        request.save_document("client", client_id(data, db))
-    update_client(request.daftra_client_id, data)
+def invoice(ctx):
+    d = ctx.data
+    return Invoice(
+        items=order_lines(ctx),                  # raises, before anything is sent, for an unlinked product
+        sales_person=sales_person(ctx.request),  # raises for a salesperson not linked to Daftra
+        date=d.get("request_date"),
+        total=d.get("total_amount"),             # what Daftra's total must come to
+        address=service_address(d),
+        terms=package_terms(ctx),
+    )
 
-    # 3. The invoice, then the receipt and both PDFs
-    invoice = ensure_invoice(request, items, staff_id)
-    return finish(request, invoice, paid, method, db)
+
+def receipt(ctx):
+    d = ctx.data
+    if money(d.get("paid_amount")) <= 0:
+        return None                              # nothing paid: no receipt
+    return Receipt(amount=d.get("paid_amount"), method=d.get("payment_method") or "",
+                   treasury=d.get("treasury"), date=d.get("payment_date"),
+                   received_by=sales_person(ctx.request), client_name=squash(d.get("customer_name")))
+
+
+DOCUMENTS = [client, invoice, receipt]
+on_approve = approve(DOCUMENTS)
 ```
 
-`ctx` is an `ApprovalContext`: `ctx.request`, `ctx.db`, `ctx.reviewer` (the approving manager). The
-receipt's المستلم is the salesperson who sent the request, not them. The return value is a summary
-dict that goes into the activity log.
+`ctx` is an `ApprovalContext`: `ctx.data` (the request's fields), `ctx.request`, `ctx.db`,
+`ctx.reviewer` (the approving manager).
 
-### The building blocks
+**Every function is called before anything is sent**, so a check one makes — an unlinked product,
+an unknown payment method — stops the approval before the client is created. Then the documents
+are made in the order of `DOCUMENTS`. A `Receipt` pays the `Invoice` (or `ExistingInvoice`) just
+before it; a `WorkOrder` and an `InvoiceEmail` need an invoice before them. The invoice's PDF is
+taken after its receipt, because Daftra draws it as it stands.
 
-From `modules.invoicing`:
+`tests/forms/test_fields_and_output_agree.py` reads each `output.py` and fails when it reads a
+field its `fields.py` does not show — so hiding a field the receipt needs fails in a test, not at
+اعتماد. A field read only for requests an earlier version of the form wrote is listed in that
+form's `LEGACY_FIELDS`.
+
+### The documents
+
+From `modules.invoicing` (`documents.py`). The form decides every field; what no form should repeat
+— making each once however often it is approved, `is_offline`, store, branch, tax, the total check,
+the PDFs — the engine does.
 
 | | |
 |---|---|
-| `invoice_items(data, db)` | the order lines as Daftra `InvoiceItem` rows, prices looked up here. Raises if a product is not linked to Daftra |
-| `ensure_invoice(request, items, staff_id)` | the invoice — found again if it already exists, created if not. Sends no «notes»: Daftra shows them under الشروط والأحكام, which holds only the warranty terms |
-| `ensure_payment(request, invoice, paid, method, reviewer)` | the receipt (سند قبض) |
-| `finish(request, invoice, paid, method, reviewer, db)` | the usual tail: the payment, both PDFs, the summary |
-| `ensure_work_order(request, invoice, reviewer, db)` | the installation work order, its custom fields and its PDF |
-| `ensure_estimate(request, items, staff_id, notes="")`, `save_estimate_pdf(request, estimate, db)` | the offer (عرض سعر) and its PDF — what طلب عرض سعر creates instead of an invoice. No payment and no work order: Daftra records nothing against an estimate |
-| `get_invoice(id)`, `get_estimate(id)`, `payment_of(request, invoice)` | reading back |
-| `sales_person(request)` | the submitter's Daftra staff id; raises a readable error if they are not linked |
-| `payment_inputs(data)` | the amount paid now and its Daftra payment-method key |
-| `money(value)`, `marker(request)`, `TOTAL_TOLERANCE` | amounts, and the mark that finds a document again |
-| `reports_daftra_errors` | **always decorate with this.** It turns any Daftra refusal into the `SyncError` the manager reads |
+| `ClientRecord` | العميل, found by code or phone. `if_unknown="create"` makes it; any other text is the error shown. `keep_in_step` puts what the form says on a known client |
+| `Invoice` | الفاتورة: `items`, `sales_person`, `date`, `total`, `discount`, `discount_label`, `order_source`, `address`, `terms`. Sends no «notes»: Daftra shows them under الشروط والأحكام |
+| `Estimate` | عرض السعر: an invoice's fields, and `notes`. No receipt and no work order go with it |
+| `ExistingInvoice` | an invoice Daftra already has, for the receipt after it to pay (طلب تسديد مبلغ متبقي) |
+| `Receipt` | سند القبض: `amount`, `method` (the form's word, turned into Daftra's key), `treasury`, `date`, `reference`, `received_by`, `notes` |
+| `WorkOrder` | أمر الشغل: `title`, `days`, `description`, `fields` (its custom fields by name), `printed` (what the PDF prints) |
+| `InvoiceEmail` | the invoice emailed by the portal — Daftra sends nothing through the API |
+
+And what they are built from: `order_lines(ctx)`, `service_address(data)`, `package_terms(ctx)`,
+`installation_work_order(request, db)` (the cooler's work order, worked out from the order lines),
+`sales_person(request)`, `form_notes(data, *parts)`, `money(value)`.
 
 From `modules.clients`: `client_id`, `existing_client_id`, `known_client`, `update_client`,
 `save_address`, `held_custom_fields`.

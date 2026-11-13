@@ -1,0 +1,415 @@
+{
+ "actions": [],
+ "daftra_note": "",
+ "description": "تحويل عرض سعر معتمد إلى فاتورة",
+ "disabled": false,
+ "hidden": true,
+ "icon": "copy",
+ "invoiced": false,
+ "key": "quote_to_invoice",
+ "label": "طلب تحويل عرض سعر إلى فاتورة",
+ "sections": [
+  {
+   "fields": [
+    {
+     "default": "today",
+     "label": "تاريخ الاتفاق مع العميل",
+     "name": "request_date",
+     "not_future": true,
+     "required": true,
+     "type": "date"
+    },
+    {
+     "label": "اسم الموظف",
+     "name": "employee_name",
+     "required": false,
+     "type": "auto_user"
+    },
+    {
+     "label": "مصدر الطلب",
+     "name": "source",
+     "options": [
+      "ماركتنج",
+      "عميل شركة",
+      "عميل جديد",
+      "عميل سابق",
+      "مكتب",
+      "الموقع",
+      "أخرى"
+     ],
+     "required": true,
+     "type": "select"
+    }
+   ],
+   "note": null,
+   "title": "بيانات الطلب"
+  },
+  {
+   "fields": [
+    {
+     "label": "رقم الهاتف",
+     "name": "phone",
+     "required": true,
+     "type": "phone"
+    },
+    {
+     "label": "رقم مسؤول اخر",
+     "name": "phone2",
+     "required": false,
+     "type": "phone"
+    },
+    {
+     "label": "كود العميل، إن وجد",
+     "name": "client_code",
+     "pattern": "^\\d{1,6}$",
+     "pattern_message": "أرقام فقط، حتى 6 خانات",
+     "required": false,
+     "type": "text"
+    },
+    {
+     "label": "اسم العميل / الجهة المطلوب على الفاتورة",
+     "max_length": 150,
+     "name": "customer_name",
+     "required": true,
+     "type": "text"
+    },
+    {
+     "dropdown": true,
+     "label": "نوع العميل",
+     "name": "customer_type",
+     "options": [
+      "فرد",
+      "تجاري"
+     ],
+     "required": false,
+     "type": "select"
+    },
+    {
+     "dropdown": true,
+     "label": "الجنس",
+     "name": "gender",
+     "options": [
+      "ذكر",
+      "أنثى"
+     ],
+     "required": false,
+     "type": "select"
+    }
+   ],
+   "note": null,
+   "title": "بيانات العميل"
+  },
+  {
+   "fields": [
+    {
+     "label": "التصنيف",
+     "name": "category",
+     "required": false,
+     "type": "daftra_client_category"
+    },
+    {
+     "from_category": "category",
+     "label": "المنطقة",
+     "max_length": 100,
+     "name": "area",
+     "readonly": true,
+     "required": false,
+     "type": "text"
+    },
+    {
+     "label": "الإمارة",
+     "name": "emirate",
+     "options": [
+      "أبوظبي",
+      "العين",
+      "دبي",
+      "الشارقة",
+      "عجمان",
+      "أم القيوين",
+      "رأس الخيمة",
+      "الفجيرة"
+     ],
+     "required": false,
+     "type": "select"
+    },
+    {
+     "label": "الشارع",
+     "name": "street",
+     "required": false,
+     "type": "text"
+    },
+    {
+     "label": "رقم البيت / اسم الموقع",
+     "name": "house",
+     "required": false,
+     "type": "text"
+    },
+    {
+     "label": "موقع العميل",
+     "max_length": 255,
+     "name": "location_url",
+     "pattern": "^https?://\\S+$",
+     "pattern_message": "الصق رابط الموقع من خرائط جوجل",
+     "placeholder": "https://maps.app.goo.gl/…",
+     "required": false,
+     "type": "text"
+    },
+    {
+     "coordinates_from": "location_url",
+     "label": "الإحداثيات",
+     "ltr": true,
+     "max_length": 100,
+     "name": "coordinates",
+     "placeholder": "مثال: 24.178700, 55.604510",
+     "required": false,
+     "type": "text"
+    }
+   ],
+   "note": null,
+   "title": "عنوان الخدمة — إذا تغيّر أو لم يُذكر في العرض"
+  },
+  {
+   "fields": [
+    {
+     "label": "رقم عرض السعر المطلوب تحويله",
+     "name": "quotation_number",
+     "required": true,
+     "type": "text"
+    },
+    {
+     "label": "تاريخ عرض السعر",
+     "name": "quotation_date",
+     "not_future": true,
+     "required": true,
+     "type": "date"
+    },
+    {
+     "label": "المنتج / الخدمة المرتبط بها العرض",
+     "name": "product_name",
+     "required": true,
+     "type": "product"
+    },
+    {
+     "label": "هل العميل وافق على عرض السعر؟",
+     "name": "customer_approved",
+     "options": [
+      "نعم",
+      "لا"
+     ],
+     "required": true,
+     "type": "select"
+    },
+    {
+     "label": "تاريخ موافقة العميل، إن تم",
+     "name": "approval_date",
+     "not_future": true,
+     "required": false,
+     "required_if": {
+      "equals": "نعم",
+      "field": "customer_approved"
+     },
+     "type": "date"
+    },
+    {
+     "label": "هل يوجد تغيير عن العرض؟",
+     "name": "has_changes",
+     "options": [
+      "نعم",
+      "لا"
+     ],
+     "required": true,
+     "type": "select"
+    },
+    {
+     "label": "تفاصيل التغيير، إن وجد",
+     "name": "change_details",
+     "required": false,
+     "required_if": {
+      "equals": "نعم",
+      "field": "has_changes"
+     },
+     "type": "textarea"
+    },
+    {
+     "label": "اسم المسؤول الذي اعتمد التحويل، إن تم",
+     "name": "conversion_approved_by",
+     "required": false,
+     "type": "staff"
+    },
+    {
+     "label": "هل مطلوب إرسال كشف حساب؟",
+     "name": "statement_needed",
+     "options": [
+      "نعم",
+      "لا"
+     ],
+     "required": true,
+     "type": "select"
+    }
+   ],
+   "note": null,
+   "title": "تفاصيل الطلب"
+  },
+  {
+   "fields": [
+    {
+     "label": "قيمة الطلب النهائية بعد الخصم، شامل الضريبة والإضافات",
+     "min": 0,
+     "money": true,
+     "name": "total_amount",
+     "required": true,
+     "type": "number"
+    },
+    {
+     "label": "خصم إضافي عن عرض السعر، إن وجد",
+     "min": 0,
+     "money": true,
+     "name": "discount_amount",
+     "required": false,
+     "type": "number"
+    },
+    {
+     "label": "اسم الشخص الذي اعتمد الخصم",
+     "name": "discount_approved_by",
+     "required": false,
+     "required_if": {
+      "field": "discount_amount",
+      "gt": 0
+     },
+     "type": "staff"
+    },
+    {
+     "label": "المبلغ المدفوع فعليًا الآن",
+     "min": 0,
+     "money": true,
+     "name": "paid_amount",
+     "positive": false,
+     "required": true,
+     "type": "number"
+    },
+    {
+     "computed": [
+      "total_amount",
+      "paid_amount"
+     ],
+     "label": "المبلغ المتبقي",
+     "money": true,
+     "name": "remaining_amount",
+     "negative_message": "المبلغ المدفوع أكبر من قيمة الطلب",
+     "required": false,
+     "type": "number"
+    },
+    {
+     "label": "موعد سداد المتبقي، إن وجد",
+     "name": "remaining_due_date",
+     "required": false,
+     "type": "date"
+    }
+   ],
+   "note": null,
+   "title": "قيمة الطلب"
+  },
+  {
+   "fields": [
+    {
+     "label": "طريقة الدفع",
+     "name": "payment_method",
+     "options": [
+      "تحويل بنكي",
+      "نقدًا",
+      "ماكينة POS",
+      "تابي",
+      "تمارا",
+      "طلب من الموقع"
+     ],
+     "required": false,
+     "required_if": {
+      "field": "paid_amount",
+      "gt": 0
+     },
+     "type": "select"
+    },
+    {
+     "default": "today",
+     "label": "تاريخ الدفع",
+     "name": "payment_date",
+     "not_future": true,
+     "required": false,
+     "required_if": {
+      "field": "paid_amount",
+      "gt": 0
+     },
+     "type": "date"
+    },
+    {
+     "label": "رقم التحويل / طلب تابي / السند الورقي",
+     "name": "payment_reference",
+     "required": false,
+     "required_if": {
+      "field": "paid_amount",
+      "gt": 0
+     },
+     "type": "text"
+    },
+    {
+     "label": "اسم المحصل، في حالة الدفع النقدي",
+     "name": "collector_name",
+     "required": false,
+     "required_if": {
+      "equals": "نقدًا",
+      "field": "payment_method"
+     },
+     "type": "staff"
+    }
+   ],
+   "note": null,
+   "title": "تفاصيل الدفعة — إن وُجدت دفعة"
+  },
+  {
+   "fields": [
+    {
+     "label": "عرض السعر المطلوب تحويله",
+     "name": "quotation_file",
+     "required": true,
+     "type": "files"
+    },
+    {
+     "label": "إثبات موافقة العميل، إن توفر",
+     "name": "approval_proof",
+     "required": false,
+     "type": "files"
+    },
+    {
+     "label": "إثبات الدفع، إن وُجدت دفعة",
+     "name": "payment_proof",
+     "required": false,
+     "required_if": {
+      "field": "paid_amount",
+      "gt": 0
+     },
+     "type": "files"
+    },
+    {
+     "label": "التصميم أو المواصفات المعدّلة، إن وجدت",
+     "name": "design_image",
+     "required": false,
+     "type": "files"
+    }
+   ],
+   "note": null,
+   "title": "المرفقات"
+  },
+  {
+   "fields": [
+    {
+     "label": "أي اتفاق خاص أو ملاحظات إضافية",
+     "name": "notes",
+     "required": false,
+     "type": "textarea"
+    }
+   ],
+   "note": null,
+   "title": "ملاحظات"
+  }
+ ]
+}

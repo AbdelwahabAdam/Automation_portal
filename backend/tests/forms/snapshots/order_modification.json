@@ -1,0 +1,441 @@
+{
+ "actions": [],
+ "daftra_note": "",
+ "description": "تسجيل التعديل المطلوب",
+ "disabled": false,
+ "hidden": true,
+ "icon": "edit",
+ "invoiced": false,
+ "key": "order_modification",
+ "label": "طلب تعديل على طلب قائم",
+ "sections": [
+  {
+   "fields": [
+    {
+     "default": "today",
+     "label": "تاريخ الاتفاق مع العميل",
+     "name": "request_date",
+     "not_future": true,
+     "required": true,
+     "type": "date"
+    },
+    {
+     "label": "اسم الموظف",
+     "name": "employee_name",
+     "required": false,
+     "type": "auto_user"
+    },
+    {
+     "label": "مصدر الطلب",
+     "name": "source",
+     "options": [
+      "ماركتنج",
+      "عميل شركة",
+      "عميل جديد",
+      "عميل سابق",
+      "مكتب",
+      "الموقع",
+      "أخرى"
+     ],
+     "required": true,
+     "type": "select"
+    }
+   ],
+   "note": null,
+   "title": "بيانات الطلب"
+  },
+  {
+   "fields": [
+    {
+     "label": "رقم الهاتف",
+     "name": "phone",
+     "required": true,
+     "type": "phone"
+    },
+    {
+     "label": "رقم مسؤول اخر",
+     "name": "phone2",
+     "required": false,
+     "type": "phone"
+    },
+    {
+     "label": "كود العميل",
+     "name": "client_code",
+     "pattern": "^\\d{1,6}$",
+     "pattern_message": "أرقام فقط، حتى 6 خانات",
+     "required": true,
+     "type": "text"
+    },
+    {
+     "label": "اسم العميل المطلوب على الفاتورة",
+     "max_length": 150,
+     "name": "customer_name",
+     "required": true,
+     "type": "text"
+    },
+    {
+     "dropdown": true,
+     "label": "نوع العميل",
+     "name": "customer_type",
+     "options": [
+      "فرد",
+      "تجاري"
+     ],
+     "required": false,
+     "type": "select"
+    },
+    {
+     "dropdown": true,
+     "label": "الجنس",
+     "name": "gender",
+     "options": [
+      "ذكر",
+      "أنثى"
+     ],
+     "required": false,
+     "type": "select"
+    }
+   ],
+   "note": null,
+   "title": "بيانات العميل"
+  },
+  {
+   "fields": [
+    {
+     "label": "التصنيف",
+     "name": "category",
+     "required": false,
+     "type": "daftra_client_category"
+    },
+    {
+     "from_category": "category",
+     "label": "المنطقة",
+     "max_length": 100,
+     "name": "area",
+     "readonly": true,
+     "required": false,
+     "type": "text"
+    },
+    {
+     "label": "الإمارة",
+     "name": "emirate",
+     "options": [
+      "أبوظبي",
+      "العين",
+      "دبي",
+      "الشارقة",
+      "عجمان",
+      "أم القيوين",
+      "رأس الخيمة",
+      "الفجيرة"
+     ],
+     "required": false,
+     "type": "select"
+    },
+    {
+     "label": "الشارع",
+     "name": "street",
+     "required": false,
+     "type": "text"
+    },
+    {
+     "label": "رقم البيت / اسم الموقع",
+     "name": "house",
+     "required": false,
+     "type": "text"
+    },
+    {
+     "label": "موقع العميل",
+     "max_length": 255,
+     "name": "location_url",
+     "pattern": "^https?://\\S+$",
+     "pattern_message": "الصق رابط الموقع من خرائط جوجل",
+     "placeholder": "https://maps.app.goo.gl/…",
+     "required": false,
+     "type": "text"
+    },
+    {
+     "coordinates_from": "location_url",
+     "label": "الإحداثيات",
+     "ltr": true,
+     "max_length": 100,
+     "name": "coordinates",
+     "placeholder": "مثال: 24.178700, 55.604510",
+     "required": false,
+     "type": "text"
+    }
+   ],
+   "note": null,
+   "title": "عنوان الخدمة — إذا كان التعديل يخص العنوان"
+  },
+  {
+   "fields": [
+    {
+     "label": "رقم الطلب الأصلي، إن توفر",
+     "name": "original_order",
+     "required": false,
+     "type": "text"
+    },
+    {
+     "label": "رقم الفاتورة الأصلية، إن توفر",
+     "name": "original_invoice",
+     "required": false,
+     "type": "text"
+    },
+    {
+     "label": "رقم أمر الشغل، إن توفر",
+     "name": "work_order",
+     "required": false,
+     "type": "text"
+    },
+    {
+     "label": "المنتج / الخدمة المرتبط بها التعديل",
+     "name": "product_name",
+     "required": true,
+     "type": "product"
+    },
+    {
+     "label": "المطلوب تعديله",
+     "name": "modified_items",
+     "options": [
+      "بيانات العميل",
+      "العنوان",
+      "المنتج",
+      "الكمية",
+      "اللون",
+      "التصميم",
+      "الكتابة",
+      "السعر",
+      "أخرى"
+     ],
+     "required": true,
+     "type": "multiselect"
+    },
+    {
+     "label": "البيانات أو المواصفات قبل التعديل",
+     "name": "before_change",
+     "required": true,
+     "type": "textarea"
+    },
+    {
+     "label": "البيانات أو المواصفات المطلوبة بعد التعديل",
+     "name": "after_change",
+     "required": true,
+     "type": "textarea"
+    },
+    {
+     "label": "سبب التعديل",
+     "name": "change_reason",
+     "required": true,
+     "type": "textarea"
+    },
+    {
+     "label": "حالة تنفيذ الطلب",
+     "name": "execution_status",
+     "options": [
+      "لم يبدأ",
+      "قيد التنفيذ",
+      "تم التنفيذ",
+      "غير معروف"
+     ],
+     "required": true,
+     "type": "select"
+    },
+    {
+     "label": "هل العميل وافق على التعديل وتكلفته؟",
+     "name": "customer_approved",
+     "options": [
+      "نعم",
+      "لا"
+     ],
+     "required": true,
+     "type": "select"
+    },
+    {
+     "label": "اسم المسؤول الذي اعتمد التعديل، إن تم اعتماده",
+     "name": "change_approved_by",
+     "required": false,
+     "type": "staff"
+    }
+   ],
+   "note": null,
+   "title": "تفاصيل الطلب"
+  },
+  {
+   "fields": [
+    {
+     "label": "هل التعديل يغيّر قيمة الطلب؟",
+     "name": "value_change",
+     "options": [
+      "زيادة",
+      "تخفيض",
+      "بدون تغيير",
+      "تحتاج مراجعة"
+     ],
+     "required": true,
+     "type": "select"
+    },
+    {
+     "label": "قيمة الطلب النهائية قبل التعديل",
+     "min": 0,
+     "money": true,
+     "name": "total_before",
+     "required": true,
+     "type": "number"
+    },
+    {
+     "label": "قيمة الطلب النهائية بعد التعديل، شامل الضريبة والإضافات",
+     "min": 0,
+     "money": true,
+     "name": "total_amount",
+     "required": true,
+     "type": "number"
+    },
+    {
+     "label": "خصم إضافي مرتبط بالتعديل، إن وجد",
+     "min": 0,
+     "money": true,
+     "name": "discount_amount",
+     "required": false,
+     "type": "number"
+    },
+    {
+     "label": "اسم الشخص الذي اعتمد الخصم",
+     "name": "discount_approved_by",
+     "required": false,
+     "required_if": {
+      "field": "discount_amount",
+      "gt": 0
+     },
+     "type": "staff"
+    },
+    {
+     "label": "المبلغ المدفوع فعليًا الآن",
+     "min": 0,
+     "money": true,
+     "name": "paid_amount",
+     "required": true,
+     "type": "number"
+    },
+    {
+     "label": "المبلغ المتبقي بعد التعديل",
+     "min": 0,
+     "money": true,
+     "name": "remaining_amount",
+     "required": true,
+     "type": "number"
+    },
+    {
+     "label": "موعد سداد المتبقي، إن وجد",
+     "name": "remaining_due_date",
+     "required": false,
+     "type": "date"
+    }
+   ],
+   "note": null,
+   "title": "قيمة الطلب"
+  },
+  {
+   "fields": [
+    {
+     "label": "طريقة الدفع",
+     "name": "payment_method",
+     "options": [
+      "تحويل بنكي",
+      "نقدًا",
+      "ماكينة POS",
+      "تابي",
+      "تمارا",
+      "طلب من الموقع"
+     ],
+     "required": false,
+     "required_if": {
+      "field": "paid_amount",
+      "gt": 0
+     },
+     "type": "select"
+    },
+    {
+     "default": "today",
+     "label": "تاريخ الدفع",
+     "name": "payment_date",
+     "not_future": true,
+     "required": false,
+     "required_if": {
+      "field": "paid_amount",
+      "gt": 0
+     },
+     "type": "date"
+    },
+    {
+     "label": "رقم التحويل / طلب تابي / السند الورقي",
+     "name": "payment_reference",
+     "required": false,
+     "required_if": {
+      "field": "paid_amount",
+      "gt": 0
+     },
+     "type": "text"
+    },
+    {
+     "label": "اسم المحصل، في حالة الدفع النقدي",
+     "name": "collector_name",
+     "required": false,
+     "required_if": {
+      "equals": "نقدًا",
+      "field": "payment_method"
+     },
+     "type": "staff"
+    }
+   ],
+   "note": null,
+   "title": "تفاصيل الدفعة — إن وُجدت دفعة جديدة"
+  },
+  {
+   "fields": [
+    {
+     "label": "صورة الفاتورة / الطلب الأصلي، إن توفرت",
+     "name": "invoice_image",
+     "required": false,
+     "type": "files"
+    },
+    {
+     "label": "صورة التصميم أو المواصفات الجديدة، إن تنطبق",
+     "name": "design_image",
+     "required": false,
+     "type": "files"
+    },
+    {
+     "label": "صورة / ملف الكتابة الجديدة، إن وجدت",
+     "name": "inscription_file",
+     "required": false,
+     "type": "files"
+    },
+    {
+     "label": "إثبات الدفع، إن وُجدت دفعة جديدة",
+     "name": "payment_proof",
+     "required": false,
+     "required_if": {
+      "field": "paid_amount",
+      "gt": 0
+     },
+     "type": "files"
+    }
+   ],
+   "note": null,
+   "title": "المرفقات"
+  },
+  {
+   "fields": [
+    {
+     "label": "أي اتفاق خاص أو ملاحظات إضافية",
+     "name": "notes",
+     "required": false,
+     "type": "textarea"
+    }
+   ],
+   "note": null,
+   "title": "ملاحظات"
+  }
+ ]
+}

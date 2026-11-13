@@ -17,7 +17,6 @@ from ...integrations import daftra
 from ...integrations.daftra import DaftraError
 from .. import requests
 from .. import terms as printed_terms
-from .payment_methods import PAYMENT_METHOD_KEYS
 
 from ...core.text import UAE, display_name, squash
 
@@ -103,23 +102,19 @@ def sales_person(request) -> int:
 
 def sales_person_name(request) -> str:
     """Who sent the request, as Daftra names the staff member they are linked to: the name they have
-    in the portal means nothing there. Staff Daftra no longer lists as active, or Daftra not
-    answering, leaves the portal's name, as a name is not worth stopping an approval for."""
+    in the portal means nothing there."""
+    return staff_name(request.created_by.daftra_staff_id, request.created_by)
+
+
+def staff_name(staff_id, user) -> str:
+    """A Daftra staff member's name, as Daftra has it. Staff Daftra no longer lists as active, or
+    Daftra not answering, leaves the portal's name of `user`, as a name is not worth stopping an
+    approval for."""
     try:
         members = daftra.list_staff_members()
     except DaftraError:
         members = []
-    return next((member["name"] for member in members if member["id"] == request.created_by.daftra_staff_id),
-                display_name(request.created_by))
-
-
-def payment_inputs(data: dict) -> tuple[Decimal, str | None]:
-    """The amount paid now and its Daftra payment method key, checked before anything is sent."""
-    paid = money(data.get("paid_amount"))
-    method = PAYMENT_METHOD_KEYS.get(data.get("payment_method"))
-    if paid > 0 and not method:
-        raise SyncError(f"طريقة الدفع «{data.get('payment_method') or '—'}» غير معروفة لدفترة.")
-    return paid, method
+    return next((member["name"] for member in members if member["id"] == staff_id), display_name(user))
 
 
 def attach_pdf(request, field: str, title: str, invoice: dict, content: bytes, db: Session):

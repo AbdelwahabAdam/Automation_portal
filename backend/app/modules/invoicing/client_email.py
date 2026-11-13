@@ -9,9 +9,10 @@ whatever hash it is given, so it is not offered.
 from decimal import Decimal
 
 from ...core.config import UPLOAD_DIR
-from ...core.text import day_month_year, squash
+from ...core.text import day_month_year
 from .. import notifications
 from .common import INVOICE_ATTACHMENT_FIELD, money
+from .documents import InvoiceEmail
 from .invoice import get_invoice
 
 
@@ -31,19 +32,19 @@ def invoice_pdf(request) -> list[tuple[str, bytes, str]]:
     return [(saved.filename, path.read_bytes(), "application/pdf")]
 
 
-def email_invoice_to_client(request) -> str:
-    """Emails the request's invoice to the email on the request, with what is still due today.
-    Returns the address it went to; raises notifications.MailError if it could not be sent."""
-    to = str(request.data.get("email") or "").strip()
+def send_invoice_email(request, email: InvoiceEmail) -> str:
+    """Emails the request's invoice, with what is still due today. Returns the address it went
+    to; raises notifications.MailError if it could not be sent."""
+    to = str(email.to or "").strip()
     if not to:
         raise notifications.MailError("لا يوجد بريد إلكتروني للعميل في الطلب")
     invoice = get_invoice(request.daftra_invoice_id)
-    due_on = request.data.get("remaining_due_date") or invoice.get("date") or ""
+    due_on = email.due_date or invoice.get("date") or ""
     unpaid = invoice.get("summary_unpaid")
     message = notifications.compose(
         "invoice_to_client",
         invoice_no=invoice.get("no") or request.daftra_invoice_no or "",
-        client_name=squash(request.data.get("customer_name")) or "عميلنا العزيز",
+        client_name=email.client_name or "عميلنا العزيز",
         due_date=day_month_year(str(due_on)) if due_on else "—",
         total=amount(invoice.get("summary_total")),
         due=amount(unpaid if unpaid is not None else Decimal(invoice.get("summary_total") or 0)),

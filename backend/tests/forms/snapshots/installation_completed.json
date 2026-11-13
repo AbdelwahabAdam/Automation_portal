@@ -1,0 +1,272 @@
+{
+ "actions": [],
+ "daftra_note": "",
+ "description": "تسجيل تأكيد الإتمام",
+ "disabled": false,
+ "hidden": true,
+ "icon": "check-circle",
+ "invoiced": false,
+ "key": "installation_completed",
+ "label": "تأكيد إتمام التركيب",
+ "sections": [
+  {
+   "fields": [
+    {
+     "default": "today",
+     "label": "تاريخ الطلب",
+     "name": "request_date",
+     "not_future": true,
+     "required": true,
+     "type": "date"
+    },
+    {
+     "label": "اسم الموظف",
+     "name": "employee_name",
+     "required": false,
+     "type": "auto_user"
+    },
+    {
+     "label": "مصدر الطلب",
+     "name": "source",
+     "options": [
+      "ماركتنج",
+      "عميل شركة",
+      "عميل جديد",
+      "عميل سابق",
+      "مكتب",
+      "الموقع",
+      "أخرى"
+     ],
+     "required": true,
+     "type": "select"
+    }
+   ],
+   "note": null,
+   "title": "بيانات الطلب"
+  },
+  {
+   "fields": [
+    {
+     "label": "رقم الهاتف",
+     "name": "phone",
+     "required": true,
+     "type": "phone"
+    },
+    {
+     "label": "رقم مسؤول اخر",
+     "name": "phone2",
+     "required": false,
+     "type": "phone"
+    },
+    {
+     "label": "كود العميل",
+     "name": "client_code",
+     "pattern": "^\\d{1,6}$",
+     "pattern_message": "أرقام فقط، حتى 6 خانات",
+     "required": true,
+     "type": "text"
+    },
+    {
+     "label": "اسم العميل",
+     "max_length": 150,
+     "name": "customer_name",
+     "required": true,
+     "type": "text"
+    },
+    {
+     "dropdown": true,
+     "label": "نوع العميل",
+     "name": "customer_type",
+     "options": [
+      "فرد",
+      "تجاري"
+     ],
+     "required": false,
+     "type": "select"
+    },
+    {
+     "dropdown": true,
+     "label": "الجنس",
+     "name": "gender",
+     "options": [
+      "ذكر",
+      "أنثى"
+     ],
+     "required": false,
+     "type": "select"
+    }
+   ],
+   "note": null,
+   "title": "بيانات العميل"
+  },
+  {
+   "fields": [
+    {
+     "label": "رقم أمر الشغل",
+     "name": "work_order",
+     "required": true,
+     "type": "text"
+    },
+    {
+     "label": "رقم الفاتورة، إن توفر",
+     "name": "invoice_number",
+     "required": false,
+     "type": "text"
+    },
+    {
+     "label": "المنتج الذي تم تركيبه",
+     "name": "product_name",
+     "required": true,
+     "type": "product"
+    },
+    {
+     "label": "تاريخ التركيب",
+     "name": "installation_date",
+     "not_future": true,
+     "required": true,
+     "type": "date"
+    },
+    {
+     "label": "اسم الفني",
+     "name": "technician_name",
+     "required": true,
+     "type": "staff"
+    },
+    {
+     "label": "حالة التركيب",
+     "name": "installation_status",
+     "options": [
+      "تم بالكامل",
+      "تم مع ملاحظات"
+     ],
+     "required": true,
+     "type": "select"
+    },
+    {
+     "label": "الملاحظات على التركيب",
+     "name": "issues",
+     "required": false,
+     "required_if": {
+      "equals": "تم مع ملاحظات",
+      "field": "installation_status"
+     },
+     "type": "textarea"
+    },
+    {
+     "label": "هل نُفذت أعمال إضافية؟",
+     "name": "extra_work",
+     "options": [
+      "نعم",
+      "لا"
+     ],
+     "required": true,
+     "type": "select"
+    },
+    {
+     "label": "تفاصيل الأعمال الإضافية",
+     "name": "extra_work_details",
+     "required": false,
+     "required_if": {
+      "equals": "نعم",
+      "field": "extra_work"
+     },
+     "type": "textarea"
+    },
+    {
+     "label": "هل وقّع العميل على استلام التركيب؟",
+     "name": "customer_signed",
+     "options": [
+      "نعم",
+      "لا"
+     ],
+     "required": true,
+     "type": "select"
+    }
+   ],
+   "note": null,
+   "title": "تفاصيل التركيب"
+  },
+  {
+   "fields": [
+    {
+     "label": "المبلغ المحصل عند التركيب، إن وجد",
+     "min": 0,
+     "money": true,
+     "name": "paid_amount",
+     "required": false,
+     "type": "number"
+    },
+    {
+     "label": "طريقة الدفع",
+     "name": "payment_method",
+     "options": [
+      "تحويل بنكي",
+      "نقدًا",
+      "ماكينة POS",
+      "تابي",
+      "تمارا",
+      "طلب من الموقع"
+     ],
+     "required": false,
+     "required_if": {
+      "field": "paid_amount",
+      "gt": 0
+     },
+     "type": "select"
+    },
+    {
+     "label": "رقم التحويل / السند الورقي",
+     "name": "payment_reference",
+     "required": false,
+     "required_if": {
+      "field": "paid_amount",
+      "gt": 0
+     },
+     "type": "text"
+    }
+   ],
+   "note": null,
+   "title": "التحصيل عند التركيب"
+  },
+  {
+   "fields": [
+    {
+     "label": "صور التركيب بعد الانتهاء",
+     "name": "installation_photos",
+     "required": true,
+     "type": "files"
+    },
+    {
+     "label": "صورة أمر الشغل الموقّع، إن توفرت",
+     "name": "signed_work_order",
+     "required": false,
+     "type": "files"
+    },
+    {
+     "label": "إثبات الدفع، إن وُجد تحصيل",
+     "name": "payment_proof",
+     "required": false,
+     "required_if": {
+      "field": "paid_amount",
+      "gt": 0
+     },
+     "type": "files"
+    }
+   ],
+   "note": null,
+   "title": "المرفقات"
+  },
+  {
+   "fields": [
+    {
+     "label": "أي اتفاق خاص أو ملاحظات إضافية",
+     "name": "notes",
+     "required": false,
+     "type": "textarea"
+    }
+   ],
+   "note": null,
+   "title": "ملاحظات"
+  }
+ ]
+}

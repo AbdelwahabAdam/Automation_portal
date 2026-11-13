@@ -186,8 +186,8 @@ manage the sales department) review under المبيعات → المراجعة;
 decides on their own request. Each step is kept in the request's history, and the owner is
 emailed when a request is returned or approved.
 
-Forms are defined in `backend/app/forms/definitions.py`. The last eight (reinstallation to daily_visits)
-were drafted from the design's form catalog and their fields still need the business's review.
+Each form is a folder, `backend/app/forms/<key>/` (see "Forms" below). The last eight (reinstallation to
+daily_visits) were drafted from the design's form catalog and their fields still need the business's review.
 
 ## Products and packages
 
@@ -220,9 +220,9 @@ any of them after the proposals import changes the catalog away from the quotati
 
 ## Daftra invoices on approval
 
-Approving one of these requests creates its documents in Daftra. What each form creates is in its
-own folder (`app/forms/<key>/hooks.py`), built from the steps in `app/modules/invoicing/`; the
-review code never names a form, it asks the form. The invoice PDF and the receipt PDF are attached
+Approving one of these requests creates its documents in Daftra. What each form creates, and what
+goes into each document, is in its own `app/forms/<key>/output.py` — one function per document,
+made by the steps in `app/modules/invoicing/`; the review code never names a form, it asks the form. The invoice PDF and the receipt PDF are attached
 to the request. The receipt and work order PDFs are drawn by the portal
 (`modules/invoicing/printouts.py`, templates in `modules/invoicing/templates/pdf/`), since
 Daftra's API has none:
@@ -251,7 +251,7 @@ Daftra's API has none:
 - **اعمال اضافية (قسم الفنيات)**: an invoice of the works picked for a client Daftra already has, and a receipt
   when something was paid. Its four works are named by their Daftra id, and each must be in the catalog:
   - تمديد المياة 6, تمديد الكهرباء 7 and اعمال باسكو 10 are the form's own prices (`TECH_SERVICE_PRICES` in
-    `app/forms/tech_extra_works/definition.py`). The server applies them over the catalog's, on this form only:
+    `app/forms/tech_extra_works/fields.py`). The server applies them over the catalog's, on this form only:
     the same products keep the catalog's price sold alone elsewhere, and their own price in a package.
   - «أخرى» is described and priced on its line.
 
@@ -331,21 +331,31 @@ Every form is a folder, `backend/app/forms/<key>/`:
 - `__init__.py` — its `FormSpec`: the key (stored on every request, so **never rename one**), its
   label, icon and description, whether it is visible, and what approving it creates in Daftra.
   Importing the folder registers the form.
-- `definition.py` — its sections and fields, written with the building blocks the form engine
-  offers, plus the choices only this form uses.
-- `hooks.py` — only where the form differs: `validate` for a check the field rules cannot express,
-  `on_approve` for what approving creates outside the portal.
+- `fields.py` — what it asks: its sections, each a function with one switch per field —
+  `HIDE`, `SHOW`, `REQUIRED` or `REQUIRED_IF(…)`. `shared.client(phone=REQUIRED, …)` is a section
+  several forms share; a plain function is the form's own. Also `validate`, where the form has a
+  check the field rules cannot express, and the choices only this form uses.
+- `output.py` — only when approving it creates something in Daftra: one function per document
+  (`client`, `invoice`, `receipt`, `work_order`…), each filling that document field by field, and
+  `DOCUMENTS`, the order they are made in.
+
+To change what a form asks, change a switch in its `fields.py`; to change what it sends Daftra,
+change a line in its `output.py`. Every form's fields are pinned by a snapshot
+(`backend/tests/forms/snapshots/<key>.json`), which a deliberate change rewrites with
+`./run-tests.sh tests/forms/test_fields_snapshot.py --update-snapshots`.
 
 `backend/app/modules/form_engine/` is the engine: `spec.py` (what a form is), `registry.py` (where
-the forms put themselves), `fields.py` (the building blocks), `options.py` (the choices more than
-one form offers), `validation.py`, `inscriptions.py`. Everything a form needs comes from the
-engine's `__init__.py`, which is the only way in.
+the forms put themselves), `switches.py` and `sections.py` (the switches, and the sections forms
+share), `fields.py` (the field builders), `options.py` (the choices more than one form offers),
+`validation.py`, `inscriptions.py`. Everything a form needs comes from the engine's `__init__.py`,
+which is the only way in. `backend/app/modules/invoicing/` holds the documents (`documents.py`) and
+the runner that makes them (`runner.py`).
 
 The engine never names a form — a search for a form key outside `app/forms/` finds nothing. The
-frontend renders whatever the definitions say, and `validation.py` checks a submission against
-them; `frontend/src/validation.js` repeats the same checks for instant feedback.
+frontend renders whatever the fields say, and `validation.py` checks a submission against them;
+`frontend/src/validation.js` repeats the same checks for instant feedback.
 
-To add a form, see "Adding a form" in `final_plan.md` §14: a folder and one line in
+To add a form, see "Adding a form" in `ARCHITECTURE.md`: a folder and one line in
 `app/forms/__init__.py`, with no router, table, migration or frontend change.
 
 ## Code layout

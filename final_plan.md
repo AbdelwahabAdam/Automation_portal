@@ -94,12 +94,14 @@ backend/app/
 │   └── models.py                # imports every module's models, for SQLAlchemy and Alembic
 ├── forms/                       # one folder per form
 │   ├── __init__.py              # imports every form, which registers it
-│   ├── new_sale/                # __init__.py · definition.py · hooks.py
-│   ├── contract_renewal/        # __init__.py · definition.py · hooks.py
-│   ├── maintenance/             # __init__.py · definition.py · hooks.py
-│   ├── balance_payment/         # __init__.py · definition.py · hooks.py
-│   ├── tech_extra_works/        # __init__.py · definition.py · hooks.py
-│   └── quotation/ …             # the other 14: __init__.py · definition.py
+│   ├── new_sale/                # __init__.py · fields.py · output.py   (forms_plan.md)
+│   ├── online_sale/             # __init__.py · fields.py · output.py
+│   ├── contract_renewal/        # __init__.py · fields.py · output.py
+│   ├── maintenance/             # __init__.py · fields.py · output.py
+│   ├── balance_payment/         # __init__.py · fields.py · output.py
+│   ├── quotation/               # __init__.py · fields.py · output.py
+│   ├── tech_extra_works/        # __init__.py · fields.py · output.py
+│   └── quote_to_invoice/ …      # the other 13: __init__.py · fields.py
 └── jobs/                        # python -m app.jobs <name>   (see §8)
 ```
 
@@ -213,6 +215,10 @@ register(FormSpec(
     on_approve=hooks.on_approve,         # optional: what approving creates outside the portal
 ))
 ```
+
+> **Superseded 2026-11-13 by `forms_plan.md`:** a form folder is now `fields.py` (what it asks, one switch per
+> field) and `output.py` (what it sends Daftra, one function per document), in place of `definition.py` and
+> `hooks.py`. What follows is the shape this refactor first gave them, kept as the record of it.
 
 - **`definition.py`** — the sections and fields, moved as they are from `forms/definitions.py`. Choices only this
   form uses move here from `options.py` (the technical services of tech_extra_works, the devices and services of
@@ -773,12 +779,13 @@ prove it.
 
 ## 14. Adding a form afterwards
 
-1. Make `app/forms/<key>/` with `__init__.py` (the `FormSpec`) and `definition.py`, and add it to
-   `app/forms/__init__.py`.
-2. If approving it creates something in Daftra: `on_approve` in `hooks.py`, built from invoicing's building
-   blocks, and tests in `tests/forms/<key>/` pinning what Daftra receives. A Daftra call the fake does not know yet
-   gets a route in `integrations/daftra/fake.py`.
-3. If it needs checks the field rules cannot express: `validate` in `hooks.py`.
+1. Make `app/forms/<key>/` with `__init__.py` (the `FormSpec`) and `fields.py` (its sections, one switch per
+   field), and add it to `app/forms/__init__.py`. Write its snapshot once, on purpose:
+   `./run-tests.sh tests/forms/test_fields_snapshot.py --update-snapshots`.
+2. If approving it creates something in Daftra: `output.py`, one function per document built from invoicing's
+   documents, `DOCUMENTS` and `on_approve = approve(DOCUMENTS)`, and tests in `tests/forms/<key>/` pinning what
+   Daftra receives. A Daftra call the fake does not know yet gets a route in `integrations/daftra/fake.py`.
+3. If it needs checks the field rules cannot express: `validate` in `fields.py`.
 4. Deploy. The form is closed to everyone but admins until, in الإدارة ← الأدوار والصلاحيات ← النماذج, roles
    are given fill, view and review.
 
@@ -1071,6 +1078,10 @@ register(FormSpec(
     on_approve=hooks.on_approve,
 ))
 ```
+
+> **Superseded 2026-11-13 by `forms_plan.md`:** a form folder is now `fields.py` (what it asks, one switch per
+> field) and `output.py` (what it sends Daftra, one function per document), in place of `definition.py` and
+> `hooks.py`. What follows is the shape this refactor first gave them, kept as the record of it.
 
 **`definition.py`: moved as it is from today's `definitions.py`**
 

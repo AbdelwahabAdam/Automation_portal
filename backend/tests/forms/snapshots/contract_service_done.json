@@ -1,0 +1,201 @@
+{
+ "actions": [],
+ "daftra_note": "",
+ "description": "تسجيل إنجاز الخدمة",
+ "disabled": false,
+ "hidden": true,
+ "icon": "shield",
+ "invoiced": false,
+ "key": "contract_service_done",
+ "label": "تأكيد إنجاز خدمة مشمولة بالعقد",
+ "sections": [
+  {
+   "fields": [
+    {
+     "default": "today",
+     "label": "تاريخ الطلب",
+     "name": "request_date",
+     "not_future": true,
+     "required": true,
+     "type": "date"
+    },
+    {
+     "label": "اسم الموظف",
+     "name": "employee_name",
+     "required": false,
+     "type": "auto_user"
+    },
+    {
+     "label": "مصدر الطلب",
+     "name": "source",
+     "options": [
+      "ماركتنج",
+      "عميل شركة",
+      "عميل جديد",
+      "عميل سابق",
+      "مكتب",
+      "الموقع",
+      "أخرى"
+     ],
+     "required": true,
+     "type": "select"
+    }
+   ],
+   "note": null,
+   "title": "بيانات الطلب"
+  },
+  {
+   "fields": [
+    {
+     "label": "رقم الهاتف",
+     "name": "phone",
+     "required": true,
+     "type": "phone"
+    },
+    {
+     "label": "رقم مسؤول اخر",
+     "name": "phone2",
+     "required": false,
+     "type": "phone"
+    },
+    {
+     "label": "كود العميل",
+     "name": "client_code",
+     "pattern": "^\\d{1,6}$",
+     "pattern_message": "أرقام فقط، حتى 6 خانات",
+     "required": true,
+     "type": "text"
+    },
+    {
+     "label": "اسم العميل",
+     "max_length": 150,
+     "name": "customer_name",
+     "required": true,
+     "type": "text"
+    },
+    {
+     "dropdown": true,
+     "label": "نوع العميل",
+     "name": "customer_type",
+     "options": [
+      "فرد",
+      "تجاري"
+     ],
+     "required": false,
+     "type": "select"
+    },
+    {
+     "dropdown": true,
+     "label": "الجنس",
+     "name": "gender",
+     "options": [
+      "ذكر",
+      "أنثى"
+     ],
+     "required": false,
+     "type": "select"
+    }
+   ],
+   "note": null,
+   "title": "بيانات العميل"
+  },
+  {
+   "fields": [
+    {
+     "label": "رقم العقد / الفاتورة",
+     "name": "contract_number",
+     "required": true,
+     "type": "text"
+    },
+    {
+     "label": "رقم الزيارة في العقد",
+     "name": "visit_number",
+     "options": [
+      "الزيارة الأولى",
+      "الزيارة الثانية",
+      "الزيارة الثالثة",
+      "الزيارة الرابعة",
+      "زيارة إضافية"
+     ],
+     "required": true,
+     "type": "select"
+    },
+    {
+     "label": "الخدمات المنفذة",
+     "name": "services_done",
+     "options": [
+      "تبديل فلاتر",
+      "صيانة البرادة",
+      "تنظيف",
+      "فحص"
+     ],
+     "required": true,
+     "type": "multiselect"
+    },
+    {
+     "label": "تاريخ التنفيذ",
+     "name": "service_date",
+     "not_future": true,
+     "required": true,
+     "type": "date"
+    },
+    {
+     "label": "اسم الفني",
+     "name": "technician_name",
+     "required": true,
+     "type": "staff"
+    },
+    {
+     "label": "القطع والفلاتر المستبدلة وكمياتها",
+     "name": "parts",
+     "required": false,
+     "type": "textarea"
+    },
+    {
+     "label": "ملاحظات على حالة البرادة، إن وجدت",
+     "name": "cooler_notes",
+     "required": false,
+     "type": "textarea"
+    },
+    {
+     "label": "موعد الزيارة القادمة، إن تحدد",
+     "name": "next_visit_date",
+     "required": false,
+     "type": "date"
+    }
+   ],
+   "note": null,
+   "title": "تفاصيل الخدمة"
+  },
+  {
+   "fields": [
+    {
+     "label": "صور قبل وبعد الخدمة، إن توفرت",
+     "name": "service_photos",
+     "required": false,
+     "type": "files"
+    },
+    {
+     "label": "تقرير الزيارة الموقّع، إن توفر",
+     "name": "signed_report",
+     "required": false,
+     "type": "files"
+    }
+   ],
+   "note": null,
+   "title": "المرفقات"
+  },
+  {
+   "fields": [
+    {
+     "label": "أي اتفاق خاص أو ملاحظات إضافية",
+     "name": "notes",
+     "required": false,
+     "type": "textarea"
+    }
+   ],
+   "note": null,
+   "title": "ملاحظات"
+  }
+ ]
+}

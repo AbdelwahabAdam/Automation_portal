@@ -1,0 +1,252 @@
+{
+ "actions": [],
+ "daftra_note": "",
+ "description": "تسجيل طلب معاينة",
+ "disabled": false,
+ "hidden": true,
+ "icon": "eye",
+ "invoiced": false,
+ "key": "pre_sale_inspection",
+ "label": "طلب معاينة قبل البيع",
+ "sections": [
+  {
+   "fields": [
+    {
+     "default": "today",
+     "label": "تاريخ الطلب",
+     "name": "request_date",
+     "not_future": true,
+     "required": true,
+     "type": "date"
+    },
+    {
+     "label": "اسم الموظف",
+     "name": "employee_name",
+     "required": false,
+     "type": "auto_user"
+    },
+    {
+     "label": "مصدر الطلب",
+     "name": "source",
+     "options": [
+      "ماركتنج",
+      "عميل شركة",
+      "عميل جديد",
+      "عميل سابق",
+      "مكتب",
+      "الموقع",
+      "أخرى"
+     ],
+     "required": true,
+     "type": "select"
+    }
+   ],
+   "note": null,
+   "title": "بيانات الطلب"
+  },
+  {
+   "fields": [
+    {
+     "label": "رقم الهاتف",
+     "name": "phone",
+     "required": true,
+     "type": "phone"
+    },
+    {
+     "label": "رقم مسؤول اخر",
+     "name": "phone2",
+     "required": false,
+     "type": "phone"
+    },
+    {
+     "label": "كود العميل، إن وجد",
+     "name": "client_code",
+     "pattern": "^\\d{1,6}$",
+     "pattern_message": "أرقام فقط، حتى 6 خانات",
+     "required": false,
+     "type": "text"
+    },
+    {
+     "label": "اسم العميل / الجهة",
+     "max_length": 150,
+     "name": "customer_name",
+     "required": true,
+     "type": "text"
+    },
+    {
+     "dropdown": true,
+     "label": "نوع العميل",
+     "name": "customer_type",
+     "options": [
+      "فرد",
+      "تجاري"
+     ],
+     "required": false,
+     "type": "select"
+    },
+    {
+     "dropdown": true,
+     "label": "الجنس",
+     "name": "gender",
+     "options": [
+      "ذكر",
+      "أنثى"
+     ],
+     "required": false,
+     "type": "select"
+    }
+   ],
+   "note": null,
+   "title": "بيانات العميل"
+  },
+  {
+   "fields": [
+    {
+     "label": "التصنيف",
+     "name": "category",
+     "required": true,
+     "type": "daftra_client_category"
+    },
+    {
+     "from_category": "category",
+     "label": "المنطقة",
+     "max_length": 100,
+     "name": "area",
+     "readonly": true,
+     "required": true,
+     "type": "text"
+    },
+    {
+     "label": "الإمارة",
+     "name": "emirate",
+     "options": [
+      "أبوظبي",
+      "العين",
+      "دبي",
+      "الشارقة",
+      "عجمان",
+      "أم القيوين",
+      "رأس الخيمة",
+      "الفجيرة"
+     ],
+     "required": true,
+     "type": "select"
+    },
+    {
+     "label": "الشارع",
+     "name": "street",
+     "required": false,
+     "type": "text"
+    },
+    {
+     "label": "رقم البيت / اسم الموقع",
+     "name": "house",
+     "required": false,
+     "type": "text"
+    },
+    {
+     "label": "موقع العميل",
+     "max_length": 255,
+     "name": "location_url",
+     "pattern": "^https?://\\S+$",
+     "pattern_message": "الصق رابط الموقع من خرائط جوجل",
+     "placeholder": "https://maps.app.goo.gl/…",
+     "required": true,
+     "type": "text"
+    },
+    {
+     "coordinates_from": "location_url",
+     "label": "الإحداثيات",
+     "ltr": true,
+     "max_length": 100,
+     "name": "coordinates",
+     "placeholder": "مثال: 24.178700, 55.604510",
+     "required": true,
+     "type": "text"
+    }
+   ],
+   "note": null,
+   "title": "عنوان المعاينة"
+  },
+  {
+   "fields": [
+    {
+     "label": "نوع الموقع",
+     "name": "site_type",
+     "options": [
+      "منزل",
+      "مسجد",
+      "مدرسة",
+      "مغسلة سيارات",
+      "جمعية خيرية",
+      "شركة",
+      "أخرى"
+     ],
+     "required": true,
+     "type": "select"
+    },
+    {
+     "label": "المنتج المبدئي المهتم به العميل، إن وجد",
+     "name": "product_name",
+     "required": false,
+     "type": "product"
+    },
+    {
+     "label": "المطلوب من المعاينة",
+     "name": "inspection_purpose",
+     "required": true,
+     "type": "textarea"
+    },
+    {
+     "label": "الموعد المفضل للمعاينة",
+     "name": "preferred_date",
+     "required": false,
+     "type": "date"
+    },
+    {
+     "label": "الوقت المفضل",
+     "name": "preferred_time",
+     "options": [
+      "صباحًا",
+      "ظهرًا",
+      "مساءً"
+     ],
+     "required": false,
+     "type": "select"
+    },
+    {
+     "label": "اسم ورقم الشخص المسؤول في الموقع، إن اختلف عن العميل",
+     "name": "site_contact",
+     "required": false,
+     "type": "text"
+    }
+   ],
+   "note": null,
+   "title": "تفاصيل الطلب"
+  },
+  {
+   "fields": [
+    {
+     "label": "صور الموقع، إن توفرت",
+     "name": "site_photos",
+     "required": false,
+     "type": "files"
+    }
+   ],
+   "note": null,
+   "title": "المرفقات"
+  },
+  {
+   "fields": [
+    {
+     "label": "أي اتفاق خاص أو ملاحظات إضافية",
+     "name": "notes",
+     "required": false,
+     "type": "textarea"
+    }
+   ],
+   "note": null,
+   "title": "ملاحظات"
+  }
+ ]
+}

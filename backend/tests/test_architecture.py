@@ -153,3 +153,22 @@ def test_no_two_modules_import_each_other():
     for unit in sorted(edges):
         walk(unit, [unit])
     assert not circles, "these import in a circle:\n" + "\n".join(sorted(set(circles)))
+
+
+def test_every_form_is_its_fields_and_its_output():
+    """forms_plan.md: each form folder is __init__.py (the FormSpec), fields.py (what it asks, one
+    switch per field) and — exactly when approving it creates something in Daftra — output.py
+    (what it sends there, one function per document). Nothing else of the old shape is left."""
+    from app.modules.form_engine import all_forms
+
+    wrong = []
+    for spec in all_forms():
+        folder = APP / "forms" / spec.key
+        if not (folder / "fields.py").exists():
+            wrong.append(f"{spec.key}: no fields.py")
+        if (folder / "output.py").exists() != (spec.on_approve is not None):
+            wrong.append(f"{spec.key}: output.py and on_approve disagree")
+        for old in ("definition.py", "hooks.py"):
+            if (folder / old).exists():
+                wrong.append(f"{spec.key}: {old} is the shape before fields.py and output.py")
+    assert not wrong, "\n".join(wrong)

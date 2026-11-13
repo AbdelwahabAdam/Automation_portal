@@ -1,0 +1,114 @@
+{
+ "actions": [],
+ "daftra_note": "",
+ "description": "تسجيل تقرير الزيارات",
+ "disabled": false,
+ "hidden": true,
+ "icon": "map-pin",
+ "invoiced": false,
+ "key": "daily_visits",
+ "label": "تقرير الزيارات اليومي",
+ "sections": [
+  {
+   "fields": [
+    {
+     "default": "today",
+     "label": "تاريخ التقرير",
+     "name": "request_date",
+     "not_future": true,
+     "required": true,
+     "type": "date"
+    },
+    {
+     "label": "اسم الموظف",
+     "name": "employee_name",
+     "required": false,
+     "type": "auto_user"
+    },
+    {
+     "label": "المنطقة / خط السير",
+     "name": "visit_area",
+     "required": false,
+     "type": "text"
+    }
+   ],
+   "note": null,
+   "title": "بيانات التقرير"
+  },
+  {
+   "fields": [
+    {
+     "integer": true,
+     "label": "عدد الزيارات",
+     "min": 1,
+     "name": "visits_count",
+     "required": true,
+     "type": "number"
+    },
+    {
+     "label": "تفاصيل الزيارات: لكل زيارة سطر فيه العميل والمنطقة والغرض والنتيجة",
+     "max_length": 6000,
+     "name": "visits",
+     "required": true,
+     "type": "textarea"
+    },
+    {
+     "integer": true,
+     "label": "عدد العملاء المهتمين الجدد",
+     "min": 0,
+     "name": "new_leads",
+     "required": false,
+     "type": "number"
+    },
+    {
+     "integer": true,
+     "label": "عدد المبيعات المؤكدة",
+     "min": 0,
+     "name": "closed_sales",
+     "required": false,
+     "type": "number"
+    },
+    {
+     "label": "إجمالي المبالغ المحصلة، إن وجدت",
+     "min": 0,
+     "money": true,
+     "name": "collected_amount",
+     "required": false,
+     "type": "number"
+    },
+    {
+     "label": "مشاكل أو طلبات تحتاج متابعة",
+     "name": "issues",
+     "required": false,
+     "type": "textarea"
+    }
+   ],
+   "note": null,
+   "title": "الزيارات"
+  },
+  {
+   "fields": [
+    {
+     "label": "صور من الزيارات، إن توفرت",
+     "name": "visit_photos",
+     "required": false,
+     "type": "files"
+    }
+   ],
+   "note": null,
+   "title": "المرفقات"
+  },
+  {
+   "fields": [
+    {
+     "label": "أي اتفاق خاص أو ملاحظات إضافية",
+     "name": "notes",
+     "required": false,
+     "type": "textarea"
+    }
+   ],
+   "note": null,
+   "title": "ملاحظات"
+  }
+ ]
+}
