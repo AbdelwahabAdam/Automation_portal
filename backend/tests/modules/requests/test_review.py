@@ -555,7 +555,10 @@ def test_approving_a_quotation_creates_the_estimate_and_nothing_else(client, db,
 
     [estimate] = fake_daftra.posted("/api2/estimates.json")
     assert estimate["Invoice"] == {
-        "client_id": client_id, "date": TODAY, "draft": 0, "currency_code": "AED", "store_id": 1, "branch_id": 1,
+        # is_offline: printed and handed over, not emailed by Daftra. Without it the account emails
+        # the estimate, and refuses to save one for a client who has no email address.
+        "client_id": client_id, "date": TODAY, "draft": 0, "is_offline": 1,
+        "currency_code": "AED", "store_id": 1, "branch_id": 1,
         "sales_person_id": 71, "staff_id": 71, "po_number": f"PORTAL-{request_id}", "order_source_id": 16,
         "adjustment_label": "مبادرة لك ان تشارك", "adjustment_value": -200.0,
         "client_address1": "شارع 1", "client_address2": "فيلا 2", "client_city": "العين",
@@ -579,6 +582,22 @@ def test_approving_a_quotation_creates_the_estimate_and_nothing_else(client, db,
     # Its PDF is kept on the request, which is what gets sent to the customer
     assert {a.field for a in db.query(Attachment).filter_by(request_id=request_id)} == {"daftra_estimate"}
     assert response.json()["daftra_estimate_no"] == f"E{estimate_id}"
+
+
+def test_an_estimate_for_a_client_with_no_email_is_still_saved(client, db, fake_daftra, sales, manager):
+    """Daftra's template emails the estimate, and refuses to save one it cannot send: «البريد
+    الإلكتروني مطلوب إذا اخترت أن ترسل الفاتورة عبر البريد». Sending it offline is what stops that.
+
+    The form asks a new client for an email «إن وجد», so most quotations carry none — this was
+    every عرض سعر for a client without one failing at اعتماد.
+    """
+    seed.catalog(db)
+    request_id = seed.submitted_quotation(client, db, sales)
+    response = approve(client, manager, request_id)
+    assert response.status_code == 200, response.json()
+    created = next(iter(fake_daftra.clients.values()))
+    assert not created.get("email")
+    assert db.get(Request, request_id).daftra_error is None
 
 
 def test_a_quotation_approved_again_makes_no_second_estimate(client, db, fake_daftra, sales, manager):

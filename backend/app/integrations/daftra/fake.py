@@ -497,9 +497,18 @@ class FakeDaftra:
         return {"data": [{"Estimate": self._invoice_out(e)} for e in rows]}
 
     def create_estimate(self, params, body):
-        """POST /api2/estimates.json, whose body is an invoice's: {"Invoice": …, "InvoiceItem": […]}."""
-        estimate_id = self._new_id()
+        """POST /api2/estimates.json, whose body is an invoice's: {"Invoice": …, "InvoiceItem": […]}.
+
+        Refused for a client with no email unless the estimate is offline, as the live account
+        does: its template emails the document, and Daftra will not save one it cannot send.
+        """
         fields, items = body["Invoice"], body["InvoiceItem"]
+        if not str(fields.get("is_offline") or "") == "1":
+            client = self.clients.get(int(fields.get("client_id") or 0)) or {}
+            if not str(client.get("email") or "").strip():
+                raise DaftraError('HTTP 400: فشل في حفظ عرض الأسعار — {"client_email": '
+                                  '"البريد الإلكتروني مطلوب إذا اخترت أن ترسل الفاتورة عبر البريد"}')
+        estimate_id = self._new_id()
         total = sum(item["unit_price"] * item["quantity"] for item in items) + fields.get("adjustment_value", 0)
         self.estimates[estimate_id] = {**fields, "id": str(estimate_id), "no": f"E{estimate_id}", "type": "3",
                                        "draft": "0", "summary_total": str(round(total, 2)), "items": items,

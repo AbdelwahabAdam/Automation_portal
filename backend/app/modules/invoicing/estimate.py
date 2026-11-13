@@ -59,7 +59,12 @@ def ensure_estimate(request, items: list[dict], staff_id: int, notes: str = "") 
         request.save_document("estimate", find_estimate(request))
         if request.daftra_estimate_id is None:
             fields = {
+                # is_offline: the estimate is printed and handed over, not emailed by Daftra.
+                # Without it the account's own setting applies, and Daftra refuses to save an
+                # estimate for a client with no email: «البريد الإلكتروني مطلوب إذا اخترت أن ترسل
+                # الفاتورة عبر البريد». An invoice is sent the same way, for the same reason.
                 "client_id": request.daftra_client_id, "date": data.get("request_date"), "draft": 0,
+                "is_offline": 1,
                 "currency_code": "AED", "store_id": settings.daftra_store_id,
                 "branch_id": settings.daftra_branch_id, "sales_person_id": staff_id,
                 "po_number": marker(request),
