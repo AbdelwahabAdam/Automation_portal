@@ -77,11 +77,14 @@ def test_a_request_with_no_estimate_is_left_alone(client, db, fake_daftra, sales
 def test_all_finds_the_approved_quotations_only(client, db, fake_daftra, sales, manager, monkeypatch, capsys):
     """--all, as it is run on the server after the deploy."""
     import sys
+    from contextlib import nullcontext
     from app.jobs import estimate_pdfs
     request = approved_quotation(client, db, sales, manager)
     submitted_sale(client, db, sales)
-    monkeypatch.setattr(estimate_pdfs, "SessionLocal", lambda: db)
-    monkeypatch.setattr(db, "close", lambda: None)
+    # The test's own session, which the command must not close: the db fixture closes it after. Not
+    # by patching db.close — that patch outlives the db fixture's own teardown, the session is never
+    # closed, and its open transaction blocks the next test's database reset for good.
+    monkeypatch.setattr(estimate_pdfs, "SessionLocal", lambda: nullcontext(db))
     monkeypatch.setattr(sys, "argv", ["estimate_pdfs", "--all", "-n"])
     estimate_pdfs.main()
     out = capsys.readouterr().out
