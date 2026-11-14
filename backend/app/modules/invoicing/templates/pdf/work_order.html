@@ -1,110 +1,154 @@
 <!doctype html>
-{# The work order as Daftra prints it («نموذج أمر تشغيل ومتابعة عقد»): the same sections in the same
-   order, so the two can be read side by side. Daftra's own PDF is behind a staff login and cannot be
-   fetched with an API key, so the portal draws this one. #}
+{# The work order as Daftra prints it («نموذج أمر تشغيل ومتابعة عقد»): the same seven sections, in
+   the same order, laid out the same way, so the two can be read side by side. Daftra's own PDF is
+   behind a staff login and cannot be fetched with an API key, so the portal draws this one. #}
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="utf-8">
 <style>
   /* It has to come out on one page, as Daftra's own does, so the spacing is tight on purpose */
-  @page { size: A4; margin: 8mm 12mm; }
-  body { font-family: "Noto Sans Arabic", "Noto Sans", "DejaVu Sans", sans-serif; color: #1a1a1a; font-size: 9pt; line-height: 1.28; }
-  .logo { display: block; width: 22mm; margin: 0 auto 1mm; }
-  .doc-title { text-align: center; font-size: 11.5pt; font-weight: bold; margin: 0 0 2mm; }
-  /* The company block prints as Daftra prints it: its name in Arabic, the rest left to right */
-  .company { text-align: center; line-height: 1.3; margin-bottom: 1mm; }
-  .company .name { font-weight: bold; }
-  .company .ltr { direction: ltr; unicode-bidi: isolate; font-size: 8pt; color: #333; }
-  .rule { border: 0; border-top: 1.5px solid #222; margin: 1.8mm 0 1.2mm; }
-  h2 { font-size: 10pt; font-weight: bold; text-align: center; margin: 0 0 1mm; }
-  .row { margin: 0 0 0.2mm; }
-  .row .k { font-weight: bold; }
-  /* Each part of الوصف on its own line, which is what the technicians read it for */
-  .desc { margin: 0.5mm 0 1mm; }
-  .desc div { margin: 0 0 0.3mm; }
-  .url { direction: ltr; unicode-bidi: isolate; word-break: break-all; font-size: 8.5pt; }
+  @page { size: A4; margin: 8mm 10mm; }
+  body { font-family: "Noto Sans Arabic", "Noto Sans", "DejaVu Sans", sans-serif; color: #1f1f1f; font-size: 8.5pt; line-height: 1.3; }
   .ltr { direction: ltr; unicode-bidi: isolate; }
-  .blank { display: inline-block; min-width: 55mm; border-bottom: 1px dotted #999; }
-  table.sign { width: 100%; border-collapse: collapse; margin-top: 3mm; }
-  table.sign td { width: 25%; text-align: center; vertical-align: top; padding: 0 2mm; }
-  table.sign .head { font-weight: bold; padding-bottom: 3mm; }
-  .foot { text-align: center; color: #555; font-size: 8pt; margin-top: 3mm; line-height: 1.3; }
+
+  /* The letterhead: the company on one side, the logo on the other, as on Daftra's own */
+  .head { display: flex; align-items: flex-start; justify-content: space-between; gap: 6mm; }
+  .head .company { text-align: left; direction: ltr; }
+  .head .name { font-size: 12pt; font-weight: bold; color: #4a1d4e; letter-spacing: 0.2px; }
+  .head .line { font-size: 7.5pt; color: #444; }
+  .head .tel { font-size: 7.5pt; font-weight: bold; color: #222; }
+  .head .logo { width: 30mm; }
+  .title { margin: 2mm 0 2.4mm; padding: 1.3mm 0; background: #4a1d4e; color: #fff; border-radius: 1.2mm;
+           text-align: center; font-size: 11.5pt; font-weight: bold; }
+
+  h2 { margin: 1.9mm 0 1mm; font-size: 9.5pt; font-weight: bold; color: #4a1d4e; }
+  h2 .n { margin-inline-end: 1.2mm; }
+
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  .grid th, .grid td { border: 0.3mm solid #d9d2dd; padding: 0.8mm 1.5mm; vertical-align: middle; }
+  .grid th { width: 26mm; background: #f4f0f6; color: #3a3a3a; font-weight: bold; text-align: start; }
+  .grid td { background: #fff; overflow-wrap: anywhere; }
+  .grid td.ltr { text-align: start; }
+
+  /* Each part of الوصف on its own line, which is what the technicians read it for */
+  .desc div { margin: 0 0 0.4mm; }
+  .desc div:last-child { margin: 0; }
+  /* A line the floor fills in by hand, as on Daftra's own form */
+  .blank { display: block; min-height: 3.2mm; }
+  a { color: #1a4f8a; }
+  .verse { font-size: 9.5pt; }
+
+  .sign th { background: #ece4ef; color: #4a1d4e; text-align: center; width: auto; }
+  .sign td { height: 11mm; vertical-align: top; color: #555; font-size: 8pt; }
+  .sign td div { margin-top: 2.2mm; }
+
+  .foot { margin-top: 2mm; padding-top: 1.2mm; border-top: 0.3mm solid #d9d2dd; text-align: center; color: #555; font-size: 7.5pt; }
 </style>
 </head>
 <body>
-  <img class="logo" src="logo.jpg" alt="Future Life">
-  <div class="doc-title">نموذج أمر تشغيل ومتابعة عقد</div>
-  <div class="company">
-    <div class="name">شركة FUTURE LIFE L.L.C O.P.C</div>
-    <div class="ltr">United Arab Emirates – Al Ain City – Downtown – Hessa Bint Mohammed Street – ALAIN</div>
-    <div class="ltr">+971557404950 | +971568593915</div>
-    <div class="ltr">Opposite ADCB Bank and Al Ain Post Office — ALAIN, Abu Dhabi 15975</div>
-  </div>
+  <header class="head">
+    <div class="company">
+      <div class="name">FUTURE LIFE L.L.C O.P.C</div>
+      <div class="line">United Arab Emirates – Al Ain City – Downtown – Hessa Bint Mohammed Street</div>
+      <div class="line">Opposite ADCB Bank and Al Ain Post Office — Al Ain, Abu Dhabi 15975</div>
+      <div class="tel">Tel: +971 55 740 4950 | +971 56 859 3915</div>
+    </div>
+    <img class="logo" src="logo.jpg" alt="Future Life">
+  </header>
+  <div class="title">نموذج أمر تشغيل ومتابعة عقد</div>
 
-  <hr class="rule">
-  <h2>بيانات العقد</h2>
-  <div class="row"><span class="k">بيانات التصنيع:</span> <span class="ltr">{{ number }}</span></div>
-  <div class="row"><span class="k">عنوان العقد:</span> {{ title }}</div>
-  <div class="row"><span class="k">تاريخ ابتداء:</span> <span class="ltr">{{ start }}</span></div>
-  <div class="row"><span class="k">تاريخ تسليم:</span> <span class="ltr">{{ delivery }}</span></div>
-  <div class="row"><span class="k">وصف:</span></div>
-  <div class="desc">
-    {% for row in rows %}<div>■ {{ row }}</div>{% endfor %}
-  </div>
-  <div class="row"><span class="k">الآية القرآنية المطبوعة:</span> {{ values.inscription or '' }}</div>
-  <div class="row"><span class="k">لون اللوحة:</span> {{ values.plate_color or '' }}</div>
-
-  <hr class="rule">
-  <h2>أمر الشغل ومتابعته</h2>
-  {# Left blank on purpose: filled in by hand on the floor, as on Daftra's own form #}
-  <div class="row"><span class="k">تاريخ التركيب:</span> <span class="blank"></span></div>
-  <div class="row"><span class="k">ملحقات التركيب:</span> {{ values.installation_accessories or '' }}</div>
-  <div class="row"><span class="k">الألوان المتاحة:</span> {{ values.available_colors or '' }}</div>
-  <div class="row"><span class="k">تصميم القطعة الأمامية:</span> {{ values.front_design or '' }}</div>
-  <div class="row"><span class="k">اتجاه الدبليو:</span> {{ values.w_direction or '' }}</div>
-  <div class="row"><span class="k">ظهر الكفر:</span> {{ values.cover_back or '' }}</div>
-  <div class="row"><span class="k">تصميم قديم &amp; جديد:</span> {{ values.design_version or '' }}</div>
-  <div class="row"><span class="k">لون البرادة:</span> {{ values.cooler_color or '' }}</div>
-  <div class="row"><span class="k">لون القاعدة:</span> {{ values.base_color or '' }}</div>
-  <div class="row"><span class="k">التمديدات:</span>
-    {% if values.extensions %}{{ values.extensions }}{% else %}<span class="blank"></span>{% endif %}</div>
-  <div class="row"><span class="k">صورة المنتج:</span>
-    {% if product_image %}<span class="url">{{ product_image }}</span>{% else %}<span class="blank"></span>{% endif %}</div>
-  <div class="row"><span class="k">صورة المعاينة:</span> <span class="blank"></span></div>
-
-  <hr class="rule">
-  <h2>بيانات العميل</h2>
-  <div class="row"><span class="k">اسم العميل:</span> {{ client_name }}</div>
-  {% if client_code %}<div class="row"><span class="k">كود العميل:</span> <span class="ltr">{{ client_code }}</span></div>{% endif %}
-  {% if location_url %}<div class="row"><span class="k">اللوكيشن:</span> <span class="url">{{ location_url }}</span></div>{% endif %}
-  {% if coordinates %}<div class="row"><span class="k">الإحداثيات:</span> <span class="ltr">{{ coordinates }}</span></div>{% endif %}
-  <div class="row"><span class="k">عنوان العميل الكامل:</span> {{ address }}</div>
-  {% if phone %}<div class="row"><span class="k">رقم الهاتف:</span> <span class="ltr">{{ phone }}</span></div>{% endif %}
-
-  <hr class="rule">
-  <h2>بيانات الموظف المعين لأمر الشغل</h2>
-  <div class="row"><span class="k">اسم الموظف:</span> {{ sales_person }}</div>
-  <div class="row"><span class="k">المسؤول:</span> {{ responsible }}</div>
-  {% if invoice_no %}<div class="row"><span class="k">رقم الفاتورة:</span> <span class="ltr">{{ invoice_no }}</span></div>{% endif %}
-
-  <table class="sign">
+  <h2><span class="n">١</span>بيانات العقد</h2>
+  <table class="grid">
     <tr>
-      <td class="head">إعتماد ادخال البيانات</td>
-      <td class="head">إمضاء ادارة المخزن</td>
-      <td class="head">إمضاء ادارة التصنيع</td>
-      <td class="head">إمضاء ادارة الفنيات</td>
+      <th>رقم التصنيع</th><td class="ltr">{{ number }}</td>
+      <th>رقم الفاتورة</th><td class="ltr">{{ invoice_no }}</td>
+    </tr>
+    <tr><th>عنوان العقد</th><td colspan="3">{{ title }}</td></tr>
+    <tr>
+      <th>تاريخ الابتداء</th><td class="ltr">{{ start }}</td>
+      <th>تاريخ التسليم</th><td class="ltr">{{ delivery }}</td>
+    </tr>
+    {% if days %}<tr><th>مدة التركيب</th><td colspan="3">{{ days }} يومًا</td></tr>{% endif %}
+    <tr><th>الوصف</th><td colspan="3" class="desc">{% for row in rows %}<div>■ {{ row }}</div>{% endfor %}</td></tr>
+  </table>
+
+  <h2><span class="n">٢</span>بيانات العميل</h2>
+  <table class="grid">
+    <tr>
+      <th>اسم العميل</th><td>{{ client_name }}</td>
+      <th>كود العميل</th><td class="ltr">{{ client_code }}</td>
     </tr>
     <tr>
-      <td>توقيع: ــــــــــــــــــ</td>
-      <td>توقيع: ــــــــــــــــــ</td>
-      <td>توقيع: ــــــــــــــــــ</td>
-      <td>توقيع: ــــــــــــــــــ</td>
+      <th>رقم الهاتف</th><td class="ltr">{{ phone }}</td>
+      <th>اللوكيشن</th>
+      {# The link, not the address itself: it is read on a screen, and typed out it fills the row #}
+      <td>{% if location_url %}<a href="{{ location_url }}">فتح الموقع على الخريطة</a>{% else %}<span class="blank"></span>{% endif %}</td>
+    </tr>
+    <tr><th>العنوان</th><td colspan="3">{{ address }}{% if coordinates %} — <span class="ltr">{{ coordinates }}</span>{% endif %}</td></tr>
+  </table>
+
+  <h2><span class="n">٣</span>مواصفات الجهاز</h2>
+  <table class="grid">
+    <tr><th>نوع الجهاز</th><td colspan="3">{{ device or title }}</td></tr>
+    <tr>
+      <th>لون البرادة</th><td>{{ values.cooler_color or '' }}</td>
+      <th>لون القاعدة</th><td>{{ values.base_color or '' }}</td>
+    </tr>
+    <tr>
+      <th>لون الكفر</th><td>{{ values.plate_color or '' }}</td>
+      <th>ظهر الكفر</th><td>{{ values.cover_back or '' }}</td>
+    </tr>
+    <tr><th>لون اللوحة</th><td colspan="3">{{ values.plate_color or '' }}</td></tr>
+    <tr><th>الآية المطبوعة</th><td colspan="3" class="verse">{% if values.inscription %}﴿ {{ values.inscription }} ﴾{% endif %}</td></tr>
+  </table>
+
+  <h2><span class="n">٤</span>ملحقات التركيب</h2>
+  <table class="grid">
+    <tr><th>الملحقات</th><td colspan="3">{{ values.installation_accessories or '' }}</td></tr>
+  </table>
+
+  <h2><span class="n">٥</span>أمر الشغل ومتابعته</h2>
+  <table class="grid">
+    <tr><th>الألوان المتاحة</th><td colspan="3">{{ values.available_colors or '' }}</td></tr>
+    <tr>
+      {# Left blank on purpose: filled in by hand on the floor, as on Daftra's own form #}
+      <th>تاريخ التركيب</th><td><span class="blank"></span></td>
+      <th>تصميم القطعة الأمامية</th><td>{% if values.front_design %}{{ values.front_design }}{% else %}<span class="blank"></span>{% endif %}</td>
+    </tr>
+    <tr>
+      <th>اتجاه الدبليو</th><td>{% if values.w_direction %}{{ values.w_direction }}{% else %}<span class="blank"></span>{% endif %}</td>
+      <th>تصميم قديم / جديد</th><td>{% if values.design_version %}{{ values.design_version }}{% else %}<span class="blank"></span>{% endif %}</td>
+    </tr>
+    <tr>
+      <th>التمديدات</th><td>{% if values.extensions %}{{ values.extensions }}{% else %}<span class="blank"></span>{% endif %}</td>
+      <th>صورة المعاينة</th><td><span class="blank"></span></td>
+    </tr>
+    <tr><th>صورة المنتج</th>
+      <td colspan="3">{% if product_image %}<a href="{{ product_image }}">عرض صورة المنتج (اضغط هنا)</a>{% else %}<span class="blank"></span>{% endif %}</td></tr>
+  </table>
+
+  <h2><span class="n">٦</span>الموظفون المعيّنون لأمر الشغل</h2>
+  <table class="grid">
+    <tr>
+      <th>الموظفون</th><td>{{ sales_person }}</td>
+      <th>المسؤول</th><td>{{ responsible }}</td>
+    </tr>
+  </table>
+
+  <h2><span class="n">٧</span>التوقيعات والاعتمادات</h2>
+  <table class="grid sign">
+    <tr>
+      <th>اعتماد إدخال البيانات</th><th>إدارة المخزن</th><th>إدارة التصنيع</th><th>إدارة الفنيات</th>
+    </tr>
+    <tr>
+      {% for _ in range(4) %}
+      <td><div>التوقيع: ........................</div><div>التاريخ: ...... / ...... / ......</div></td>
+      {% endfor %}
     </tr>
   </table>
 
   <div class="foot">
-    <div class="ltr">Water with Future Technology</div>
-    <div class="ltr">Future Life Water Treatment L.L.C</div>
+    <div class="ltr">Future Life Water Treatment L.L.C — Water with Future Technology</div>
     <div>جميع الحقوق محفوظة © FUTURE LIFE L.L.C O.P.C</div>
   </div>
 </body>

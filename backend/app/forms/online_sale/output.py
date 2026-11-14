@@ -109,6 +109,8 @@ def work_order(ctx):
             "inscription": made.fields["inscription"],
             "plate_color": made.fields["plate_color"],
             "extensions": made.fields["extensions"],
+            "device": made.fields["device"],          # نوع الجهاز, on Daftra's own print
+            "address": made.fields["address"],        # العنوان, the request's own, not the client's
         },
         printed=made.printed,
     )

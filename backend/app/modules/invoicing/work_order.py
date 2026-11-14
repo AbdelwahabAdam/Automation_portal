@@ -38,7 +38,21 @@ WORK_ORDER_FIELDS = {
     # filled, and they hold «تمديد الكهرباء» and «تمديد المياه» (work orders 358, 359, 370, 1942, 2112).
     # The form stopped asking for them, so only a request from before that still fills this in.
     "extensions": "field_34",                # التمديدات الزياده ان وجدت
+    # Added to the form so Daftra's own print «نموذج أمر تشغيل ومتابعة عقد» can show what until now
+    # only the portal's PDF had. The engine fills the first two in: neither exists when the form
+    # builds the work order.
+    "invoice_no": "field_50",                # رقم الفاتورة
+    "installation_days": "field_51",         # مدة التركيب
+    "device": "field_52",                    # نوع الجهاز
+    # العنوان as the request has it. Daftra's own {%client_full_address%} prints the client's
+    # primary address block, which is the older one once the portal has moved a newer address into
+    # the secondary slot (clients.in_daftra.second_address), and which may have no street at all.
+    "address": "field_53",
 }
+# Fields on the work order form that the portal does not fill: مستند 1 (صورة المعاينة) and تاريخ
+# التركيب, both written by hand in Daftra. A save would empty them (see below), so they are read
+# first and sent back unchanged.
+KEPT_FIELDS = ("field_10", "field_25")
 # Daftra replaces the whole custom form on every save, so a field left out of the body is emptied,
 # not kept. Every field is therefore always sent, blank ones included.
 CONTAINS_CUSTOM_DATA = {"CONTAINE_CUSTOM_DATA": "1"}  # Daftra's own spelling; required on every save
@@ -65,6 +79,12 @@ PLATE_ENTRIES = {
 }
 # The list writes a verse with its code: «001 - …», and from 100 on «104- …»
 INSCRIPTION_ENTRIES = {text: f"{code}- {text}" if int(code) >= 100 else f"{code} - {text}" for code, text in INSCRIPTIONS}
+
+
+def full_address(data: dict) -> str:
+    """العنوان as the request has it: الإمارة، المنطقة، الشارع، المنزل, skipping what is not filled."""
+    return "، ".join(str(data[key]).strip() for key in ("emirate", "area", "street", "house")
+                     if str(data.get(key) or "").strip())
 
 
 def package_lines(data: dict) -> list[dict]:
@@ -133,6 +153,8 @@ def work_order_values(request, db: Session) -> dict:
         "plate_color": joined(lambda d, _: d.get("plate_color") or COLOR_TEXT.get(d.get("cover_color"))
                               or (f"اللون {d['cover_color']}" if d.get("cover_color") else "")),
         "product_image": product_image_id(data, db),
+        "device": device_name(data),
+        "address": full_address(data),
     }
     return values
 
@@ -181,6 +203,14 @@ def set_work_order_fields(request, row: dict, entries: dict) -> bool:
     read decides. A failure here does not stop the approval; the same details are in the description
     and the PDF."""
     fields = work_order_custom_fields(entries)
+    # What someone wrote by hand in the fields the portal has nothing for, sent back as it is: left
+    # out, Daftra would empty them. A read that fails only means those two keep their old behaviour.
+    try:
+        held = daftra.read_v2("work_order", request.daftra_work_order_id).get("custom_data") or {}
+        fields.update({key: held[key] for key in KEPT_FIELDS
+                       if str(held.get(key) or "") not in ("", "None")})
+    except DaftraError:
+        pass
     # An edit needs these again, as the work order has them, and a حالة someone has set in Daftra stays.
     # Without its number Daftra gives the work order the next one, and the portal's copy falls behind.
     work_order = {"number": row.get("number"), "title": row.get("title"),
@@ -248,11 +278,11 @@ def work_order_title(data: dict, invoice: dict) -> str:
     return full_title(work_order_heading(data), invoice)
 
 
-def work_order_rows(request, reviewer) -> list[str]:
-    """What the technicians need, one line each, printed under «وصف» on the PDF the portal draws.
+def work_order_rows(request) -> list[str]:
+    """What is built, one line each, printed under «الوصف» on the PDF the portal draws.
 
-    Not the Daftra description any more — that holds ملاحظات and رقم مسؤول اخر alone — so the PDF is
-    where the approving manager's name appears, Daftra's API having no field of its own for it.
+    The client, the address, the location, the invoice number, مدة التركيب and the approving
+    manager each have a row of their own on that form now, so they are not repeated here.
     """
     data = request.data
     rows = []
@@ -283,18 +313,8 @@ def work_order_rows(request, reviewer) -> list[str]:
             rows.append(f"الكتابة: {text}{place}")
         if details.get("manufacturing_notes"):
             rows.append(f"ملاحظات التصنيع: {details['manufacturing_notes']}")
-    if data.get("installation_days"):
-        rows.append(f"مدة التركيب: {data['installation_days']} يومًا")
-    address = "، ".join(str(data[k]) for k in ("emirate", "area", "street", "house") if data.get(k))
-    rows += [
-        f"العميل: {data.get('customer_name') or ''} — {data.get('phone') or ''}",
-        f"العنوان: {address}" if address else "",
-        f"اللوكيشن: {data['location_url']}" if data.get("location_url") else "",
-        f"الإحداثيات: {data['coordinates']}" if data.get("coordinates") else "",
-        f"رقم الفاتورة: {request.daftra_invoice_no}" if request.daftra_invoice_no else "",
-        f"المسؤول: {display_name(reviewer)}",
-        f"ملاحظات: {data['notes']}" if data.get("notes") else "",
-    ]
+    if data.get("notes"):
+        rows.append(f"ملاحظات: {data['notes']}")
     return [row for row in rows if row]
 
 
@@ -378,9 +398,21 @@ def make_work_order(request, invoice: dict, reviewer, db: Session, doc: WorkOrde
     if str(invoice.get("work_order_id") or "0") != str(request.daftra_work_order_id):
         daftra.post(f"invoices/assign_work_order/{request.daftra_invoice_id}.json",
                     {"Invoice": {"work_order_id": request.daftra_work_order_id}})
-    fields_saved = set_work_order_fields(request, row, doc.fields)
+    # رقم الفاتورة and مدة التركيب are the engine's to fill: the invoice has no number until it is
+    # made, and the due date is the engine's own doc.days — neither is known when the form builds this
+    fields_saved = set_work_order_fields(request, row, {
+        **doc.fields,
+        "invoice_no": str(invoice.get("no") or request.daftra_invoice_no or ""),
+        "installation_days": f"{int(doc.days)} يومًا",
+    })
     staff_assigned = assign_work_order_staff(request, reviewer)
     return save_work_order_pdf(request, row, invoice, reviewer, db, doc.printed), fields_saved, staff_assigned
+
+
+def device_name(data: dict) -> str:
+    """نوع الجهاز: the packages (and products picked on their own) the order is for, one line."""
+    names = [line.get("group_name") or line.get("name") or "" for line in package_lines(data)]
+    return "، ".join(dict.fromkeys(name for name in names if name))
 
 
 def draw_work_order(request, row: dict, invoice: dict, reviewer, db: Session,
@@ -394,11 +426,11 @@ def draw_work_order(request, row: dict, invoice: dict, reviewer, db: Session,
     """
     data = request.data
     start, delivery = str(row.get("start_date") or ""), str(row.get("delivery_date") or "")
-    address = "، ".join(str(data[key]) for key in ("emirate", "area", "street", "house") if data.get(key))
+    address = full_address(data)
     return printouts.work_order(
         number=request.daftra_work_order_no or "", title=row.get("title") or work_order_title(data, invoice),
         start=day_month_year(start), delivery=day_month_year(delivery),
-        rows=work_order_rows(request, reviewer),
+        rows=work_order_rows(request),
         values=values if values is not None else work_order_values(request, db),
         client_name=squash(data.get("customer_name")), client_code=str(data.get("client_code") or ""),
         phone=str(data.get("phone") or ""), address=address,
@@ -407,6 +439,7 @@ def draw_work_order(request, row: dict, invoice: dict, reviewer, db: Session,
         # left to fill in, as صورة المعاينة is on its own form
         product_image="", invoice_no=request.daftra_invoice_no or "",
         responsible=display_name(reviewer), sales_person=sales_person_name(request),
+        days=str(data.get("installation_days") or ""), device=device_name(data),
     )
 
 

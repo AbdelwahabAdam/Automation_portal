@@ -38,9 +38,10 @@ def test_any_number_of_installation_days_sets_the_work_orders_due_date(client, d
     [work_order] = fake_daftra.posted("/api2/work_orders.json")
     start = datetime.now(UAE).date()
     assert work_order["WorkOrder"]["delivery_date"] == (start + timedelta(days=17)).isoformat()
-    # The floor reads مدة التركيب on the PDF; the description carries the notes alone, with no mark
+    # The floor reads مدة التركيب on the PDF, in بيانات العقد (tests/modules/invoicing/test_printouts.py);
+    # the Daftra description carries the notes alone, with no mark
     assert work_order["WorkOrder"]["description"] == ""
-    assert "مدة التركيب: 17 يومًا" in work_order_rows(db.get(Request, request_id), manager)
+    assert db.get(Request, request_id).data["installation_days"] == 17
 
 
 def work_order_edits(fake_daftra):
@@ -283,6 +284,11 @@ def test_approving_a_new_sale_creates_everything_in_daftra(client, db, fake_daft
         # field_47 is empty: «بسم الله» was typed, so it is on the PDF and on no list of Daftra's
         "field_38": "", "field_39": "Sales One", "field_44": "اللون الاسود ", "field_45": "", "field_46": "",
         "field_47": "", "field_49": "اللون الدهبي",
+        # Daftra's own print shows these three too now. The engine fills رقم الفاتورة and مدة التركيب:
+        # the invoice has no number until it is made, and the due date is the engine's own.
+        "field_50": f"0{invoice_id}", "field_51": "20 يومًا",
+        "field_52": "باقة برادة سقيا الخير - 3 صنابير - أسود",
+        "field_53": "العين، العين العامره، شارع 1، فيلا 2",
     }
     assert fake_daftra.invoices[invoice_id]["work_order_id"] == saved["id"]
 
@@ -320,8 +326,10 @@ def test_the_work_orders_description_is_the_notes_for_the_floor_and_nothing_else
         "بدون ثقوب على الجانب الأيسر" + "\n" + "اللوحة تركب بعد الدهان")
     # The same note on two packages is written once, and the floor's own sheet still says the rest
     same = [{**line, "group_id": "g2"} for line in first]
-    rows = work_order_rows(db.get(Request, request_id), manager)
-    assert any(row.startswith("العميل:") for row in rows) and any(row.startswith("المسؤول:") for row in rows)
+    # الوصف is what is built; the client and the approving manager have sections of their own on the form
+    rows = work_order_rows(db.get(Request, request_id))
+    assert any(row.startswith("نوع الجهاز:") for row in rows)
+    assert not any(row.startswith(("العميل:", "العنوان:", "رقم الفاتورة:")) for row in rows)
     assert manufacturing_notes({"order_lines": first + same}) == "بدون ثقوب على الجانب الأيسر"
 
 
@@ -1116,7 +1124,7 @@ def test_the_extensions_of_an_older_request_still_reach_the_work_order(client, d
     db.commit()
     assert approve(client, manager, request_id).status_code == 200
     [work_order] = fake_daftra.posted("/api2/work_orders.json")
-    assert "التمديدات الزيادة: تمديد الكهرباء، اعمال الحفر" in work_order_rows(db.get(Request, request_id), manager)
+    assert "التمديدات الزيادة: تمديد الكهرباء، اعمال الحفر" in work_order_rows(db.get(Request, request_id))
     saved = next(iter(fake_daftra.work_orders.values()))
     assert saved["custom"]["field_34"] == "تمديد الكهرباء، اعمال الحفر"
     assert [key for key in saved["custom"] if key not in KNOWN_WORK_ORDER_FIELDS] == []
