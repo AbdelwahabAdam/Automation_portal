@@ -1,5 +1,6 @@
 """PDFs the portal draws itself, for documents Daftra's API gives no file for: the receipt
-(إيصال استلام), in the layout Daftra prints it, and the work order (أمر الشغل).
+(إيصال استلام), in the layout Daftra prints it, the work order (أمر الشغل), and the estimate
+(عرض سعر), whose link from Daftra does not open (checked on the live account 2026-11-14).
 
 The templates and logo are in templates/pdf/.
 """
@@ -44,3 +45,16 @@ def work_order(number: str, title: str, start: str, delivery: str, rows: list[st
                 location_url=location_url, coordinates=coordinates, product_image=product_image,
                 invoice_no=invoice_no, responsible=responsible, sales_person=sales_person,
                 days=days, device=device)
+
+
+def estimate(number: str, date: str, client_name: str, client_code: str, phone: str, address: str,
+             sales_person: str, lines: list[dict], subtotal: str, adjustment_label: str, adjustment: str,
+             total: str, taxes: list[dict], notes: list[str], terms: list[str]) -> bytes:
+    """lines: {name, description, unit_price, quantity, total}, as Daftra holds them, amounts written out.
+    adjustment: the discount, signed (-1,500.00); empty when there is none.
+    taxes: {label, amount, included}; an included one is printed under the total, as part of it.
+    notes, terms: one line each; an empty line in terms is a gap between paragraphs."""
+    return _pdf("estimate.html", number=number, date=date, client_name=client_name, client_code=client_code,
+                phone=phone, address=address, sales_person=sales_person, lines=lines, subtotal=subtotal,
+                adjustment_label=adjustment_label, adjustment=adjustment, total=total, taxes=taxes, notes=notes,
+                terms=terms)

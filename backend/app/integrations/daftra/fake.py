@@ -494,7 +494,7 @@ class FakeDaftra:
 
     def list_estimates(self, params, body):
         rows = [e for e in self.estimates.values() if str(e["client_id"]) == str(params.get("client_id"))]
-        return {"data": [{"Estimate": self._invoice_out(e)} for e in rows]}
+        return {"data": [{"Estimate": self._estimate_out(e)} for e in rows]}
 
     def create_estimate(self, params, body):
         """POST /api2/estimates.json, whose body is an invoice's: {"Invoice": …, "InvoiceItem": […]}.
@@ -520,7 +520,20 @@ class FakeDaftra:
         estimate = self.estimates.get(int(estimate_id))
         if estimate is None:
             raise NotFound("HTTP 404: no estimate")
-        return {"data": {"Estimate": self._invoice_out(estimate)}}
+        return {"data": {"Estimate": self._estimate_out(estimate)}}
+
+    def _estimate_out(self, estimate):
+        """An estimate as the live account returns one: its lines under InvoiceItem, and the VAT the
+        prices already include under InvoiceTax (5%, worked out on the lines before the discount,
+        as Daftra does — estimate 00347: 8,450 of lines, 402.38 VAT, on a total of 6,950)."""
+        items = estimate.get("items") or []
+        lines = sum(float(item["unit_price"]) * float(item["quantity"]) for item in items)
+        return {**self._invoice_out(estimate),
+                "original_date": estimate.get("date", ""),
+                "InvoiceItem": [{**item, "display_order": i, "subtotal": float(item["unit_price"]) * float(item["quantity"])}
+                                for i, item in enumerate(items)],
+                "InvoiceTax": {"3": {"name": "VAT Included", "value": "5.0000", "included": "1",
+                                     "invoice_value": lines * 5 / 105}}}
 
     def attach_document(self, params, body):
         self.invoices[int(body["invoice_id"])]["documents"].append(body["document_id"])

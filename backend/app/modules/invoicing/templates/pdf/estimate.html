@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<style>
+  @page { size: A4; margin: 10mm 14mm 14mm; @bottom-center { content: "صفحة " counter(page) " من " counter(pages); font-size: 8.5pt; color: #888; } }
+  body { font-family: "Noto Sans Arabic", "Noto Sans", "DejaVu Sans", sans-serif; color: #222; font-size: 10pt; }
+  .head { display: flex; justify-content: space-between; align-items: flex-start; }
+  .company { text-align: right; line-height: 1.4; }
+  .company .name { font-size: 12pt; font-weight: bold; margin-bottom: 0.5mm; }
+  .company .address { direction: ltr; text-align: right; font-size: 9pt; color: #444; }
+  .logo { width: 28mm; }
+  .titlebar { display: flex; justify-content: space-between; align-items: flex-end; margin: 3mm 0 3mm;
+              border-bottom: 2px solid #2f6f8f; padding-bottom: 2mm; }
+  .title { font-size: 18pt; font-weight: bold; margin: 0; color: #2f6f8f; }
+  .meta { font-size: 10pt; white-space: nowrap; }
+  .meta b { font-weight: bold; }
+  .ltr { direction: ltr; unicode-bidi: isolate; }
+  .parties { display: flex; gap: 6mm; margin-bottom: 3mm; }
+  .box { flex: 1; border: 1px solid #ccc; padding: 2mm 3.5mm; line-height: 1.5; }
+  .box h2 { font-size: 10pt; margin: 0 0 1mm; color: #2f6f8f; }
+  table.lines { width: 100%; border-collapse: collapse; margin-top: 1mm; }
+  .lines th { background: #2f6f8f; color: #fff; font-weight: bold; padding: 1.5mm 2mm; font-size: 9.5pt; }
+  .lines td { border-bottom: 1px solid #ddd; padding: 1.2mm 2mm; vertical-align: top; }
+  .lines tr { page-break-inside: avoid; }
+  .lines .n { width: 7mm; text-align: center; }
+  .lines .num { width: 25mm; text-align: left; direction: ltr; white-space: nowrap; }
+  .lines .qty { width: 14mm; text-align: center; }
+  .item { font-weight: bold; text-align: right; }
+  .desc { color: #555; font-size: 9pt; text-align: right; margin-top: 0.3mm; }
+  .item.ltr, .desc.ltr { direction: ltr; text-align: right; }
+  .totals { width: 80mm; margin: 2mm 0 0 auto; border-collapse: collapse; page-break-inside: avoid; }
+  .totals td { padding: 1.1mm 2mm; }
+  .totals td.v { text-align: left; direction: ltr; white-space: nowrap; }
+  .totals tr.grand td { border-top: 2px solid #2f6f8f; font-weight: bold; font-size: 11.5pt; }
+  .totals tr.vat td { color: #555; font-size: 9pt; }
+  .notes { margin-top: 4mm; border: 1px solid #ccc; padding: 2mm 3.5mm; line-height: 1.45; }
+  .notes h2, .terms h2 { font-size: 10pt; margin: 0 0 1.5mm; color: #2f6f8f; }
+  .notes p, .terms p { margin: 0 0 0.6mm; text-align: right; }
+  .terms p.first { font-weight: bold; font-size: 10.5pt; color: #2f6f8f; break-after: avoid; page-break-after: avoid; }
+  .terms { margin-top: 5mm; font-size: 9pt; line-height: 1.5; }
+  .terms .gap { height: 1.5mm; }
+</style>
+</head>
+<body>
+  <div class="head">
+    <div class="company">
+      <div class="name">FUTURE LIFE L.L.C O.P.C</div>
+      <div class="address">United Arab Emirates – Al Ain City – Downtown– Hessa Bint Mohammed Street</div>
+      <div class="address">Opposite ADCB Bank and Al Ain Post Office</div>
+      <div class="address">ALAIN Abu Dhabi 15975</div>
+    </div>
+    <img class="logo" src="logo.jpg" alt="Future Life">
+  </div>
+
+  <div class="titlebar">
+    <h1 class="title">عرض سعر</h1>
+    <div class="meta">رقم: <b class="ltr">{{ number }}</b>&nbsp;&nbsp;&nbsp; التاريخ: <b class="ltr">{{ date }}</b></div>
+  </div>
+
+  <div class="parties">
+    <div class="box">
+      <h2>العميل</h2>
+      <div><b>{{ client_name }}</b>{% if client_code %} — <span class="ltr">{{ client_code }}</span>{% endif %}</div>
+      {% if phone %}<div>الهاتف: <span class="ltr">{{ phone }}</span></div>{% endif %}
+      {% if address %}<div>العنوان: {{ address }}</div>{% endif %}
+    </div>
+    {% if sales_person %}
+    <div class="box">
+      <h2>مسؤول المبيعات</h2>
+      <div>{{ sales_person }}</div>
+    </div>
+    {% endif %}
+  </div>
+
+  <table class="lines">
+    <thead>
+      <tr><th class="n">#</th><th>البند</th><th class="num">سعر الوحدة</th><th class="qty">الكمية</th><th class="num">المجموع</th></tr>
+    </thead>
+    <tbody>
+      {% for line in lines %}
+      <tr>
+        <td class="n">{{ loop.index }}</td>
+        <td><div class="item{% if line.name_ltr %} ltr{% endif %}">{{ line.name }}</div>{% if line.description %}<div class="desc{% if line.description_ltr %} ltr{% endif %}">{{ line.description }}</div>{% endif %}</td>
+        <td class="num">{{ line.unit_price }}</td>
+        <td class="qty">{{ line.quantity }}</td>
+        <td class="num">{{ line.total }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <table class="totals">
+    <tr><td>المجموع</td><td class="v">{{ subtotal }} AED</td></tr>
+    {% if adjustment %}<tr><td>{{ adjustment_label }}</td><td class="v">{{ adjustment }} AED</td></tr>{% endif %}
+    {% for tax in taxes if not tax.included %}<tr><td>{{ tax.label }}</td><td class="v">{{ tax.amount }} AED</td></tr>{% endfor %}
+    <tr class="grand"><td>الإجمالي</td><td class="v">{{ total }} AED</td></tr>
+    {% for tax in taxes if tax.included %}<tr class="vat"><td>{{ tax.label }}</td><td class="v">{{ tax.amount }} AED</td></tr>{% endfor %}
+  </table>
+
+  {% if notes %}
+  <div class="notes">
+    <h2>ملاحظات</h2>
+    {% for line in notes %}<p>{{ line }}</p>{% endfor %}
+  </div>
+  {% endif %}
+
+  {% if terms %}
+  <div class="terms">
+    {% for line in terms %}{% if line %}<p{% if loop.first %} class="first"{% endif %}>{{ line }}</p>{% else %}<div class="gap"></div>{% endif %}{% endfor %}
+  </div>
+  {% endif %}
+</body>
+</html>

@@ -9,7 +9,7 @@ module's service — so the page, the cron and the command line all run the same
 run is recorded in `job_runs`.
 """
 
-from . import (create_user, download_product_images, fake_daftra, import_catalog,
+from . import (create_user, download_product_images, estimate_pdfs, fake_daftra, import_catalog,
                import_client_categories, import_maintenance_items, import_product_images,
                package_report, redraw_work_orders, sync_clients, sync_products, warm_daftra_cache)
 from .models import JobRun
@@ -20,7 +20,7 @@ from .runner import run_now, start_in_background
 # The modules that register the jobs, so importing this package is enough
 JOBS = (sync_clients, sync_products, warm_daftra_cache, import_catalog, import_client_categories,
         import_maintenance_items, import_product_images, download_product_images, package_report,
-        redraw_work_orders, create_user, fake_daftra)
+        redraw_work_orders, estimate_pdfs, create_user, fake_daftra)
 
 __all__ = ["JOBS", "JobRun", "all_jobs", "find", "get", "job", "names", "on_admin_page", "router",
            "run_now", "start_in_background"]
