@@ -201,6 +201,39 @@ def work_order_custom_fields(entries: dict) -> dict:
     return {field_id: entries.get(name) or "" for name, field_id in WORK_ORDER_FIELDS.items()}
 
 
+def blank_or(value) -> str:
+    """Daftra reads an empty custom field back as the text "None", so both it and "" count as blank."""
+    text = str(value) if value is not None else ""
+    return "" if text in ("None", "") else text
+
+
+def save_work_order_fields(work_order_id: int, row: dict, fields: dict) -> bool:
+    """Saves the work order's custom fields, then reads them back to be sure: Daftra saves them and
+    then answers with an error page, and the values show up a moment after it answers.
+
+    row: the work order as Daftra returns it. An edit needs its number, title and dates again —
+    without its number Daftra gives it the next one — and a حالة someone has set in Daftra stays.
+    fields: every custom field, by Daftra's id; one left out is emptied."""
+    work_order = {"number": row.get("number"), "title": row.get("title"),
+                  "start_date": str(row.get("start_date") or "")[:10],
+                  "delivery_date": str(row.get("delivery_date") or "")[:10]}
+    if int(row.get("follow_up_status_id") or 0):
+        work_order["follow_up_status_id"] = int(row["follow_up_status_id"])
+    try:
+        daftra.update_unconfirmed(f"work_orders/{work_order_id}.json", {
+            "WorkOrder": work_order,
+            "CustomModel": {**CONTAINS_CUSTOM_DATA, **fields},
+        })
+        for attempt in range(4):
+            time.sleep(1 + attempt)
+            saved = daftra.read_v2("work_order", work_order_id).get("custom_data") or {}
+            if all(blank_or(saved.get(key)) == blank_or(value) for key, value in fields.items()):
+                return True
+    except DaftraError:
+        pass
+    return False
+
+
 def set_work_order_fields(request, row: dict, entries: dict) -> bool:
     """Writes the work order's custom fields, then reads them back to be sure. With a real file id in
     صورة المنتج Daftra answers 200, but it answered 500 for a while and the values saved anyway, so the
@@ -215,32 +248,42 @@ def set_work_order_fields(request, row: dict, entries: dict) -> bool:
                        if str(held.get(key) or "") not in ("", "None")})
     except DaftraError:
         pass
-    # An edit needs these again, as the work order has them, and a حالة someone has set in Daftra stays.
-    # Without its number Daftra gives the work order the next one, and the portal's copy falls behind.
-    work_order = {"number": row.get("number"), "title": row.get("title"),
-                  "start_date": str(row.get("start_date") or "")[:10],
-                  "delivery_date": str(row.get("delivery_date") or "")[:10]}
-    if int(row.get("follow_up_status_id") or 0):
-        work_order["follow_up_status_id"] = int(row["follow_up_status_id"])
-    try:
-        daftra.update_unconfirmed(f"work_orders/{request.daftra_work_order_id}.json", {
-            "WorkOrder": work_order,
-            "CustomModel": {**CONTAINS_CUSTOM_DATA, **fields},
-        })
-        # The values show up a moment after Daftra answers. Daftra reads an empty field back as the
-        # text "None", so both it and "" count as blank.
-        def blank_or(value) -> str:
-            text = str(value) if value is not None else ""
-            return "" if text in ("None", "") else text
+    return save_work_order_fields(request.daftra_work_order_id, row, fields)
 
-        for attempt in range(4):
-            time.sleep(1 + attempt)
-            saved = daftra.read_v2("work_order", request.daftra_work_order_id).get("custom_data") or {}
-            if all(blank_or(saved.get(key)) == blank_or(value) for key, value in fields.items()):
-                return True
-    except DaftraError:
-        pass
-    return False
+
+def add_work_order_notes(request, dry_run: bool = False) -> str:
+    """For a work order made before ملاحظات had a field of its own (field_54, 2026-11-15): writes the
+    request's ملاحظات into it, and says what happened.
+
+    Only that field changes. Every other one is sent back exactly as Daftra holds it now — a save
+    empties any field left out — so what staff have changed in Daftra since the approval stays.
+    ملاحظات someone has already written there are never replaced. Safe to run again."""
+    notes = str(request.data.get("notes") or "").strip()
+    if not notes:
+        return "no ملاحظات on the request"
+    work_order_id, field = request.daftra_work_order_id, WORK_ORDER_FIELDS["notes"]
+    try:
+        held = daftra.read_v2("work_order", work_order_id).get("custom_data") or {}
+    except DaftraError as error:
+        return f"Daftra: {error}"
+    already = blank_or(held.get(field))
+    if already == notes:
+        return "already has them"
+    if already:
+        return "its ملاحظات hold something else; left as they are"
+    fields = {key: blank_or(value) for key, value in held.items() if key.startswith("field_")}
+    fields[field] = notes
+    if dry_run:
+        return f"would write {len(notes)} characters"
+    try:
+        row = daftra.get(f"work_orders/{work_order_id}.json").get("data", {}).get("WorkOrder", {})
+    except DaftraError as error:
+        return f"Daftra: {error}"
+    if not row.get("number"):
+        return "Daftra gave back no number for it; left as it is"
+    if save_work_order_fields(work_order_id, row, fields):
+        return f"written ({len(notes)} characters)"
+    return "sent, but Daftra did not show it saved; look at it in Daftra"
 
 
 def assign_work_order_staff(request, reviewer) -> bool:
