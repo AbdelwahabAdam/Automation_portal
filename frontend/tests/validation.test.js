@@ -3,7 +3,7 @@
 // checks (backend/tests/modules/form_engine/test_forms.py).
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { matchesQuery, normalize } from '../src/ds/match.js';
+import { matchesQuery, normalize, samePerson } from '../src/ds/match.js';
 import { formatAmount, formatDay, localDay } from '../src/lib/format.js';
 import {
   changedDetails, coordinatesFromLink, evaluateForm, groupLines, initialValues, linePrice, normalizePhone, packageColors,
@@ -297,4 +297,16 @@ test('a new client is asked for type and gender, and an email only has to look l
   const done = evaluateForm(clientForm, { new_client: true, customer_type: 'شركة', gender: 'أنثى', email: ' Office@Example.COM ' });
   assert.deepEqual(done.errors, {});
   assert.equal(done.clean.email, 'office@example.com');
+});
+
+test('samePerson: a name written differently is the same person, someone else is not', () => {
+  // Request 162: a new client's name against the client whose second number was his
+  assert.equal(samePerson('حمد يوسف محمد السناني', 'محمد سعيد سهيل'), false);
+  assert.equal(samePerson('فهد سعيد العطر', 'محمد سعيد العطر'), false);
+  assert.equal(samePerson('محمد سعيد', 'محمد سعيد سهيل'), true);
+  assert.equal(samePerson('حمد السنانى', 'حمد السناني'), true);
+  assert.equal(samePerson('عبدالله احمد', 'عبد الله احمد'), true);
+  assert.equal(samePerson('مُحمّد علي', 'محمد علي'), true);
+  assert.equal(samePerson('Qaiser nadeem', 'QAISER NADEEM Mohd Latif'), true);
+  assert.equal(samePerson('', 'محمد'), true);
 });

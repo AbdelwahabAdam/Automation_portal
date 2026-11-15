@@ -289,6 +289,7 @@ def test_approving_a_new_sale_creates_everything_in_daftra(client, db, fake_daft
         "field_50": f"0{invoice_id}", "field_51": "20 يومًا",
         "field_52": "باقة برادة سقيا الخير - 3 صنابير - أسود",
         "field_53": "العين، العين العامره، شارع 1، فيلا 2",
+        "field_54": "",   # ملاحظات: none were written
     }
     assert fake_daftra.invoices[invoice_id]["work_order_id"] == saved["id"]
 
@@ -331,6 +332,20 @@ def test_the_work_orders_description_is_the_notes_for_the_floor_and_nothing_else
     assert any(row.startswith("نوع الجهاز:") for row in rows)
     assert not any(row.startswith(("العميل:", "العنوان:", "رقم الفاتورة:")) for row in rows)
     assert manufacturing_notes({"order_lines": first + same}) == "بدون ثقوب على الجانب الأيسر"
+
+
+def test_the_forms_notes_go_in_the_work_orders_own_field(client, db, fake_daftra, sales, manager):
+    """The form's ملاحظات (أي اتفاق خاص أو ملاحظات إضافية) go in the work order's ملاحظات (field_54),
+    as written; the ملاحظات under each product stay in its description."""
+    seed.catalog(db)
+    written = "العميل يريد التركيب يوم الجمعة\nالدفع الباقي عند التسليم"
+    request_id = submitted_sale(client, db, sales, notes=written,
+                                order_lines=seed.package_lines(manufacturing_notes="بدون ثقوب"))
+    assert approve(client, manager, request_id).status_code == 200
+    saved = next(iter(fake_daftra.work_orders.values()))
+    assert saved["custom"]["field_54"] == written
+    [work_order] = fake_daftra.posted("/api2/work_orders.json")
+    assert work_order["WorkOrder"]["description"] == "بدون ثقوب"
 
 
 def test_the_other_contact_number_is_added_to_the_work_orders_description(client, db, fake_daftra, sales, manager):
@@ -873,7 +888,7 @@ def test_the_second_number_reaches_daftra_and_replaces_the_one_held(client, db, 
     assert approve(client, manager, request_id).status_code == 200
     [made] = fake_daftra.posted("/api2/clients.json")
     assert (made["Client"]["phone1"], made["Client"]["phone2"]) == ("0501234567", "0559998877")
-    # Our own copy keeps it, so a search by either number finds them
+    # Our own copy keeps it, beside their own number (which is the one a search finds them by)
     assert db.query(Client).filter_by(phone="0501234567").one().phone2 == "0559998877"
 
     # A client Daftra already has: a different second number replaces theirs

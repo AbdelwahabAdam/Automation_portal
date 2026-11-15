@@ -48,6 +48,9 @@ WORK_ORDER_FIELDS = {
     # primary address block, which is the older one once the portal has moved a newer address into
     # the secondary slot (clients.in_daftra.second_address), and which may have no street at all.
     "address": "field_53",
+    # The form's own ملاحظات (أي اتفاق خاص أو ملاحظات إضافية), as written. The ملاحظات under each
+    # product are for the floor and stay in the description.
+    "notes": "field_54",                     # ملاحظات
 }
 # Fields on the work order form that the portal does not fill: مستند 1 (صورة المعاينة) and تاريخ
 # التركيب, both written by hand in Daftra. A save would empty them (see below), so they are read
@@ -155,6 +158,7 @@ def work_order_values(request, db: Session) -> dict:
         "product_image": product_image_id(data, db),
         "device": device_name(data),
         "address": full_address(data),
+        "notes": str(data.get("notes") or "").strip(),
     }
     return values
 

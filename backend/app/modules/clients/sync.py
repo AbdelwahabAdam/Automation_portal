@@ -27,10 +27,10 @@ def client_rows(raw_clients: list[dict]) -> list[dict]:
     """
     rows = []
     for c in raw_clients:
-        phone, phone2 = local_phone(c.get("phone1")), local_phone(c.get("phone2"))
-        if not phone:
-            phone, phone2 = phone2, ""
-        elif phone2 == phone:
+        # Their own number, and the رقم مسؤول اخر beside it when there is one
+        phone = daftra_side.own_number(c)
+        phone2 = local_phone(c.get("phone2")) if local_phone(c.get("phone1")) else ""
+        if phone2 == phone:
             phone2 = ""
         if not phone:
             continue

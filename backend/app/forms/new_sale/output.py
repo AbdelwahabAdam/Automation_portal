@@ -99,6 +99,7 @@ def work_order(ctx):
             "extensions": made.fields["extensions"],
             "device": made.fields["device"],          # نوع الجهاز, on Daftra's own print
             "address": made.fields["address"],        # العنوان, the request's own, not the client's
+            "notes": made.fields["notes"],            # ملاحظات, the form's own, as written
         },
         printed=made.printed,                         # the same values, as the portal's PDF prints them
     )

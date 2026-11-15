@@ -238,6 +238,8 @@ function ReviewActions({ request, own, mayReview, daftraNote, onDone }) {
       )}
       {asking === 'approve' && (
         <Dialog title="اعتماد الطلب؟" confirmLabel="اعتماد" busy={busy} onConfirm={() => decide('approve')} onCancel={() => setAsking(null)}>
+          {/* Said again where the decision is made: the page's own warning may be scrolled past */}
+          {request.client_warning && <Alert tone="warning" title="تنبيه: اسم العميل مختلف">{request.client_warning}</Alert>}
           بعد الاعتماد لا يمكن تعديل الطلب، ويصل إشعار بالبريد إلى الموظف.
           {daftraNote && ` ${daftraNote}`}
         </Dialog>
@@ -443,6 +445,10 @@ export default function RequestView({ requestId, formTypes, onBack, ownerName: g
       )}
       {request.status === 'returned' && request.returned_reason && (
         <Alert tone="warning" title="أُعيد الطلب للتعديل">{request.returned_reason}</Alert>
+      )}
+      {/* Approving would put it on a client of another name (the server's drafts.client_warning) */}
+      {request.client_warning && (
+        <Alert tone="warning" title="تنبيه: اسم العميل مختلف">{request.client_warning}</Alert>
       )}
       {formType.sections.map((section) => {
         const rows = section.fields.map((spec) => [spec, display(spec)]).filter(([, shown]) => shown);

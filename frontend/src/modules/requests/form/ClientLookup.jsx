@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react';
 import * as clientsApi from '../../../api/clients.js';
 import { Alert, Button, Select } from '../../../ds/index.jsx';
+import { samePerson } from '../../../ds/match.js';
 import { coordinatesFromLink, normalizePhone } from '../validation.js';
 
 // Form fields that an existing Daftra client can fill. المنطقة is not one: whatever a client's saved
@@ -223,9 +224,18 @@ export function ClientLookupNote({ name, client: found, values }) {
   if (lookup.status === 'loading') return <p className="fl-field__hint">جارٍ البحث عن العميل…</p>;
   if (lookup.status === 'found') {
     const addresses = lookup.client.addresses || [];
+    // The name typed is someone else's: the request would go on this client's account
+    const otherName = !samePerson(values.customer_name, lookup.client.customer_name);
     return (
-      <Alert tone="success" title="عميل مسجل">
+      <Alert tone={otherName ? 'warning' : 'success'} title={otherName ? 'تنبيه: اسم العميل مختلف' : 'عميل مسجل'}>
         <p>{lookup.client.customer_name} — كود <bdi dir="ltr">{lookup.client.client_code}</bdi>. تم تعبئة بياناته.</p>
+        {otherName && (
+          <p>
+            الطلب باسم «<bdi>{values.customer_name}</bdi>» وهذا العميل اسمه «<bdi>{lookup.client.customer_name}</bdi>». عند
+            الاعتماد تُسجَّل الفاتورة على «<bdi>{lookup.client.customer_name}</bdi>» وتُحدَّث بياناته. إن كان عميلًا آخر
+            فامسح كود العميل واكتب رقم هاتفه هو.
+          </p>
+        )}
         <div className="fl-row fl-lookup__actions">
           {addresses.length > 0 && (
             <Select value={addressChoice ?? ''} onChange={(e) => found.chooseAddress(e.target.value)} aria-label="عنوان العميل">

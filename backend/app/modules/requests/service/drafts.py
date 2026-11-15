@@ -18,6 +18,27 @@ from . import access, review
 from .review import filled
 
 
+# Until it is approved: after that it is in Daftra under whichever client it went to
+CLIENT_WARNING_STATUSES = ("draft", "submitted", "returned")
+
+
+def client_warning(db: Session, request: Request) -> str | None:
+    """Said to whoever opens the request when approving it would put it on a client whose name is
+    not the request's: what put request 162 (حمد السناني) on محمد سعيد سهيل's account."""
+    if request.status not in CLIENT_WARNING_STATUSES:
+        return None
+    data = request.data or {}
+    other = clients.other_client(data, db)
+    if other is None:
+        return None
+    by_code = bool(str(data.get("client_code") or "").strip("0 "))
+    how = (f"كود العميل {other.client_code}" if by_code
+           else f"رقم الهاتف {data.get('phone')}")
+    return (f"{how} في هذا الطلب للعميل «{other.customer_name}» (كود {other.client_code})، "
+            f"والطلب باسم «{data.get('customer_name')}». عند الاعتماد تُسجَّل الفاتورة على «{other.customer_name}» "
+            "وتُحدَّث بياناته وعنوانه في دفترة. إن لم يكن هو العميل نفسه فأعد الطلب للموظف لتصحيح الكود أو الرقم.")
+
+
 def daftra_lists(form_type: str, db: Session) -> dict:
     """The Daftra lists this form's fields pick from, as {field type: {id: name}}; one that cannot
     be loaded right now is left out, and Daftra checks the id when the request is approved."""

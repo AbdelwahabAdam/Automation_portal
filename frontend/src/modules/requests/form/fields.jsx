@@ -219,7 +219,9 @@ function PhoneInput({ spec, value, invalid, onChange, onSearch }) {
       id={spec.name} value={national} invalid={invalid} type="text" inputMode="tel" autoComplete="off"
       start={<span className="fl-box__code" id={`${spec.name}-code`}>+971</span>}
       aria-describedby={`${spec.name}-code`}
-      icon="search" iconLabel={onSearch ? `بحث عن العميل بـ${spec.label}` : undefined}
+      /* The magnifier only where it searches: on رقم مسؤول اخر it would promise a search that is not
+         made — a client is never looked up by their second number */
+      icon={onSearch ? 'search' : undefined} iconLabel={onSearch ? `بحث عن العميل بـ${spec.label}` : undefined}
       onIconClick={onSearch && (() => onSearch(spec.name, value ?? ''))}
       enterKeyHint={onSearch ? 'search' : undefined}
       onChange={(e) => change(e.target.value)}
@@ -277,7 +279,7 @@ export function Control({ spec, value, invalid, onChange, onPick, onBlur, onSear
   const inputMode = { number: spec.integer ? 'numeric' : 'decimal', phone: 'tel' }[spec.type];
   // A field the client is looked up by: its keyboard says «بحث», and digits are what gets typed
   const searching = Boolean(onSearch);
-  const icon = spec.type === 'phone' || onSearch ? 'search' : undefined;
+  const icon = onSearch ? 'search' : undefined;
   return (
     <>
       {/* A phone keeps its number pad, and the client code is digits too; on both, the keyboard's own

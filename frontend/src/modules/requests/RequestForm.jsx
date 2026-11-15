@@ -118,13 +118,16 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
     return () => window.removeEventListener('beforeunload', warn);
   }, [dirty]);
 
-  // A saved draft looks its client up again, so those fields have their choices back
+  // A saved draft with a client loads that same client again, so their addresses and open invoices
+  // are there to pick from. One without a client code is not searched for by its phone: that is how
+  // request 162, a new client's, was put on another client when it was reopened to fix its date —
+  // his number was that client's رقم مسؤول اخر, and the client code went in unseen. Searching is the
+  // user's own, by the magnifier or on leaving the field.
   const lookedUpDraft = useRef(false);
   useEffect(() => {
     if (loading || lookedUpDraft.current || !needsClientInfo) return;
     lookedUpDraft.current = true;
     if (values.client_code) client.lookupClient('client_code', String(values.client_code));
-    else if (values.phone) client.lookupClient('phone', String(values.phone));
   });
 
   if (!formType) return <Alert tone="error">نوع هذا النموذج لم يعد متاحًا.</Alert>;

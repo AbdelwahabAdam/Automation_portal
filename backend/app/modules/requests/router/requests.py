@@ -57,8 +57,10 @@ def create_request(body: schemas.RequestIn, who: Actor = Depends(acting(get_curr
 
 
 @router.get("/requests/{request_id}", response_model=schemas.RequestOut)
-def get_request(request: Request = Depends(viewable_request)):
-    return request
+def get_request(request: Request = Depends(viewable_request), db: Session = Depends(get_db)):
+    out = schemas.RequestOut.model_validate(request)
+    out.client_warning = drafts.client_warning(db, request)
+    return out
 
 
 @router.put("/requests/{request_id}", response_model=schemas.RequestOut)

@@ -52,6 +52,8 @@ class RequestOut(BaseModel):
     daftra_synced_at: datetime | None
     # The terms its invoice or estimate printed, e.g. «شروط وأحكام الضمان — الإصدار 1»
     printed_terms: str | None = None
+    # Approving would put it on a client of another name (drafts.client_warning); only on one request
+    client_warning: str | None = None
 
 
 class DecisionIn(BaseModel):

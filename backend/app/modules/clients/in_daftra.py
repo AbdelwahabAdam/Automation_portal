@@ -8,7 +8,7 @@ and the emirate and area are the forms' own choices.
 import re
 from collections import Counter, defaultdict
 
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ...core.config import settings
@@ -163,19 +163,26 @@ def client_id(data: dict, db: Session) -> int:
     return found if found is not None else create_client(data, local_phone(data.get("phone")), db)
 
 
+def own_number(client: dict) -> str:
+    """A Daftra client's own number: phone1, or phone2 when phone1 is empty — as our copy of the
+    list keeps it (sync.client_rows). A phone2 beside a phone1 is someone else's: رقم مسؤول اخر."""
+    return local_phone(client.get("phone1")) or local_phone(client.get("phone2"))
+
+
 def known_client(data: dict, db: Session) -> bool:
     """Whether our client list has a client with the request's client code or phone: the same list
-    the form's phone search reads, so the form and the server agree on who is a new client."""
+    the form's phone search reads, so the form and the server agree on who is a new client. The
+    phone is a client's own number only, never their رقم مسؤول اخر (see repo.by_phone)."""
     code = digits(data.get("client_code"))
     if code.strip("0") and db.scalar(select(Client.id).where(Client.client_code == code.zfill(6)).limit(1)):
         return True
     phone = local_phone(data.get("phone"))
-    return len(phone) >= 9 and db.scalar(
-        select(Client.id).where(or_(Client.phone == phone, Client.phone2 == phone)).limit(1)) is not None
+    return len(phone) >= 9 and db.scalar(select(Client.id).where(Client.phone == phone).limit(1)) is not None
 
 
 def existing_client_id(data: dict, db: Session) -> int | None:
-    """The Daftra client with the request's client code, else its phone number; None if there is none."""
+    """The Daftra client with the request's client code, else whose own number the request's phone
+    is; None if there is none. A client who merely has it as their رقم مسؤول اخر is not them."""
     code = digits(data.get("client_code"))
     if code.strip("0"):
         client = db.scalar(select(Client).where(Client.client_code == code.zfill(6)))
@@ -185,7 +192,7 @@ def existing_client_id(data: dict, db: Session) -> int | None:
     phone = local_phone(data.get("phone"))
     if len(phone) < 9:
         return None
-    known = db.scalars(select(Client).where(or_(Client.phone == phone, Client.phone2 == phone))).all()
+    known = db.scalars(select(Client).where(Client.phone == phone)).all()
     if len(known) > 1:
         raise SyncError(f"يوجد أكثر من عميل بالرقم {phone} ولم يُحدَّد كود العميل. "
                         "أعد الطلب للموظف ليكتب كود العميل الصحيح.")
@@ -194,11 +201,48 @@ def existing_client_id(data: dict, db: Session) -> int | None:
 
     # Our copy of the client list may be older than Daftra's
     rows = daftra.get("clients.json", {"keywords": phone, "limit": 50}).get("data", [])
-    found = [row["Client"] for row in rows
-             if phone in (local_phone(row["Client"].get("phone1")), local_phone(row["Client"].get("phone2")))]
+    found = [row["Client"] for row in rows if own_number(row["Client"]) == phone]
     if len(found) > 1:
         raise SyncError(f"يوجد في دفترة أكثر من عميل بالرقم {phone}. أعد الطلب للموظف ليكتب كود العميل الصحيح.")
     return int(found[0]["id"]) if found else None
+
+
+def same_person(name: str, other: str) -> bool:
+    """Whether two written names can be the same person: «محمد سعيد» and «محمد سعيد سهيل», or
+    «حمد السنانى» and «حمد السناني», but not «حمد يوسف محمد السناني» and «محمد سعيد سهيل».
+
+    Lenient on purpose — a warning that fires on every short name is soon not read. The same once
+    spelling differences are put aside (fold_arabic), or every word of the shorter one is in the
+    longer, or the first two words are the same. A name missing on either side is no difference.
+    """
+    def split(text) -> list[str]:
+        # Without the vowel marks and tatweel, and punctuation read as a space, as the form's search does
+        text = re.sub("[ً-ٰـ]", "", str(text or ""))
+        return [fold_arabic(word).lower() for word in re.sub(r"[^\w\s]", " ", text).split()]
+
+    words = [split(name), split(other)]
+    if not all(words):
+        return True
+    joined = ["".join(w) for w in words]
+    shorter, longer = sorted(words, key=len)
+    return (joined[0] in joined[1] or joined[1] in joined[0]
+            or all(word in longer for word in shorter) or words[0][:2] == words[1][:2])
+
+
+def other_client(data: dict, db: Session) -> Client | None:
+    """The client in our list that approving would put this request on, when its name is not the
+    request's: someone else's client code, or someone else's number, typed in or filled in by a
+    search. None when there is no such client or the names agree. Our list only: Daftra is not
+    asked, since this is shown each time a request is opened."""
+    code = digits(data.get("client_code"))
+    client = (db.scalar(select(Client).where(Client.client_code == code.zfill(6))) if code.strip("0") else None)
+    if client is None:
+        phone = local_phone(data.get("phone"))
+        found = db.scalars(select(Client).where(Client.phone == phone)).all() if len(phone) >= 9 else []
+        client = found[0] if len(found) == 1 else None
+    if client is None or same_person(data.get("customer_name") or "", client.customer_name or ""):
+        return None
+    return client
 
 
 def custom_fields(data: dict, held: dict | None = None) -> dict:
