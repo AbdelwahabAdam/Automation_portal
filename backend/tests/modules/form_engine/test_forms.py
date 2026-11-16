@@ -158,6 +158,26 @@ def test_an_inscription_the_catalogue_has_not_got_is_still_accepted():
     assert long_errors["order_lines"]["lines"]["0"] == {"inscription": "الحد الأقصى 500 حرفًا"}
 
 
+def test_a_price_is_refused_for_an_inscription_of_لا_يوجد():
+    """The invoice carries no line for an inscription of «لا يوجد», so the subtotal must not carry
+    its price either: the two totals could never meet, and the approval would fail once the invoice
+    had already been made (request 176, invoice 06629)."""
+    sent = new_sale(order_lines=package_lines(inscription="لا يوجد", inscription_price="300"))
+    _, errors = validate("new_sale", sent, FILES)
+    assert "اختر «أخرى»" in errors["order_lines"]["lines"]["0"]["inscription_price"]
+
+    # Nothing to charge for, nothing to refuse
+    _, none = validate("new_sale", new_sale(order_lines=package_lines(
+        inscription="لا يوجد", inscription_price="")), FILES)
+    assert none == {}
+
+    # With a real inscription the price is wanted, and the subtotal counts it once per package
+    clean, kept = validate("new_sale", new_sale(order_lines=package_lines(
+        inscription="بسم الله", inscription_price="300")), FILES)
+    assert kept == {}
+    assert clean["order_lines"][0]["details"]["inscription_price"] == 300
+
+
 def test_cover_colour_must_be_one_of_the_package_family():
     _, errors = validate("new_sale", new_sale(order_lines=package_lines(cover_color="بنفسجي")), FILES)
     assert errors["order_lines"]["lines"]["0"]["cover_color"] == "اختر من القائمة"

@@ -236,6 +236,18 @@ def validate_submission(form_type: str, data: dict, file_counts: dict, employee_
                         del details[dname]
                 if required and dname not in details and dname not in row_errors:
                     row_errors[dname] = "مطلوب"
+                # A charge asked for only under a condition cannot be charged outside it. The
+                # subtotal below counts every charge, while the invoice only carries a line for one
+                # whose condition holds (invoicing.invoice: an inscription of «لا يوجد» invoices
+                # nothing), so the two totals could never meet and the approval would fail — after
+                # the invoice had already been made in Daftra. It is refused here instead.
+                # Not when the field it hangs on is itself wrong: that one is marked, and a
+                # «الكتابة المطلوبة» that was refused reads as «لا يوجد» here without meaning it.
+                if (dspec.get("charge") and "required_if" in dspec and not required
+                        and dname not in row_errors
+                        and dspec["required_if"]["field"] not in row_errors
+                        and (details.get(dname) or 0) > 0):
+                    row_errors[dname] = dspec.get("charge_error") or "لا يُحتسب هنا؛ اتركه فارغًا"
             # «أخرى» has no catalog price: what the salesperson typed on the line is the price
             typed = next((dspec["name"] for dspec in own_fields if dspec.get("line_price")), None)
             if typed is not None and details.get(typed) is not None:

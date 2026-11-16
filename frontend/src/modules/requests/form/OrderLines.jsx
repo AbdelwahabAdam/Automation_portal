@@ -2,7 +2,7 @@
 import { Fragment, useMemo, useState } from 'react';
 import { Button, Choice, Combobox, Field, Icon, Select } from '../../../ds/index.jsx';
 import { formatMoney } from '../../../lib/format.js';
-import { changedDetails, groupLines, linePrice, packageColors, packageDefault, packageQuantity } from '../validation.js';
+import { changedDetails, chargeApplies, groupLines, linePrice, packageColors, packageDefault, packageQuantity } from '../validation.js';
 import { Control, guessFromProductName, Stepper } from './fields.jsx';
 
 const newGroupId = () => `g${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
@@ -47,6 +47,9 @@ function DetailFields({ lineFields, details, errors, keyPrefix, onChange, forPac
   const fieldOf = (dspec) => {
     const id = `${keyPrefix}-${dspec.name}`;
     const error = errors?.[dspec.name];
+    // A charge that does not apply right now cannot be typed into (سعر الكتابة while الكتابة
+    // المطلوبة is «لا يوجد»): the invoice would carry no line for it, and the totals would differ
+    const off = !chargeApplies(lineFields, dspec, details);
     const required = dspec.type === 'package_color' ? colorChoices(dspec).length > 0 && !dspec.optional : dspec.required;
     let control;
     if (dspec.type === 'package_color') {
@@ -66,7 +69,8 @@ function DetailFields({ lineFields, details, errors, keyPrefix, onChange, forPac
     } else {
       // A package's details are always drop-downs, however few their options
       control = (
-        <Control spec={{ ...dspec, name: id, dropdown: dspec.type === 'select' }} value={details?.[dspec.name] ?? ''}
+        <Control spec={{ ...dspec, name: id, dropdown: dspec.type === 'select', disabled: off }}
+          value={off ? '' : details?.[dspec.name] ?? ''}
           invalid={Boolean(error)} onChange={(_, value) => onChange(dspec.name, value)} />
       );
     }

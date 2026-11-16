@@ -51,6 +51,7 @@ def order_details(*, order_lines, package_quantity, cooler_color, cover_color, i
                                   for family in PACKAGE_COLOR_FAMILIES])),
         (inscription, INSCRIPTION[0]),
         (inscription_price, money("inscription_price", "سعر الكتابة، شامل الضريبة (درهم)", charge=True,
+                                  charge_error="لا تُحتسب الكتابة مع «لا يوجد». اختر «أخرى» واكتب النص المطلوب، أو اترك سعر الكتابة فارغًا.",
                                   beside="inscription")),
         (dimensions, f("dimensions", "المقاسات المطلوبة، إن تنطبق")),
         (special_requirements, f("special_requirements", "مواصفات أو متطلبات خاصة", "textarea")),

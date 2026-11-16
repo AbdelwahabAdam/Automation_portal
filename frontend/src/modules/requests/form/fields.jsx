@@ -244,6 +244,8 @@ export function Control({ spec, value, invalid, onChange, onPick, onBlur, onSear
     invalid,
     // Filled in by something else and not typed into: الإحداثيات come from the map's pin
     readOnly: spec.readonly || undefined,
+    // Does not apply right now, so it cannot be typed into: سعر الكتابة while الكتابة المطلوبة is «لا يوجد»
+    disabled: spec.disabled || undefined,
     placeholder: spec.placeholder,
     onChange: (e) => onChange(spec.name, e.target.value),
     onBlur: onBlur && ((e) => onBlur(spec.name, e.target.value)),

@@ -140,6 +140,17 @@ def make_invoice(request, doc: Invoice) -> dict:
             term = doc.terms
             if term is not None:
                 fields["html_notes"] = printed_terms.as_html(term.body)
+            # The same check as the one below, made before anything is sent: the lines about to go
+            # add up to what the request says, or nothing is created. Without it a request whose
+            # total cannot be matched still leaves an invoice behind in Daftra on every approval,
+            # for someone to find and delete by hand. The invoice's total is its lines less the
+            # discount, as its prices already carry the VAT.
+            lines_total = sum(money(item.get("unit_price")) * money(item.get("quantity"))
+                              for item in doc.items)
+            if abs(lines_total - discount - money(doc.total)) > TOTAL_TOLERANCE:
+                raise SyncError(
+                    f"بنود الطلب تساوي {lines_total - discount:.2f} بينما إجمالي الطلب "
+                    f"{money(doc.total):.2f}. صحّح الطلب ثم اعتمده مرة أخرى.")
             request.save_document(
                 "invoice", daftra.create("invoices.json", {"Invoice": fields, "InvoiceItem": list(doc.items)}))
             request.printed_terms_id, request.printed_terms = (term.id, term.label) if term else (None, None)

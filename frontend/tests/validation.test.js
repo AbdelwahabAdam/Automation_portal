@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import { matchesQuery, normalize, samePerson } from '../src/ds/match.js';
 import { formatAmount, formatDay, localDay } from '../src/lib/format.js';
 import {
-  changedDetails, coordinatesFromLink, evaluateForm, groupLines, initialValues, linePrice, normalizePhone, packageColors,
+  changedDetails, chargeApplies, coordinatesFromLink, evaluateForm, groupLines, initialValues, linePrice, normalizePhone, packageColors,
   packageDefault, packageQuantity, today,
 } from '../src/modules/requests/validation.js';
 import { afterCategory, afterEmirate, categoriesFor } from '../src/modules/requests/address.js';
@@ -309,4 +309,26 @@ test('samePerson: a name written differently is the same person, someone else is
   assert.equal(samePerson('مُحمّد علي', 'محمد علي'), true);
   assert.equal(samePerson('Qaiser nadeem', 'QAISER NADEEM Mohd Latif'), true);
   assert.equal(samePerson('', 'محمد'), true);
+});
+
+// سعر الكتابة as the real form sends it: charged only while الكتابة المطلوبة is not «لا يوجد»,
+// because the invoice carries a line for it only then (request 176, invoice 06629)
+const NO_INSCRIPTION = ['لا يوجد', 'لايوجد', 'لا توجد', 'لاتوجد'];
+const charging = [
+  { name: 'inscription', blank_value: 'لا يوجد' },
+  { name: 'inscription_price', charge: true, required_if: { field: 'inscription', not_in: NO_INSCRIPTION } },
+];
+const charge = (details, value) => changedDetails(charging, SAQYA, 'inscription', details, value);
+
+test('a price does not apply to an inscription of «لا يوجد», and goes with it', () => {
+  const price = charging[1];
+  assert.equal(chargeApplies(charging, price, { inscription: 'بسم الله' }), true);
+  assert.equal(chargeApplies(charging, price, { inscription: 'لا يوجد' }), false);
+  // An empty الكتابة المطلوبة stands for «لا يوجد», as the server reads it before anything else
+  assert.equal(chargeApplies(charging, price, {}), false);
+  // Choosing «لا يوجد» empties the price with it, so none is sent with nothing to charge it for
+  assert.equal(charge({ inscription: 'بسم الله', inscription_price: '300' }, 'لا يوجد').inscription_price, '');
+  // A real inscription keeps what was typed
+  assert.equal(charge({ inscription: 'لا يوجد', inscription_price: '' }, 'بسم الله').inscription, 'بسم الله');
+  assert.equal(charge({ inscription: 'بسم الله', inscription_price: '300' }, 'نص آخر').inscription_price, '300');
 });

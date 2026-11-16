@@ -126,6 +126,19 @@ function withoutWork(text, work) {
   return String(text ?? '').replace(`${WORK_SEPARATOR}${work}`, '').replace(work, '').trim();
 }
 
+// Whether a charge applies to a line right now. Mirrors validation.py: a charge field with a
+// required_if is only charged while that condition holds, because the invoice carries a line for
+// it only then — a price for an inscription of «لا يوجد» would put the request's total and
+// Daftra's permanently apart. A field left blank stands for its blank_value first, as the server
+// does, so an empty الكتابة المطلوبة reads as «لا يوجد» here too.
+export function chargeApplies(lineFields, dspec, details) {
+  if (!dspec.charge || !dspec.required_if) return true;
+  const gate = (lineFields || []).find((d) => d.name === dspec.required_if.field);
+  const filled = { ...details };
+  if (gate?.blank_value && !filled[gate.name]) filled[gate.name] = gate.blank_value;
+  return conditionMet(dspec.required_if, filled);
+}
+
 // A package's details after one of them changes. The inscription a package starts with (a field
 // with a work_field, from the backend's PACKAGE_INSCRIPTIONS) brings its price and its mention in
 // ملحقات التركيب, and takes the mention away when another one replaces it. A price still at the
@@ -134,15 +147,20 @@ export function changedDetails(lineFields, packageName, name, details, value) {
   const next = { ...details, [name]: value };
   const spec = lineFields.find((dspec) => dspec.name === name && dspec.work_field);
   const family = spec && packageFamily(spec, packageName);
-  if (!family) return next;
-  const chosen = value === family.text;
-  if (chosen === (details?.[name] === family.text)) return next;
-  if (chosen) {
-    next[spec.price_field] = family.price;
-    next[spec.work_field] = withWork(next[spec.work_field], family.work);
-  } else {
-    next[spec.work_field] = withoutWork(next[spec.work_field], family.work);
-    if (Number(next[spec.price_field]) === Number(family.price)) next[spec.price_field] = '';
+  const chosen = family && value === family.text;
+  if (family && chosen !== (details?.[name] === family.text)) {
+    if (chosen) {
+      next[spec.price_field] = family.price;
+      next[spec.work_field] = withWork(next[spec.work_field], family.work);
+    } else {
+      next[spec.work_field] = withoutWork(next[spec.work_field], family.work);
+      if (Number(next[spec.price_field]) === Number(family.price)) next[spec.price_field] = '';
+    }
+  }
+  // A charge whose condition has just stopped holding is emptied with it, so a price left behind
+  // cannot be sent with nothing to charge it for
+  for (const dspec of lineFields || []) {
+    if (dspec.charge && dspec.required_if && !chargeApplies(lineFields, dspec, next)) next[dspec.name] = '';
   }
   return next;
 }

@@ -108,6 +108,7 @@ def order_details(*, order_lines, package_quantity, cooler_color, cover_color, p
                        "price_field": "inscription_price", "work_field": "installation_accessories"}),
         # beside: shown on the same line as that field, taking a third of it
         (inscription_price, money("inscription_price", "سعر الكتابة، شامل الضريبة (درهم)", charge=True,
+                                  charge_error="لا تُحتسب الكتابة مع «لا يوجد». اختر «أخرى» واكتب النص المطلوب، أو اترك سعر الكتابة فارغًا.",
                                   beside="inscription")),
         (manufacturing_notes, f("manufacturing_notes", "ملاحظات", "textarea",
                                 placeholder="يتم اضافة تفاصيل الطلب بشكل كامل")),
