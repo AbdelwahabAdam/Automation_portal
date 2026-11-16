@@ -8,8 +8,8 @@ from datetime import datetime, timedelta, timezone
 from app.integrations import daftra
 from app.core.config import UPLOAD_DIR, settings
 from app.modules.invoicing import printouts
-from app.modules.invoicing.work_order import (WORK_ORDER_FIELDS, add_work_order_notes, manufacturing_notes,
-                                              work_order_rows)
+from app.modules.invoicing.work_order import (WORK_ORDER_FIELDS, add_work_order_address, add_work_order_notes,
+                                              manufacturing_notes, work_order_rows)
 from app.jobs.redraw_work_orders import redraw
 from app.modules.models import Attachment, Client, Product, Request
 
@@ -376,6 +376,40 @@ def test_an_older_work_order_gets_its_requests_notes_and_nothing_else_changes(cl
     assert saved["custom"]["field_54"] == "كتبها موظف"
     request.data = {**request.data, "notes": ""}
     assert add_work_order_notes(request) == "no ملاحظات on the request"
+
+def test_an_older_work_order_gets_its_requests_address_and_nothing_else_changes(client, db, fake_daftra,
+                                                                                sales, manager):
+    """app.jobs.work_order_address, for the work orders made before العنوان had a field of its own.
+
+    The request's address, not the client's: Daftra's own {%client_full_address%} prints the
+    client's primary block, which is the older one once a newer address has gone to the secondary."""
+    seed.catalog(db)
+    request_id = submitted_sale(client, db, sales)
+    assert approve(client, manager, request_id).status_code == 200
+    request = db.get(Request, request_id)
+    written = "العين، العين العامره، شارع 1، فيلا 2"
+    saved = fake_daftra.work_orders[request.daftra_work_order_id]
+    # As one made before: no العنوان, and something staff changed in Daftra since, and a field
+    # (field_31) the portal knows nothing of
+    saved["custom"] = {**saved["custom"], "field_53": "None", "field_25": "2026-11-20", "field_31": "x"}
+    before = dict(saved["custom"])
+
+    assert add_work_order_address(request, dry_run=True) == f"would write «{written}»"
+    assert saved["custom"] == before
+    assert add_work_order_address(request) == f"written «{written}»"
+    sent = work_order_edits(fake_daftra)[-1]
+    # Its number goes back with it, or Daftra would give the work order the next one
+    assert sent["WorkOrder"]["number"] == saved["number"]
+    assert saved["custom"] == {**before, "field_53": written}
+    # Again: nothing to do. And an address someone wrote by hand is left as it is.
+    assert add_work_order_address(request) == "already has it"
+    saved["custom"]["field_53"] = "كتبه موظف"
+    assert add_work_order_address(request) == "its العنوان holds something else; left as it is"
+    assert saved["custom"]["field_53"] == "كتبه موظف"
+    request.data = {key: value for key, value in request.data.items()
+                    if key not in ("emirate", "area", "street", "house")}
+    assert add_work_order_address(request) == "no address on the request"
+
 
 
 def test_the_other_contact_number_is_added_to_the_work_orders_description(client, db, fake_daftra, sales, manager):

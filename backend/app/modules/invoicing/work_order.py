@@ -286,6 +286,45 @@ def add_work_order_notes(request, dry_run: bool = False) -> str:
     return "sent, but Daftra did not show it saved; look at it in Daftra"
 
 
+def add_work_order_address(request, dry_run: bool = False) -> str:
+    """For a work order made before العنوان had a field of its own (field_53): writes the address the
+    request holds into it, and says what happened.
+
+    The request's own address, not the client's: Daftra's {%client_full_address%} prints the
+    client's primary block, which is the older one once a newer address has gone into the secondary
+    slot, and which may have no street at all.
+
+    Only that field changes. Every other one is sent back exactly as Daftra holds it now — a save
+    empties any field left out — so what staff have changed in Daftra since the approval stays. An
+    address someone has already written there is never replaced. Safe to run again."""
+    address = full_address(request.data)
+    if not address:
+        return "no address on the request"
+    work_order_id, field = request.daftra_work_order_id, WORK_ORDER_FIELDS["address"]
+    try:
+        held = daftra.read_v2("work_order", work_order_id).get("custom_data") or {}
+    except DaftraError as error:
+        return f"Daftra: {error}"
+    already = blank_or(held.get(field))
+    if already == address:
+        return "already has it"
+    if already:
+        return "its العنوان holds something else; left as it is"
+    fields = {key: blank_or(value) for key, value in held.items() if key.startswith("field_")}
+    fields[field] = address
+    if dry_run:
+        return f"would write «{address}»"
+    try:
+        row = daftra.get(f"work_orders/{work_order_id}.json").get("data", {}).get("WorkOrder", {})
+    except DaftraError as error:
+        return f"Daftra: {error}"
+    if not row.get("number"):
+        return "Daftra gave back no number for it; left as it is"
+    if save_work_order_fields(work_order_id, row, fields):
+        return f"written «{address}»"
+    return "sent, but Daftra did not show it saved; look at it in Daftra"
+
+
 def assign_work_order_staff(request, reviewer) -> bool:
     """Puts the installations' own staff member under معلومات الموظفين المعينين on the work order.
 
