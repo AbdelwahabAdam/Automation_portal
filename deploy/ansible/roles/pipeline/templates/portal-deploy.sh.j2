@@ -26,6 +26,21 @@ wait_until_up() {
   return 1
 }
 
+# The build cache and the images earlier deploys left behind, which nothing running needs. This
+# disk is small enough that a build can fill it, and a full disk fails the build *and* the build
+# that goes back to the old version — which leaves the portal down with no way out but a person.
+free_space() {
+  docker builder prune -af >/dev/null 2>&1
+  docker image prune -f >/dev/null 2>&1
+  echo "Disk after clearing Docker's cache: $(df -h --output=avail {{ portal_dir }} | tail -1 | tr -d ' ') free"
+}
+
+# Nearly full, so a build is about to fail. The cache is worth keeping while there is room for it:
+# clearing it makes every build slower.
+disk_is_nearly_full() {
+  [ "$(df --output=pcent {{ portal_dir }} | tail -1 | tr -dc 0-9)" -ge 85 ]
+}
+
 build_and_start() {
   # What this build is: the number staff read, a build that rises with every commit, and where it came from
   APP_VERSION=$(cat VERSION 2>/dev/null || echo dev)
@@ -51,6 +66,11 @@ git log --no-merges --format='  %h %s' "$was..$now" | head -20
 # Only tracked files are reset; .env and imports/ stay as they are
 git reset --hard "$now" || { echo "FAILED: could not check out ${now:0:7}"; exit 1; }
 
+if disk_is_nearly_full; then
+  echo "Disk is nearly full ($(df -h --output=pcent {{ portal_dir }} | tail -1 | tr -d ' ') used); clearing Docker's cache before building"
+  free_space
+fi
+
 if build_and_start; then
   # The build leaves images and a cache behind, and this server's disk is small
   docker image prune -f >/dev/null
@@ -60,10 +80,15 @@ if build_and_start; then
 fi
 
 echo "FAILED: ${now:0:7} did not answer; going back to ${was:0:7}"
+# Whatever the build left behind goes first: if it failed for want of room, going back needs that
+# room, and without this the rollback build fails too and the portal stays down.
+free_space
 git reset --hard "$was"
 if build_and_start; then
   echo "=== back on ${was:0:7}, which is running"
 else
-  echo "=== THE PORTAL IS DOWN: neither version answers. Look at: compose logs"
+  echo "=== THE PORTAL IS DOWN: neither version answers."
+  echo "    Disk: $(df -h {{ portal_dir }} | tail -1)"
+  echo "    Look at: compose logs. If the disk is full: docker image prune -af && sudo portal-deploy"
 fi
 exit 1

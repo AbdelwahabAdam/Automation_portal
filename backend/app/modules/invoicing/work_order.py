@@ -52,10 +52,11 @@ WORK_ORDER_FIELDS = {
     # product are for the floor and stay in the description.
     "notes": "field_54",                     # ملاحظات
 }
-# Fields on the work order form that the portal does not fill: مستند 1 (صورة المعاينة) and تاريخ
-# التركيب, both written by hand in Daftra. A save would empty them (see below), so they are read
-# first and sent back unchanged.
-KEPT_FIELDS = ("field_10", "field_25")
+# Fields on the work order form that the portal does not fill: مستند 1 (صورة المعاينة), تاريخ
+# التركيب and التاريخ, all written by hand in Daftra. A save would empty them (see below), so they
+# are read first and sent back unchanged — but only when they hold something. An empty one is left
+# out: مستند 1 is a file field, and an empty string in it makes Daftra drop the whole CustomModel.
+KEPT_FIELDS = ("field_10", "field_25", "field_31")
 # Daftra replaces the whole custom form on every save, so a field left out of the body is emptied,
 # not kept. Every field is therefore always sent, blank ones included.
 CONTAINS_CUSTOM_DATA = {"CONTAINE_CUSTOM_DATA": "1"}  # Daftra's own spelling; required on every save
@@ -234,6 +235,20 @@ def save_work_order_fields(work_order_id: int, row: dict, fields: dict) -> bool:
     return False
 
 
+def fields_as_held(held: dict, **changes) -> dict:
+    """The custom fields to send back, built exactly as an approval builds them: the ids the portal
+    knows, as Daftra holds them now, plus `changes`.
+
+    Not every field_* the read gave back. A file field (مستند 1) sent as an empty string makes
+    Daftra drop the whole CustomModel and answer as though it had saved, so a backfill that echoed
+    everything it read wrote nothing at all. KEPT_FIELDS are sent only when they hold something,
+    which is what set_work_order_fields does.
+    """
+    fields = {field_id: blank_or(held.get(field_id)) for field_id in WORK_ORDER_FIELDS.values()}
+    fields.update({key: held[key] for key in KEPT_FIELDS if blank_or(held.get(key))})
+    return {**fields, **changes}
+
+
 def set_work_order_fields(request, row: dict, entries: dict) -> bool:
     """Writes the work order's custom fields, then reads them back to be sure. With a real file id in
     صورة المنتج Daftra answers 200, but it answered 500 for a while and the values saved anyway, so the
@@ -271,8 +286,7 @@ def add_work_order_notes(request, dry_run: bool = False) -> str:
         return "already has them"
     if already:
         return "its ملاحظات hold something else; left as they are"
-    fields = {key: blank_or(value) for key, value in held.items() if key.startswith("field_")}
-    fields[field] = notes
+    fields = fields_as_held(held, **{field: notes})
     if dry_run:
         return f"would write {len(notes)} characters"
     try:
@@ -310,8 +324,7 @@ def add_work_order_address(request, dry_run: bool = False) -> str:
         return "already has it"
     if already:
         return "its العنوان holds something else; left as it is"
-    fields = {key: blank_or(value) for key, value in held.items() if key.startswith("field_")}
-    fields[field] = address
+    fields = fields_as_held(held, **{field: address})
     if dry_run:
         return f"would write «{address}»"
     try:

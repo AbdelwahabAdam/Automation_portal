@@ -401,6 +401,12 @@ def test_an_older_work_order_gets_its_requests_address_and_nothing_else_changes(
     # Its number goes back with it, or Daftra would give the work order the next one
     assert sent["WorkOrder"]["number"] == saved["number"]
     assert saved["custom"] == {**before, "field_53": written}
+    # The body carries the ids the portal knows and the hand-written field_25, and NOT the empty
+    # file field (field_10) nor field_31: an empty file field makes Daftra drop the whole
+    # CustomModel and answer as though it had saved, so the backfill wrote nothing at all.
+    sent_fields = {k for k in sent["CustomModel"] if k.startswith("field_")}
+    assert sent_fields == {*WORK_ORDER_FIELDS.values(), "field_25", "field_31"}
+    assert "field_10" not in sent_fields   # empty file field: left out, never sent blank
     # Again: nothing to do. And an address someone wrote by hand is left as it is.
     assert add_work_order_address(request) == "already has it"
     saved["custom"]["field_53"] = "كتبه موظف"
