@@ -22,6 +22,11 @@ UAE = timezone(timedelta(hours=4))
 KNOWN_WORK_ORDER_FIELDS = {*WORK_ORDER_FIELDS.values(), "CONTAINE_CUSTOM_DATA"}
 
 
+def blank(value) -> str:
+    """Daftra reads an empty custom field back as the text "None"."""
+    return "" if str(value) in ("None", "") else str(value)
+
+
 def sending_payment_proof(monkeypatch):
     """Turns on putting the إثبات الدفع on the invoice in Daftra (off by default)."""
     monkeypatch.setattr(settings, "daftra_send_payment_proof", True)
@@ -412,6 +417,13 @@ def test_an_older_work_order_gets_its_requests_address_and_nothing_else_changes(
     saved["custom"]["field_53"] = "كتبه موظف"
     assert add_work_order_address(request) == "its العنوان holds something else; left as it is"
     assert saved["custom"]["field_53"] == "كتبه موظف"
+    # Daftra refuses every edit to a closed contract, so the job says so instead of trying
+    saved["custom"]["field_53"] = "None"
+    saved["status"] = 2
+    assert add_work_order_address(request) == "عقد مغلق في دفترة؛ لا يمكن التعديل"
+    assert blank(saved["custom"]["field_53"]) == ""
+    saved["status"] = 1
+
     request.data = {key: value for key, value in request.data.items()
                     if key not in ("emirate", "area", "street", "house")}
     assert add_work_order_address(request) == "no address on the request"

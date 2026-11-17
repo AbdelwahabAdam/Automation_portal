@@ -235,6 +235,16 @@ def save_work_order_fields(work_order_id: int, row: dict, fields: dict) -> bool:
     return False
 
 
+# Daftra's status for a work order whose contract is closed. It refuses any edit to one
+# («عقد مغلق، لا يمكنك التعديل», HTTP 400), so a backfill says so rather than trying and reporting
+# that the save could not be confirmed.
+CLOSED_STATUS = "2"
+
+
+def is_closed(row: dict) -> bool:
+    return str(row.get("status")) == CLOSED_STATUS
+
+
 def fields_as_held(held: dict, **changes) -> dict:
     """The custom fields to send back, built exactly as an approval builds them: the ids the portal
     knows, as Daftra holds them now, plus `changes`.
@@ -295,9 +305,11 @@ def add_work_order_notes(request, dry_run: bool = False) -> str:
         return f"Daftra: {error}"
     if not row.get("number"):
         return "Daftra gave back no number for it; left as it is"
+    if is_closed(row):
+        return "عقد مغلق في دفترة؛ لا يمكن التعديل"
     if save_work_order_fields(work_order_id, row, fields):
         return f"written ({len(notes)} characters)"
-    return "sent, but Daftra did not show it saved; look at it in Daftra"
+    return "Daftra refused it, or did not show it saved; look at it in Daftra"
 
 
 def add_work_order_address(request, dry_run: bool = False) -> str:
@@ -333,9 +345,11 @@ def add_work_order_address(request, dry_run: bool = False) -> str:
         return f"Daftra: {error}"
     if not row.get("number"):
         return "Daftra gave back no number for it; left as it is"
+    if is_closed(row):
+        return "عقد مغلق في دفترة؛ لا يمكن التعديل"
     if save_work_order_fields(work_order_id, row, fields):
         return f"written «{address}»"
-    return "sent, but Daftra did not show it saved; look at it in Daftra"
+    return "Daftra refused it, or did not show it saved; look at it in Daftra"
 
 
 def assign_work_order_staff(request, reviewer) -> bool:
