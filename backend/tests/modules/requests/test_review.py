@@ -73,10 +73,15 @@ def work_order_edits(fake_daftra):
     return [body for method, path, _, body in fake_daftra.calls if method == "PUT" and path.startswith("/api2/work_orders/")]
 
 
-def test_a_new_work_order_leaves_its_status_to_daftra(client, db, fake_daftra, sales, manager):
-    """حالة امر الشغل says which department and area it is with, which the portal does not know."""
+def test_a_new_work_order_no_status_rule_covers_leaves_its_status_to_daftra(client, db, fake_daftra, sales, manager):
+    """حالة امر الشغل says which department and area it is with. The portal sets it only where a rule
+    says (work_order.work_order_status: doors, food coolers, نبع المزن / سقيا الخير by الإمارة); an
+    order none of them covers — a stainless cooler here — is left to Daftra, at creation and after."""
     seed.catalog(db)
-    request_id = submitted_sale(client, db, sales)
+    # One of the six plain cover colours: a stainless cooler has no family of its own to pick from
+    stainless = [{**line, "group_name": "باقة برادة ستانلس ستيل - 3 صنابير"}
+                 for line in seed.package_lines(cover_color="اللون الاسود")]
+    request_id = submitted_sale(client, db, sales, order_lines=stainless)
     assert approve(client, manager, request_id).status_code == 200
     [work_order] = fake_daftra.posted("/api2/work_orders.json")
     assert "follow_up_status_id" not in work_order["WorkOrder"]
