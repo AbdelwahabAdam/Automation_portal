@@ -8,7 +8,8 @@ from datetime import datetime, timedelta, timezone
 from app.integrations import daftra
 from app.core.config import UPLOAD_DIR, settings
 from app.modules.invoicing import printouts
-from app.modules.invoicing.work_order import (WORK_ORDER_FIELDS, add_work_order_address, add_work_order_notes,
+from app.modules.invoicing.work_order import (WORK_ORDER_FIELDS, add_work_order_address,
+                                              add_work_order_cover_color, add_work_order_notes, cover_color,
                                               manufacturing_notes, work_order_rows)
 from app.jobs.redraw_work_orders import redraw
 from app.modules.models import Attachment, Client, Product, Request
@@ -240,7 +241,8 @@ def test_approving_a_new_sale_creates_everything_in_daftra(client, db, fake_daft
         "Client": {"business_name": "عميل تجريبي", "type": 2, "gender": 1, "phone1": "0501234567", "address1": "شارع 1",
                    "address2": "فيلا 2", "city": "العين", "state": "العين العامره", "country_code": "AE",
                    "default_currency_code": "AED", "category_id": 5, "category": "العين العامره"},
-        "le_custom_data_client": {"test": "N + F", "coordinates_text": "24.178700, 55.604510"},
+        # نوع الجهاز from the package ordered: سقيا الخير (runner.device_type)
+        "le_custom_data_client": {"test": "S", "coordinates_text": "24.178700, 55.604510"},
     }
     client_id = int(next(iter(fake_daftra.clients)))
 
@@ -296,6 +298,7 @@ def test_approving_a_new_sale_creates_everything_in_daftra(client, db, fake_daft
         "field_52": "باقة برادة سقيا الخير - 3 صنابير - أسود",
         "field_53": "العين، العين العامره، شارع 1، فيلا 2",
         "field_54": "",   # ملاحظات: none were written
+        "field_55": "اللون الاسود مقاس طبيعي",   # لون الكفر, on its own
     }
     assert fake_daftra.invoices[invoice_id]["work_order_id"] == saved["id"]
 
@@ -427,6 +430,43 @@ def test_an_older_work_order_gets_its_requests_address_and_nothing_else_changes(
     request.data = {key: value for key, value in request.data.items()
                     if key not in ("emirate", "area", "street", "house")}
     assert add_work_order_address(request) == "no address on the request"
+
+
+def test_an_older_work_order_gets_its_cover_colour_and_nothing_else_changes(client, db, fake_daftra,
+                                                                             sales, manager):
+    """app.jobs.work_order_cover_color, for the work orders made before لون الكفر had a field of its own."""
+    seed.catalog(db)
+    request_id = submitted_sale(client, db, sales)
+    assert approve(client, manager, request_id).status_code == 200
+    request = db.get(Request, request_id)
+    written = "اللون الاسود مقاس طبيعي"
+    saved = fake_daftra.work_orders[request.daftra_work_order_id]
+    # As one made before: no لون الكفر, and something staff changed in Daftra since
+    saved["custom"] = {**saved["custom"], "field_55": "None", "field_25": "2026-11-20"}
+    before = dict(saved["custom"])
+
+    assert add_work_order_cover_color(request, dry_run=True) == f"would write «{written}»"
+    assert saved["custom"] == before
+    assert add_work_order_cover_color(request) == f"written «{written}»"
+    assert work_order_edits(fake_daftra)[-1]["WorkOrder"]["number"] == saved["number"]
+    assert saved["custom"] == {**before, "field_55": written}
+    # Again: nothing to do. A colour someone wrote by hand stays, and a closed contract is skipped.
+    assert add_work_order_cover_color(request) == "already has it"
+    saved["custom"]["field_55"] = "كتبه موظف"
+    assert add_work_order_cover_color(request) == "its لون الكفر holds something else; left as it is"
+    saved["custom"]["field_55"] = "None"
+    saved["status"] = 2
+    assert add_work_order_cover_color(request) == "عقد مغلق في دفترة؛ لا يمكن التعديل"
+    assert blank(saved["custom"]["field_55"]) == ""
+    saved["status"] = 1
+    # Two packages: both colours, once each
+    lines = request.data["order_lines"]
+    second = [{**line, "group_id": "g2", "details": {**(line.get("details") or {}), "cover_color": "أبيض"}}
+              for line in lines]
+    assert cover_color({"order_lines": lines + second + second}) == "اللون الاسود مقاس طبيعي / اللون الابيض"
+    request.data = {**request.data, "order_lines": [
+        {**line, "details": {**(line.get("details") or {}), "cover_color": ""}} for line in lines]}
+    assert add_work_order_cover_color(request) == "no cover colour on the request"
 
 
 

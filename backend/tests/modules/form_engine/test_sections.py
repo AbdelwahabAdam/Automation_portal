@@ -59,8 +59,13 @@ def test_a_label_for_a_field_the_section_has_not_got_is_refused():
 
 def test_amounts_refuses_what_cannot_be_worked_out():
     base = dict(subtotal_amount=SHOW, total_amount=SHOW, discount_label=HIDE, discount_amount=SHOW,
-                discount_approved_by=SHOW, paid_amount=REQUIRED, remaining_amount=SHOW, remaining_due_date=SHOW)
+                discount_percent=HIDE, discount_approved_by=SHOW, paid_amount=REQUIRED, remaining_amount=SHOW,
+                remaining_due_date=SHOW)
     shared.amounts(**base)
+    # نسبة الخصم is a share of the subtotal, beside قيمة الخصم: with either hidden it has nothing to be
+    shared.amounts(**{**base, "discount_percent": SHOW})
+    with pytest.raises(TypeError, match="discount_percent"):
+        shared.amounts(**{**base, "discount_percent": SHOW, "subtotal_amount": HIDE})
     with pytest.raises(TypeError, match="paid_amount"):
         shared.amounts(**{**base, "paid_amount": HIDE})
     with pytest.raises(TypeError, match="total_amount=SHOW"):

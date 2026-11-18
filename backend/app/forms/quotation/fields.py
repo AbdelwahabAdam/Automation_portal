@@ -20,6 +20,7 @@ from ...modules.form_engine import (
     NO_INSCRIPTION,
     OPEN_PRICE_FIELDS,
     PACKAGE_COLOR_FAMILIES,
+    PACKAGE_PROFILES,
     REQUIRED,
     REQUIRED_IF,
     SHOW,
@@ -62,7 +63,7 @@ def order_details(*, order_lines, package_quantity, cooler_color, cover_color, i
     return switched(
         "تفاصيل الطلب",
         (order_lines, f("order_lines", "المنتجات والباقات", "order_lines", subtotal_field="subtotal_amount",
-                        line_fields=lines)),
+                        line_fields=lines, package_profiles=PACKAGE_PROFILES)),
         note="الأسعار من الكتالوج؛ عدّلها على السطر إن كان العرض بسعر آخر.",
     )
 
@@ -124,12 +125,13 @@ SECTIONS = [
         total_amount=SHOW,
         discount_label=REQUIRED_IF(DISCOUNTED),
         discount_amount=SHOW,
+        discount_percent=SHOW,                      # beside it: each worked out from the other
         discount_approved_by=REQUIRED_IF(DISCOUNTED),
         paid_amount=HIDE,
         remaining_amount=HIDE,
         remaining_due_date=HIDE,
         labels={"total_amount": "قيمة العرض النهائية بعد الخصم، شامل الضريبة والإضافات",
-                "discount_amount": "قيمة الخصم المقترح، إن وجد"},
+                "discount_amount": "الخصم المقترح (درهم)"},   # short: beside نسبة الخصم
     ),
     # How it would be paid, if the customer accepts: only طريقة الدفع is demanded
     shared.payment(

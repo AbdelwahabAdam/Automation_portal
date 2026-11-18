@@ -8,7 +8,7 @@ import {
   useToast,
 } from '../../ds/index.jsx';
 import { formatAmount, formatDate, formatDay, formatMoney } from '../../lib/format.js';
-import { DAFTRA_LIST_TYPES, groupLines } from './validation.js';
+import { DAFTRA_LIST_TYPES, groupLines, packageFields } from './validation.js';
 
 // The PDFs approving a request saves on it (see backend/app/modules/invoicing/)
 const DAFTRA_PDFS = [['daftra_estimate', 'عرض السعر PDF'], ['daftra_invoice', 'الفاتورة PDF'],
@@ -359,8 +359,9 @@ export default function RequestView({ requestId, formTypes, onBack, ownerName: g
               <tbody>
                 {groupLines(lines).map((group) => {
                   const first = group.rows[0].line;
-                  // The details describe the package (or the one standalone product) as a whole, not each item inside it
-                  const details = lineFields
+                  // The details describe the package (or the one standalone product) as a whole, not each item inside it,
+                  // under the names the form gave them for this package (لون الباب on a door)
+                  const details = packageFields(lineFields, group.groupName || first.name, spec.package_profiles)
                     .map((dspec) => [dspec.label, first.details?.[dspec.name]])
                     .filter(([, v]) => v != null && v !== '');
                   const total = group.rows.reduce((sum, { line }) => sum + (line.unit_price || 0) * (Number(line.quantity) || 0), 0);

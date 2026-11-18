@@ -95,6 +95,34 @@ function cleanValue(spec, raw) {
 // PACKAGE_COLOR_FAMILIES): the first family whose words the name contains. A package no family
 // matches offers the field's default_colors instead — لون الغطاء is asked on every package — and
 // [] only when the field has none either. Mirrors package_colors() in the backend's options.py.
+// Which of an order line's fields a package asks for, and as what. Mirrors package_profile() and
+// package_fields() in backend/app/modules/form_engine/options.py; the order_lines field carries the
+// table as package_profiles, so the two always read the same one. No profile: every field, as before.
+const squashed = (text) => String(text ?? '').split(/\s+/).filter(Boolean).join(' ');
+
+export function packageProfile(profiles, packageName) {
+  const name = squashed(packageName);
+  return (profiles || []).find((profile) => profile.match.some((w) => name.includes(w))
+    && (profile.needs || []).every((w) => name.includes(w))
+    && !(profile.exclude || []).some((w) => name.includes(w))) || null;
+}
+
+export function packageFields(lineFields, packageName, profiles) {
+  const profile = packageProfile(profiles, packageName);
+  if (!profile) return lineFields;
+  const listed = new Set(profile.fields);
+  // A field shown beside a kept one goes with it (سعر الكتابة beside الكتابة المطلوبة)
+  const keep = new Set([...listed, ...lineFields.filter((d) => d.beside && listed.has(d.beside)).map((d) => d.name)]);
+  const labels = profile.labels || {};
+  const options = profile.options || {};
+  return lineFields
+    // الكمية and the open-price pair are structural: every package has them
+    .filter((d) => keep.has(d.name) || d.package_only || d.open_price_only)
+    .map((d) => (d.name in labels || d.name in options
+      ? { ...d, ...(d.name in labels ? { label: labels[d.name] } : {}), ...(d.name in options ? { options: [...options[d.name]] } : {}) }
+      : d));
+}
+
 export function packageColors(spec, packageName) {
   const name = String(packageName ?? '').split(/\s+/).filter(Boolean).join(' ');
   const family = (spec.families || []).find((f) => f.match.some((w) => name.includes(w)) && !f.exclude.some((w) => name.includes(w)));
@@ -140,9 +168,10 @@ export function chargeApplies(lineFields, dspec, details) {
 }
 
 // A package's details after one of them changes. The inscription a package starts with (a field
-// with a work_field, from the backend's PACKAGE_INSCRIPTIONS) brings its price and its mention in
-// ملحقات التركيب, and takes the mention away when another one replaces it. A price still at the
-// default goes with it: left at 0 it would make the new inscription free without anyone choosing that.
+// with a work_field, from the backend's PACKAGE_INSCRIPTIONS) brings its price — and, for a family
+// that names a «work», its mention in ملحقات التركيب, taken away again when another inscription
+// replaces it. A family without one leaves ملحقات التركيب alone. A price still at the default goes
+// with it: left at 0 it would make the new inscription free without anyone choosing that.
 export function changedDetails(lineFields, packageName, name, details, value) {
   const next = { ...details, [name]: value };
   const spec = lineFields.find((dspec) => dspec.name === name && dspec.work_field);
@@ -151,9 +180,9 @@ export function changedDetails(lineFields, packageName, name, details, value) {
   if (family && chosen !== (details?.[name] === family.text)) {
     if (chosen) {
       next[spec.price_field] = family.price;
-      next[spec.work_field] = withWork(next[spec.work_field], family.work);
+      if (family.work) next[spec.work_field] = withWork(next[spec.work_field], family.work);
     } else {
-      next[spec.work_field] = withoutWork(next[spec.work_field], family.work);
+      if (family.work) next[spec.work_field] = withoutWork(next[spec.work_field], family.work);
       if (Number(next[spec.price_field]) === Number(family.price)) next[spec.price_field] = '';
     }
   }
@@ -214,6 +243,27 @@ function conditionMet(condition, clean) {
   return typeof value === 'number' && value > condition.gt;
 }
 
+// نسبة الخصم and قيمة الخصم, each worked out from the other and the subtotal (a field with
+// percent_of). The one typed — values["<field>_basis"], "percent" or "amount" — stays as it was, so a
+// percentage keeps its share of an order that grows and an amount keeps its dirhams. A percentage
+// gives whole dirhams, an amount a percentage to two places. Mirrors discount_from_percent() in
+// backend/app/modules/form_engine/validation.py, which works it out again on submit.
+export function discountFromPercent(fields, values, clean) {
+  for (const spec of fields) {
+    const { percent_of: base, amount_field: amount, name } = spec;
+    if (!base) continue;
+    const subtotal = clean[base];
+    if (values[`${name}_basis`] === 'percent') {
+      if (clean[name] == null) delete clean[amount];
+      else if (subtotal) clean[amount] = Math.round((subtotal * clean[name]) / 100);
+    } else if (clean[amount] == null) {
+      delete clean[name];
+    } else if (subtotal) {
+      clean[name] = Math.round((clean[amount] / subtotal) * 10000) / 100;
+    }
+  }
+}
+
 // Cleans the typed values and works out computed fields.
 // catalog gives the live price of each product, for a field an order_lines field feeds (its "subtotal_field").
 // Returns { clean, errors, required } where required is the set of field names needed right now.
@@ -242,12 +292,19 @@ export function evaluateForm(formType, values, fileCounts = {}, catalog = {}) {
       total += linePrice(line, priceById, spec.line_fields || []) * (Number(line.quantity) || 0);
       // A package's details sit on each of its lines, so its charges (e.g. the inscription) count once per package
       if (!line.group_id || !seenGroups.has(line.group_id)) {
-        total += charges.reduce((sum, name) => sum + (Number(toLatinDigits(String(line.details?.[name] ?? ''))) || 0), 0) * packageQuantity(line);
+        // Only the charges this package asks for: a door has no inscription to pay for
+        const asked = spec.package_profiles
+          ? new Set(packageFields(spec.line_fields || [], line.group_name || line.name, spec.package_profiles).map((d) => d.name))
+          : null;
+        total += charges.filter((name) => !asked || asked.has(name))
+          .reduce((sum, name) => sum + (Number(toLatinDigits(String(line.details?.[name] ?? ''))) || 0), 0) * packageQuantity(line);
       }
       if (line.group_id) seenGroups.add(line.group_id);
     }
     clean[spec.subtotal_field] = Math.round(total * 100) / 100;
   }
+  // From the subtotal just worked out, before the total below takes the discount off it
+  discountFromPercent(fields, values, clean);
   const byName = Object.fromEntries(fields.map((s) => [s.name, s]));
   const requiredInput = (name) => Boolean(byName[name]?.required) && isInput(byName[name]);
   for (const spec of fields.filter((s) => s.computed)) {

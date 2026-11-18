@@ -17,7 +17,9 @@ The order is the form's, with three rules the documents themselves impose:
 
 from typing import Callable
 
+from ...core.config import settings
 from ...core.errors import SyncError
+from ...core.text import squash
 from ...integrations.daftra import NotFound
 from .. import notifications, requests
 from ..clients import client_id, existing_client_id, update_client
@@ -149,6 +151,29 @@ def order_lines(ctx) -> list[dict]:
     """The invoice lines for the request's المنتجات والباقات, with each package's inscription as a
     line of its own. Refuses — before anything is sent — a product not linked to Daftra."""
     return invoice_items(ctx.data, ctx.db)
+
+
+def device_type(data: dict) -> str:
+    """نوع الجهاز — «اسم الجهاز» on the client in Daftra, which every save of a client must carry —
+    from the packages ordered: N for نبع المزن, S for سقيا الخير, F for a food cooler, written in
+    that order and joined «N + F». One order carries «N + F» at most.
+
+    F is a حفظ الطعام package, or a combined (مدمجة) cooler, which has a food cooler of its own
+    («… وبرادة طعام»). Only a combined نبع المزن or سقيا الخير, though: the doors and panels made
+    for one are named «… لبرادة مدمجة» too. «مدمج» short of its last letter, as the catalogue
+    writes both مدمجه and مدمجة. The stainless coolers are not سقيا الخير, whatever their name says.
+
+    An order none of this matches (doors, panels, stainless, RO, filters) gets the account's
+    default, DAFTRA_DEFAULT_DEVICE_NAME («N + F»), to be corrected in Daftra by hand.
+    """
+    letters = set()
+    for line in data.get("order_lines") or []:
+        name = squash(line.get("group_name") or line.get("name"))
+        naba = "نبع المزن" in name
+        suqya = "سقيا الخير" in name and "ستانلس" not in name
+        food = "حفظ الطعام" in name or ("مدمج" in name and (naba or suqya))
+        letters |= {letter for letter, has in (("N", naba), ("S", suqya), ("F", food)) if has}
+    return " + ".join(letter for letter in "NSF" if letter in letters) or settings.daftra_default_device_name
 
 
 def service_address(data: dict) -> dict:

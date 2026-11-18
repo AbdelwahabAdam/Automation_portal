@@ -14,3 +14,6 @@ deploy/terraform/terraform.tfvars
 deploy/ansible/inventory.ini
 deploy/ansible/group_vars/all/vault.yml
 imports/
+
+# The live package list docs/gen_package_doc.py reads (package names only, regenerated on demand)
+backend/packages.tsv

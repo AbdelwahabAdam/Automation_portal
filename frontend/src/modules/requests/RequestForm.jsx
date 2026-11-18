@@ -42,6 +42,14 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
 
   const fields = useMemo(() => (formType ? allFields(formType) : []), [formType]);
   const fieldNames = useMemo(() => new Set(fields.map((spec) => spec.name)), [fields]);
+  // نسبة الخصم beside قيمة الخصم: the percentage field of the pair a field belongs to, if any
+  const discountPairs = useMemo(() => fields.filter((spec) => spec.percent_of), [fields]);
+  const pairOf = (name) => discountPairs.find((spec) => spec.name === name || spec.amount_field === name);
+  // Typing in either one makes it the one that stays, and the other follows it
+  const typedBasis = (name) => {
+    const pair = pairOf(name);
+    return pair ? { [`${pair.name}_basis`]: pair.name === name ? 'percent' : 'amount' } : {};
+  };
   const specOf = (name) => fields.find((spec) => spec.name === name);
   // Forms with a field only Daftra can fill for the found client (their التصنيف, their open invoices)
   const needsClientInfo = fields.some((spec) => ['daftra_client_category', 'daftra_client_invoice'].includes(spec.type));
@@ -174,7 +182,7 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
 
   function change(name, value) {
     setValues((current) => {
-      const next = { ...current, [name]: value };
+      const next = { ...current, [name]: value, ...typedBasis(name) };
       for (const spec of fields) {
         if (spec.coordinates_from === name) {
           const found = coordinatesFromLink(value);
@@ -238,7 +246,7 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
     const spec = specOf(name);
     const amount = spec?.fills_by_choice?.[text];
     setValues((current) => ({
-      ...current, [name]: text, ...(amount === undefined ? {} : { [spec.fills]: String(amount) }),
+      ...current, [name]: text, ...(amount === undefined ? {} : { [spec.fills]: String(amount), ...typedBasis(spec.fills) }),
     }));
     setMessage(null);
     clearError(name, ...(amount === undefined ? [] : [spec.fills]));
@@ -383,7 +391,17 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
   const allOpen = formType.sections.every((section) => open.has(section.title));
   const errorCount = Object.keys(errors).length;
 
-  const isFilled = (spec) => (spec.type === 'files' ? fileCounts[spec.name] : hasValue(values[spec.name]));
+  // The box of the pair that was not typed shows what the other works out to, from the evaluation:
+  // never written into the values, so a draft opened untouched is not «changed»
+  const shownValue = (spec) => {
+    const pair = pairOf(spec.name);
+    if (!pair) return values[spec.name];
+    const typedPercent = values[`${pair.name}_basis`] === 'percent';
+    if (typedPercent === (spec.name === pair.name)) return values[spec.name];
+    const worked = evaluation?.clean[spec.name];
+    return worked == null ? '' : String(worked);
+  };
+  const isFilled = (spec) => (spec.type === 'files' ? fileCounts[spec.name] : hasValue(shownValue(spec)));
   // A new-client field the server still asks about (e.g. the search was never run) is shown too
   const shown = (spec) => fieldApplies(spec, values) || Boolean(errors[spec.name]);
   const inputsOf = (section) => section.fields.filter((spec) => spec.type !== 'auto_user' && !spec.computed && shown(spec));
@@ -489,6 +507,10 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
         control: <TextInput id={spec.name} value={values.area ?? ''} readOnly placeholder="—" />,
       };
     }
+    if (pairOf(spec.name)) {
+      // Their hint is the pair's, under both (fieldRow)
+      return { control: <Control spec={spec} value={shownValue(spec)} invalid={invalid} onChange={change} /> };
+    }
     if (spec.fills) {
       return {
         hint: 'اختيار اسم المبادرة يملأ قيمة الخصم، ويمكن تعديلها بعدها.',
@@ -507,22 +529,44 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
     };
   }
 
-  function fieldRow(spec) {
+  function fieldOf(spec) {
     const { control, locked, hint } = controlFor(spec);
     // A computed field shows its error live (e.g. paid more than the total); order_lines
     // keeps its per-line errors inside the field itself, not as one message here
     const rawError = errors[spec.name] || (spec.computed && evaluation.errors[spec.name]);
     const error = spec.type === 'order_lines' && rawError && typeof rawError === 'object'
       ? 'بعض البنود تحتاج إلى تعديل، انظر التفاصيل أدناه' : rawError;
+    return (
+      <Field
+        id={'field-' + spec.name} label={spec.label} htmlFor={spec.type === 'files' ? undefined : spec.name}
+        required={evaluation.required.has(spec.name)} locked={locked} hint={hint} error={error}
+      >
+        {control}
+      </Field>
+    );
+  }
+
+  function fieldRow(spec) {
+    // قيمة الخصم and نسبة الخصم share one cell of the grid, the amount first: they are one value
+    // written two ways. The percentage is drawn there, beside its amount, and not on its own.
+    const pair = pairOf(spec.name);
+    const amountSpec = pair && fields.find((other) => other.name === pair.amount_field);
+    if (pair && amountSpec && shown(pair) && shown(amountSpec)) {
+      if (spec.name === pair.name) return null;
+      return (
+        <div key={spec.name} className="fl-discount-pair">
+          {fieldOf(amountSpec)}
+          {fieldOf(pair)}
+          <div className="fl-field__hint fl-discount-pair__hint">
+            اختياري. اكتب القيمة أو النسبة، وتُحسب الأخرى من قيمة الطلب قبل الخصم.
+          </div>
+        </div>
+      );
+    }
     const wide = WIDE_TYPES.includes(spec.type) || showsAsChoice(spec);
     return (
       <div key={spec.name} className={wide ? 'fl-wide' : undefined}>
-        <Field
-          id={'field-' + spec.name} label={spec.label} htmlFor={spec.type === 'files' ? undefined : spec.name}
-          required={evaluation.required.has(spec.name)} locked={locked} hint={hint} error={error}
-        >
-          {control}
-        </Field>
+        {fieldOf(spec)}
         <ClientLookupNote name={spec.name} client={client} values={values} />
       </div>
     );

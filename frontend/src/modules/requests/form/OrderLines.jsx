@@ -2,7 +2,7 @@
 import { Fragment, useMemo, useState } from 'react';
 import { Button, Choice, Combobox, Field, Icon, Select } from '../../../ds/index.jsx';
 import { formatMoney } from '../../../lib/format.js';
-import { changedDetails, chargeApplies, groupLines, linePrice, packageColors, packageDefault, packageQuantity } from '../validation.js';
+import { changedDetails, chargeApplies, groupLines, linePrice, packageColors, packageDefault, packageFields, packageQuantity } from '../validation.js';
 import { Control, guessFromProductName, Stepper } from './fields.jsx';
 
 const newGroupId = () => `g${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
@@ -28,8 +28,9 @@ export function belongsTo(dspec, item) {
 
 // item: the product the line is, when it is one product (not a package's own fields)
 // ownOnly: a product inside a package shows only what is its own (an open price's text)
-function fieldsOfLine(lineFields, { forPackage, packageName, item, ownOnly }) {
-  return lineFields.filter((dspec) => (forPackage || !dspec.package_only)
+function fieldsOfLine(lineFields, { forPackage, packageName, item, ownOnly, profiles }) {
+  // Only what this package asks for, as it names them (لون الباب on a door) — options.PACKAGE_PROFILES
+  return packageFields(lineFields, packageName, profiles).filter((dspec) => (forPackage || !dspec.package_only)
     // column: it is shown in the table's own سعر الوحدة column, not among the line's fields
     && !dspec.column
     && (!ownOnly || dspec.open_price_only)
@@ -37,8 +38,8 @@ function fieldsOfLine(lineFields, { forPackage, packageName, item, ownOnly }) {
     && (dspec.type !== 'package_color' || packageColors(dspec, packageName).length > 0));
 }
 
-function DetailFields({ lineFields, details, errors, keyPrefix, onChange, forPackage, packageName, item, ownOnly }) {
-  const shown = fieldsOfLine(lineFields, { forPackage, packageName, item, ownOnly });
+function DetailFields({ lineFields, details, errors, keyPrefix, onChange, forPackage, packageName, item, ownOnly, profiles }) {
+  const shown = fieldsOfLine(lineFields, { forPackage, packageName, item, ownOnly, profiles });
   if (!shown.length) return null;
   // A field with a partner (one marked "beside" it) shares a full line with it: two thirds and one third
   const besides = Object.fromEntries(shown.filter((dspec) => dspec.beside).map((dspec) => [dspec.beside, dspec]));
@@ -99,6 +100,7 @@ export default function OrderLines({ spec, value, invalid, catalog, onChange, li
   const [openGroups, setOpenGroups] = useState(() => new Set());
   const lines = value ?? [];
   const lineFields = spec.line_fields || [];
+  const profiles = spec.package_profiles;
   // items: "maintenance_items" offers only the catalog's maintenance items (products with a
   // maintenance group); item_ids names the products outright, by their Daftra id (اعمال اضافية).
   // Neither is the name of a form: no screen reads a form key.
@@ -281,12 +283,12 @@ export default function OrderLines({ spec, value, invalid, catalog, onChange, li
         </tr>
         {/* A line inside a package shows only what is its own (an open price's text): the rest
             belongs to the package, above */}
-        {fieldsOfLine(lineFields, { forPackage: false, packageName: line.name, item, ownOnly }).length > 0 && (
+        {fieldsOfLine(lineFields, { forPackage: false, packageName: line.group_name || line.name, item, ownOnly, profiles }).length > 0 && (
           <tr className={inPackage ? 'fl-row--detail fl-row--child' : 'fl-row--detail'}>
             <td colSpan={COLUMNS}>
               <DetailFields lineFields={lineFields} details={line.details} errors={lineErrors?.[index]} keyPrefix={`${spec.name}-${index}`}
-                onChange={(name, v) => setDetail(index, name, v)} forPackage={false} packageName={line.name}
-                item={item} ownOnly={ownOnly} />
+                onChange={(name, v) => setDetail(index, name, v)} forPackage={false} packageName={line.group_name || line.name}
+                item={item} ownOnly={ownOnly} profiles={profiles} />
             </td>
           </tr>
         )}
@@ -322,7 +324,7 @@ export default function OrderLines({ spec, value, invalid, catalog, onChange, li
           <td colSpan={COLUMNS}>
             <DetailFields lineFields={lineFields} details={first.line.details} errors={lineErrors?.[first.index]}
               keyPrefix={`${spec.name}-${group.key}`} onChange={(name, v) => setGroupDetail(group.key, name, v)} forPackage
-              packageName={group.groupName} />
+              packageName={group.groupName} profiles={profiles} />
           </td>
         </tr>
         {open && group.rows.map((entry) => row(entry, true))}

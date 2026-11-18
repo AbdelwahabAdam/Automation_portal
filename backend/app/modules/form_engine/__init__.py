@@ -16,10 +16,10 @@ from .fields import INSCRIPTION, OPEN_PRICE_FIELDS, f, files, money, original_re
 from .inscriptions import INSCRIPTIONS
 from .options import (CASH, CASH_PAYMENT, COLORS, CUSTOMER_TYPE_CODES, CUSTOMER_TYPES,
                       DISCOUNTED, DISCOUNT_AMOUNTS, DISCOUNT_LABELS, EMIRATES, GENDERS, INSTALLATION_WORK, MAX_PACKAGE_QUANTITY, NO_INSCRIPTION,
-                      PACKAGE_COLOR_FAMILIES, PACKAGE_INSCRIPTIONS, PAID, PAYMENT_METHODS, PLATE_COLORS, SOURCES,
+                      PACKAGE_COLOR_FAMILIES, PACKAGE_INSCRIPTIONS, PACKAGE_PROFILES, PAID, PAYMENT_METHODS, PLATE_COLORS, SOURCES,
                       TREASURY_BY_METHOD,
                       YES_NO,
-                      installation_work, package_colors, package_quantity)
+                      installation_work, package_colors, package_fields, package_profile, package_quantity)
 from .registry import (all_forms, clear, find, form_fields, forms_for, get, keys, known, may,
                        register, visible_forms)
 from .spec import ApprovalContext, CheckContext, FormAction, FormSpec
@@ -31,6 +31,8 @@ from .validation import DAFTRA_LIST_TYPES, is_input, sanitize_draft, validate_su
 shared = SimpleNamespace(
     request_info=_sections.request_info, client=_sections.client, address=_sections.address,
     amounts=_sections.amounts, payment=_sections.payment, notes=_sections.notes,
+    # One field rather than a section: نسبة الخصم, for a form whose amounts are its own (صيانة)
+    percent_discount=_sections.percent_discount,
 )
 HAS_REMAINDER = _sections.HAS_REMAINDER
 
@@ -46,9 +48,9 @@ __all__ = [
     # the choices more than one form offers
     "INSCRIPTIONS", "CASH", "CASH_PAYMENT", "COLORS", "CUSTOMER_TYPE_CODES", "CUSTOMER_TYPES",
     "DISCOUNTED", "DISCOUNT_AMOUNTS", "DISCOUNT_LABELS", "EMIRATES", "GENDERS", "INSTALLATION_WORK",
-    "MAX_PACKAGE_QUANTITY", "NO_INSCRIPTION", "PACKAGE_COLOR_FAMILIES", "PACKAGE_INSCRIPTIONS", "PAID", "PAYMENT_METHODS",
+    "MAX_PACKAGE_QUANTITY", "NO_INSCRIPTION", "PACKAGE_COLOR_FAMILIES", "PACKAGE_INSCRIPTIONS", "PACKAGE_PROFILES", "PAID", "PAYMENT_METHODS",
     "PLATE_COLORS", "SOURCES",
-    "TREASURY_BY_METHOD", "YES_NO", "installation_work", "package_colors", "package_quantity",
+    "TREASURY_BY_METHOD", "YES_NO", "installation_work", "package_colors", "package_fields", "package_profile", "package_quantity",
     # validating what comes back
     "DAFTRA_LIST_TYPES", "is_input", "sanitize_draft", "validate_submission",
 ]

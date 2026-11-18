@@ -63,7 +63,8 @@ def order_details(*, devices, service, order_lines, item_price, visit_date):
     )
 
 
-def amounts(*, subtotal_amount, total_amount, discount_label, discount_amount, paid_amount, discount_approved_by):
+def amounts(*, subtotal_amount, total_amount, discount_label, discount_amount, discount_percent, paid_amount,
+            discount_approved_by):
     """قيمة الطلب. A maintenance visit is paid in full, or is free (0)."""
     return switched(
         "قيمة الطلب",
@@ -75,7 +76,9 @@ def amounts(*, subtotal_amount, total_amount, discount_label, discount_amount, p
         # A named discount's name comes first: picking an initiative fills قيمة الخصم, beside it
         (discount_label, f("discount_label", "اسم الخصم كما يظهر في الفاتورة", max_length=100,
                            suggestions=DISCOUNT_LABELS, fills="discount_amount", fills_by_choice=DISCOUNT_AMOUNTS)),
-        (discount_amount, money("discount_amount", "قيمة الخصم، إن وجد")),
+        (discount_amount, money("discount_amount", "قيمة الخصم (درهم)")),   # short: beside نسبة الخصم
+        # Beside it, as a percentage of قيمة البنود: either may be typed, and the other follows
+        (discount_percent, shared.percent_discount(of="subtotal_amount")),
         (paid_amount, money("paid_amount", "المبلغ المدفوع فعليًا الآن", must_equal="total_amount",
                             must_equal_message="يجب دفع قيمة الطلب كاملة")),
         (discount_approved_by, f("discount_approved_by", "اسم الشخص الذي اعتمد الخصم", "staff")),
@@ -130,6 +133,7 @@ SECTIONS = [
         total_amount=SHOW,
         discount_label=REQUIRED_IF(DISCOUNTED),
         discount_amount=SHOW,
+        discount_percent=SHOW,
         paid_amount=REQUIRED,
         discount_approved_by=REQUIRED_IF(DISCOUNTED),
     ),

@@ -106,6 +106,19 @@ def client(*, phone: Switch, phone2: Switch, client_code: Switch, customer_name:
     ], placeholders)
 
 
+# ---------- نسبة الخصم ----------
+
+def percent_discount(label: str = "نسبة الخصم (%)", *, of: str = "subtotal_amount",
+                     amount: str = "discount_amount") -> dict:
+    """نسبة الخصم: the discount as a percentage of `of`, beside the `amount` it stands for.
+
+    Either may be typed, and the other follows (validation.discount_from_percent): the one typed is
+    remembered in «<this field>_basis» and stays as it was when the order changes. A percentage gives
+    an amount in whole dirhams; an amount gives a percentage to two places.
+    """
+    return f("discount_percent", label, "number", min=0, max=100, percent_of=of, amount_field=amount)
+
+
 # ---------- عنوان الخدمة ----------
 
 def address(*, category: Switch, area: Switch, emirate: Switch, street: Switch, house: Switch,
@@ -138,7 +151,7 @@ def address(*, category: Switch, area: Switch, emirate: Switch, street: Switch, 
 # ---------- قيمة الطلب ----------
 
 def amounts(*, subtotal_amount: Switch, total_amount: Switch, discount_label: Switch,
-            discount_amount: Switch, discount_approved_by: Switch, paid_amount: Switch,
+            discount_amount: Switch, discount_percent: Switch, discount_approved_by: Switch, paid_amount: Switch,
             remaining_amount: Switch, remaining_due_date: Switch,
             must_pay: bool = False, price_default: int | None = None, paid_default: str | None = None,
             labels: dict | None = None, note: str | None = None) -> dict:
@@ -154,13 +167,18 @@ def amounts(*, subtotal_amount: Switch, total_amount: Switch, discount_label: Sw
     discount_label shown: the discount is printed on the Daftra invoice under a name, and then
     «المبلغ المدفوع» sits between the discount and who approved it, as the invoiced forms have it.
     remaining_due_date REQUIRED_IF(HAS_REMAINDER): the remainder is an instalment in Daftra.
+    discount_percent SHOW: نسبة الخصم beside قيمة الخصم, each worked out from the other and the subtotal
+                     (percent_discount below). Only with a subtotal shown — there is nothing else for a
+                     percentage to be of. Daftra still gets the amount: an invoice's discount is an amount.
     must_pay: what is paid now must be more than 0.
     """
     labels = _labelled(labels, {"subtotal_amount", "total_amount", "discount_label", "discount_amount",
-                                "discount_approved_by", "paid_amount", "remaining_amount", "remaining_due_date"})
+                                "discount_percent", "discount_approved_by", "paid_amount", "remaining_amount",
+                                "remaining_due_date"})
     switches = {name: check(name, value) for name, value in {
         "subtotal_amount": subtotal_amount, "total_amount": total_amount, "discount_label": discount_label,
-        "discount_amount": discount_amount, "discount_approved_by": discount_approved_by,
+        "discount_amount": discount_amount, "discount_percent": discount_percent,
+        "discount_approved_by": discount_approved_by,
         "paid_amount": paid_amount, "remaining_amount": remaining_amount,
         "remaining_due_date": remaining_due_date}.items()}
     _check_amounts(switches)
@@ -188,13 +206,19 @@ def amounts(*, subtotal_amount: Switch, total_amount: Switch, discount_label: Sw
     named = f("discount_label", labels.get("discount_label", "اسم الخصم كما يظهر في الفاتورة"),
               max_length=100, suggestions=DISCOUNT_LABELS, fills="discount_amount",
               fills_by_choice=DISCOUNT_AMOUNTS)
-    amount = money("discount_amount", labels.get("discount_amount", "قيمة الخصم، إن وجد"))
+    # Beside نسبة الخصم the two share one field's width, so each is named short, with its unit; the
+    # hint under the pair says they are optional. On its own the amount keeps its usual name.
+    paired = shown(switches["discount_percent"])
+    amount = money("discount_amount", labels.get(
+        "discount_amount", "قيمة الخصم (درهم)" if paired else "قيمة الخصم، إن وجد"))
+    percent = percent_discount(labels.get("discount_percent", "نسبة الخصم (%)"))
     approved = f("discount_approved_by", labels.get("discount_approved_by", "اسم الشخص الذي اعتمد الخصم"), "staff")
     # A named discount's name comes first: picking an initiative fills قيمة الخصم, beside it
-    middle = ([("discount_label", named), ("discount_amount", amount), ("paid_amount", paid),
-               ("discount_approved_by", approved)]
+    middle = ([("discount_label", named), ("discount_amount", amount), ("discount_percent", percent),
+               ("paid_amount", paid), ("discount_approved_by", approved)]
               if shown(switches["discount_label"]) else
-              [("discount_amount", amount), ("discount_approved_by", approved), ("paid_amount", paid)])
+              [("discount_amount", amount), ("discount_percent", percent), ("discount_approved_by", approved),
+               ("paid_amount", paid)])
 
     instalment = switches["remaining_due_date"].kind == "required_if"
     due = f("remaining_due_date", labels.get(
@@ -227,6 +251,9 @@ def _check_amounts(s: dict[str, Switch]):
         raise TypeError("amounts: remaining_amount is the total less paid_amount, which is hidden")
     if shown(s["remaining_due_date"]) and not shown(s["remaining_amount"]):
         raise TypeError("amounts: remaining_due_date is when remaining_amount falls due, which is hidden")
+    if shown(s["discount_percent"]) and not (shown(s["subtotal_amount"]) and shown(s["discount_amount"])):
+        raise TypeError("amounts: discount_percent is a share of subtotal_amount, beside discount_amount — "
+                        "both must be shown")
     discount = [name for name in ("discount_label", "discount_approved_by") if shown(s[name])]
     if discount and not shown(s["discount_amount"]):
         raise TypeError(f"amounts: {', '.join(discount)} describe a discount, but discount_amount is hidden")

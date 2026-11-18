@@ -3,10 +3,11 @@
 import math
 import re
 from datetime import date
+from decimal import ROUND_HALF_UP, Decimal
 
 from ...core.text import ARABIC_DIGITS, local_phone, uae_today
 from .registry import form_fields
-from .options import package_colors, package_quantity
+from .options import package_colors, package_fields, package_quantity
 
 # An email address: something@somewhere.domain, no spaces
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -127,6 +128,42 @@ def _condition_met(condition: dict, clean: dict) -> bool:
     return isinstance(value, (int, float)) and value > condition["gt"]
 
 
+def whole_dirhams(amount: float) -> float:
+    """An amount rounded to the dirham, a half going up (round() would take 0.5 to the even one)."""
+    return float(Decimal(str(amount)).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+
+
+def discount_from_percent(fields: list[dict], data: dict, clean: dict) -> None:
+    """نسبة الخصم and قيمة الخصم, each worked out from the other and the subtotal (a field with
+    percent_of). The one the salesperson typed — «<field>_basis», "percent" or "amount" — stays as it
+    was, so a percentage keeps its share of an order that grows and an amount keeps its dirhams. A
+    percentage gives an amount in whole dirhams; an amount gives a percentage to two places.
+
+    The amount is what Daftra is sent either way: an invoice's discount is an amount. With no
+    subtotal there is nothing to work either from, and both stay as they were typed.
+    Mirrored in frontend/src/modules/requests/validation.js (discountFromPercent).
+    """
+    for spec in fields:
+        base, amount = spec.get("percent_of"), spec.get("amount_field")
+        if not base:
+            continue
+        name = spec["name"]
+        basis = "percent" if data.get(name + "_basis") == "percent" else "amount"
+        subtotal = clean.get(base)
+        if basis == "percent":
+            if clean.get(name) is None:
+                clean.pop(amount, None)            # the percentage was emptied: so is what it stood for
+            elif subtotal:
+                clean[amount] = whole_dirhams(subtotal * clean[name] / 100)
+        else:
+            if clean.get(amount) is None:
+                clean.pop(name, None)              # no amount, no percentage of one
+            elif subtotal:
+                clean[name] = round(clean[amount] / subtotal * 100, 2)
+        if clean.get(name) is not None or clean.get(amount) is not None:
+            clean[name + "_basis"] = basis
+
+
 def validate_submission(form_type: str, data: dict, file_counts: dict, employee_name: str,
                         products: dict | None = None, package_prices: dict | None = None,
                         daftra_lists: dict | None = None, new_client: bool = False) -> tuple[dict, dict]:
@@ -210,6 +247,14 @@ def validate_submission(form_type: str, data: dict, file_counts: dict, employee_
             # In a package it carries the package's details like the rest of the package.
             if open_price and not line.get("group_id"):
                 own_fields = [dspec for dspec in own_fields if dspec.get("open_price_only")]
+            # Only what this package asks for (options.PACKAGE_PROFILES), as it labels them and with
+            # its own choices: a door is asked لون الباب and no inscription. A field it does not ask
+            # for is neither required of it nor kept, whatever the browser sends. Only on a form
+            # whose lines are packages (it carries package_profiles): a maintenance item named like
+            # one is not a package.
+            if spec.get("package_profiles"):
+                own_fields = package_fields(own_fields, line.get("group_name") or line.get("name"),
+                                            spec["package_profiles"])
             for dspec in filter(is_input, own_fields):
                 dvalue, derror = _clean_value(dspec, line["details"].get(dspec["name"]))
                 if derror:
@@ -289,6 +334,10 @@ def validate_submission(form_type: str, data: dict, file_counts: dict, employee_
         else:
             del clean[name]
             errors[name] = "اختر من القائمة"
+
+    # نسبة الخصم and قيمة الخصم follow each other, from the subtotal just worked out, before the
+    # total below takes the discount off it
+    discount_from_percent(fields, data, clean)
 
     for spec in fields:
         name = spec["name"]
@@ -395,4 +444,7 @@ def sanitize_draft(form_type: str, data: dict) -> dict:
                 draft[spec["name"] + "_id"] = str(data[spec["name"] + "_id"])[:20]
             if spec["type"] in DAFTRA_LIST_TYPES and data.get(spec["name"] + "_name"):
                 draft[spec["name"] + "_name"] = str(data[spec["name"] + "_name"])[:200]
+        # Which of نسبة الخصم and قيمة الخصم was typed, so the draft keeps following the right one
+        if spec.get("percent_of") and data.get(spec["name"] + "_basis") in ("percent", "amount"):
+            draft[spec["name"] + "_basis"] = data[spec["name"] + "_basis"]
     return draft

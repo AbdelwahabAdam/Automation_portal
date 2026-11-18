@@ -11,7 +11,7 @@ The payment is checked by hand for now.
 from ...core.errors import ExternalFailure, Invalid
 from ...core.text import squash
 from ...modules import notifications
-from ...modules.invoicing import (ClientRecord, Invoice, InvoiceEmail, Receipt, WorkOrder, approve, get_invoice,
+from ...modules.invoicing import (ClientRecord, device_type, Invoice, InvoiceEmail, Receipt, WorkOrder, approve, get_invoice,
                                   installation_work_order, make_work_order, money, order_lines, package_terms,
                                   reports_daftra_errors, sales_person, send_invoice_email, service_address)
 from .fields import INSTALLATION_DAYS
@@ -38,6 +38,7 @@ def client(ctx):
         category_name=d.get("category_name"),
         location_url=d.get("location_url"),
         coordinates=d.get("coordinates"),
+        device_name=device_type(d),                  # نوع الجهاز, from the packages ordered
         if_unknown="create",
         keep_in_step=True,
     )
@@ -112,6 +113,7 @@ def work_order(ctx):
             "device": made.fields["device"],          # نوع الجهاز, on Daftra's own print
             "address": made.fields["address"],        # العنوان, the request's own, not the client's
             "notes": made.fields["notes"],            # ملاحظات, the form's own, as written
+            "cover_color": made.fields["cover_color"],  # لون الكفر, on its own
         },
         printed=made.printed,
     )

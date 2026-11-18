@@ -7,6 +7,12 @@
   .fl-pair { grid-template-columns: 1fr; }
 }
 
+/* قيمة الخصم and نسبة الخصم: one value written two ways, side by side in one field's width, the
+   amount a little wider. Not stacked on a phone: two short numbers fit, and it is the pair that
+   says they are the same discount. Their one hint runs under both. */
+.fl-discount-pair { display: grid; grid-template-columns: 3fr 2fr; gap: var(--fl-space-3); align-items: start; }
+.fl-discount-pair__hint { grid-column: 1 / -1; margin-top: calc(-1 * var(--fl-space-2)); }
+
 /* The link shown to an admin when an invitation email could not be sent */
 .fl-invite-link { margin-block-start: var(--fl-space-2); overflow-wrap: anywhere; }
 /* The client found by a search: their address choice and its buttons */

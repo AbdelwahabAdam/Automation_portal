@@ -64,6 +64,7 @@ SECTIONS = [
         total_amount=SHOW,
         discount_label=REQUIRED_IF(DISCOUNTED),
         discount_amount=SHOW,
+        discount_percent=SHOW,                      # beside it: each worked out from the other
         discount_approved_by=REQUIRED_IF(DISCOUNTED),
         paid_amount=REQUIRED,
         remaining_amount=SHOW,

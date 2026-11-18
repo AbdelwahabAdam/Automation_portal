@@ -213,7 +213,7 @@
          ],
          "exclude": [],
          "match": [
-          "سقيا الخير مدمجة"
+          "سقيا الخير مدمج"
          ]
         },
         {
@@ -778,8 +778,7 @@
           "سقيا الخير"
          ],
          "price": "0",
-         "text": "وجعلنا من الماء كل شيئ حي",
-         "work": "104 - وجعلنا من الماء كل شيئ حي"
+         "text": "وجعلنا من الماء كل شيئ حي"
         }
        ],
        "label": "الكتابة المطلوبة",
@@ -874,6 +873,94 @@
       }
      ],
      "name": "order_lines",
+     "package_profiles": [
+      {
+       "fields": [
+        "cooler_color"
+       ],
+       "labels": {
+        "cooler_color": "اللون"
+       },
+       "match": [
+        "فلتر دش"
+       ],
+       "options": {
+        "cooler_color": [
+         "أبيض",
+         "أسود"
+        ]
+       }
+      },
+      {
+       "fields": [
+        "cooler_color",
+        "w_direction",
+        "manufacturing_notes"
+       ],
+       "labels": {
+        "cooler_color": "لون الباب"
+       },
+       "match": [
+        "باب خلفي"
+       ]
+      },
+      {
+       "fields": [
+        "cooler_color",
+        "cover_color",
+        "plate_color",
+        "base_color",
+        "front_design",
+        "w_direction",
+        "cover_back",
+        "design_version",
+        "inscription",
+        "manufacturing_notes",
+        "installation_accessories"
+       ],
+       "match": [
+        "نبع المزن"
+       ],
+       "needs": [
+        "مدمج"
+       ]
+      },
+      {
+       "fields": [
+        "cooler_color",
+        "cover_color",
+        "plate_color",
+        "base_color",
+        "front_design",
+        "w_direction",
+        "cover_back",
+        "inscription",
+        "manufacturing_notes",
+        "installation_accessories"
+       ],
+       "match": [
+        "نبع المزن"
+       ]
+      },
+      {
+       "exclude": [
+        "ستانلس"
+       ],
+       "fields": [
+        "cooler_color",
+        "cover_color",
+        "plate_color",
+        "base_color",
+        "cover_back",
+        "inscription",
+        "manufacturing_notes",
+        "installation_accessories"
+       ],
+       "match": [
+        "سقيا الخير"
+       ]
+      }
+     ],
      "required": true,
      "subtotal_field": "subtotal_amount",
      "type": "order_lines"
@@ -928,10 +1015,20 @@
      "type": "text"
     },
     {
-     "label": "قيمة الخصم، إن وجد",
+     "label": "قيمة الخصم (درهم)",
      "min": 0,
      "money": true,
      "name": "discount_amount",
+     "required": false,
+     "type": "number"
+    },
+    {
+     "amount_field": "discount_amount",
+     "label": "نسبة الخصم (%)",
+     "max": 100,
+     "min": 0,
+     "name": "discount_percent",
+     "percent_of": "subtotal_amount",
      "required": false,
      "type": "number"
     },

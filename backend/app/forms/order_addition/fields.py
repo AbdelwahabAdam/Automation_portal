@@ -71,7 +71,7 @@ SECTIONS = [
         execution_info=REQUIRED_IF(WORK_STARTED),
     ),
     shared.amounts(
-        subtotal_amount=HIDE, total_amount=REQUIRED, discount_label=HIDE, discount_amount=SHOW,
+        subtotal_amount=HIDE, total_amount=REQUIRED, discount_label=HIDE, discount_amount=SHOW, discount_percent=HIDE,
         discount_approved_by=REQUIRED_IF(DISCOUNTED), paid_amount=REQUIRED, remaining_amount=SHOW,
         remaining_due_date=SHOW,
         labels={"total_amount": "قيمة الإضافة النهائية بعد الخصم، شامل الضريبة",

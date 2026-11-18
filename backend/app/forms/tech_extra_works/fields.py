@@ -79,6 +79,7 @@ SECTIONS = [
         total_amount=SHOW,                   # the works' own total: no discount here
         discount_label=HIDE,
         discount_amount=HIDE,
+        discount_percent=HIDE,
         discount_approved_by=HIDE,
         paid_amount=REQUIRED,
         remaining_amount=SHOW,

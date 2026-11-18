@@ -109,10 +109,12 @@ def test_the_cover_colour_is_asked_on_every_package_and_the_plate_colour_is_its_
     assert order.index("installation_accessories") == order.index("manufacturing_notes") + 1
     assert order.index("plate_color") == order.index("cover_color") + 1
 
-    # A package with no colours of its own takes one of the six, and the server keeps it
+    # A package with no colours of its own takes one of the six, and the server keeps it. A fixed
+    # panel: it has no colour family and no profile, so it keeps every field. (Not a door: a door
+    # asks only لون الباب, اتجاه الدبليو and ملاحظات — options.PACKAGE_PROFILES.)
     with_six = package_lines(cover_color="اللون الازرق", plate_color="اللون الخشبي")
     for line in with_six:
-        line["group_name"] = "باب خلفي جرار لبرادة مدمجة"
+        line["group_name"] = "لوح خلفي ثابت لبرادة مدمجة"
     clean, errors = validate("new_sale", new_sale(order_lines=with_six), FILES)
     assert errors == {}
     assert clean["order_lines"][0]["details"]["cover_color"] == "اللون الازرق"
@@ -704,7 +706,9 @@ def test_saqya_packages_start_with_their_verse_for_free():
     assert family["match"] == ["سقيا الخير"] and family["exclude"] == [] and family["price"] == "0"
     # It is the catalogue's own entry, to the letter, or the form would show it under «أخرى»
     assert dict(INSCRIPTIONS)["104"] == family["text"]
-    assert family["work"] == f"104 - {family['text']}"
+    # …and it is not written into ملحقات التركيب: that box is what the floor installs, and the verse
+    # has its own place, الكتابة المطلوبة, and its own field on the work order (field_47)
+    assert "work" not in family
     lines = next(spec for spec in form_fields("new_sale") if spec["type"] == "order_lines")
     field = next(d for d in lines["line_fields"] if d["name"] == "inscription")
     names = {d["name"] for d in lines["line_fields"]}

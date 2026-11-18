@@ -10,7 +10,7 @@ Daftra's total, and the PDFs.
 """
 
 from ...core.text import squash
-from ...modules.invoicing import (ClientRecord, Invoice, Receipt, WorkOrder, approve, installation_work_order,
+from ...modules.invoicing import (ClientRecord, device_type, Invoice, Receipt, WorkOrder, approve, installation_work_order,
                                   money, order_lines, package_terms, sales_person, service_address)
 
 
@@ -33,6 +33,7 @@ def client(ctx):
         category_name=d.get("category_name"),
         location_url=d.get("location_url"),
         coordinates=d.get("coordinates"),
+        device_name=device_type(d),                  # نوع الجهاز, from the packages ordered
         if_unknown="create",
         keep_in_step=True,
     )
@@ -100,6 +101,7 @@ def work_order(ctx):
             "device": made.fields["device"],          # نوع الجهاز, on Daftra's own print
             "address": made.fields["address"],        # العنوان, the request's own, not the client's
             "notes": made.fields["notes"],            # ملاحظات, the form's own, as written
+            "cover_color": made.fields["cover_color"],  # لون الكفر, on its own
         },
         printed=made.printed,                         # the same values, as the portal's PDF prints them
     )

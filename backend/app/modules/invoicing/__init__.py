@@ -23,7 +23,7 @@ from .estimate import (ESTIMATE_ATTACHMENT_FIELD, draw_estimate, find_estimate, 
 from .invoice import (finish_invoice, get_invoice, invoice_items, make_invoice, make_payment, payment_of,
                       save_invoice_pdf, save_receipt_pdf)
 from .payment_methods import PAYMENT_METHOD_KEYS
-from .runner import approve, make_client, order_lines, package_terms, run, service_address
+from .runner import approve, device_type, make_client, order_lines, package_terms, run, service_address
 from .work_order import (WORK_ORDER_FIELDS, find_work_order, installation_work_order, make_work_order,
                          work_order_values)
 
@@ -31,7 +31,7 @@ __all__ = [
     # what a form's output.py is written with: the documents, the runner, and what they are built from
     "ClientRecord", "Estimate", "ExistingInvoice", "Invoice", "InvoiceEmail", "Receipt", "WorkOrder",
     "WORK_ORDER_FIELDS", "send_invoice_email",
-    "approve", "run", "make_client", "order_lines", "package_terms", "service_address", "installation_work_order",
+    "approve", "run", "make_client", "order_lines", "package_terms", "service_address", "device_type", "installation_work_order",
     "make_estimate", "make_invoice", "make_payment", "make_work_order", "finish_invoice",
     "ESTIMATE_ATTACHMENT_FIELD", "INVOICE_ATTACHMENT_FIELD", "PAYMENT_METHOD_KEYS",
     "RECEIPT_ATTACHMENT_FIELD", "TOTAL_TOLERANCE", "WORK_ORDER_ATTACHMENT_FIELD", "attach_pdf",

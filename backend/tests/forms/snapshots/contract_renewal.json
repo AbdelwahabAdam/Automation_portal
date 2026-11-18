@@ -225,10 +225,20 @@
      "type": "text"
     },
     {
-     "label": "قيمة الخصم، إن وجد",
+     "label": "قيمة الخصم (درهم)",
      "min": 0,
      "money": true,
      "name": "discount_amount",
+     "required": false,
+     "type": "number"
+    },
+    {
+     "amount_field": "discount_amount",
+     "label": "نسبة الخصم (%)",
+     "max": 100,
+     "min": 0,
+     "name": "discount_percent",
+     "percent_of": "subtotal_amount",
      "required": false,
      "type": "number"
     },

@@ -51,6 +51,9 @@ WORK_ORDER_FIELDS = {
     # The form's own ملاحظات (أي اتفاق خاص أو ملاحظات إضافية), as written. The ملاحظات under each
     # product are for the floor and stay in the description.
     "notes": "field_54",                     # ملاحظات
+    # The cover's colour on its own (added 2026-11-18). Until then it was only inside الألوان المتاحة
+    # and, when the form gave no plate colour, in لون اللوحه. A text field, so written as the form has it.
+    "cover_color": "field_55",               # لون الكفر
 }
 # Fields on the work order form that the portal does not fill: مستند 1 (صورة المعاينة), تاريخ
 # التركيب and التاريخ, all written by hand in Daftra. A save would empty them (see below), so they
@@ -83,6 +86,16 @@ PLATE_ENTRIES = {
 }
 # The list writes a verse with its code: «001 - …», and from 100 on «104- …»
 INSCRIPTION_ENTRIES = {text: f"{code}- {text}" if int(code) >= 100 else f"{code} - {text}" for code, text in INSCRIPTIONS}
+
+
+def cover_color(data: dict) -> str:
+    """لون الكفر of every package, as staff write a colour («اللون الابيض»), joined with « / »."""
+    colors = []
+    for line in package_lines(data):
+        value = str((line.get("details") or {}).get("cover_color") or "").strip()
+        if value:
+            colors.append(COLOR_TEXT.get(value) or f"اللون {value}")
+    return " / ".join(dict.fromkeys(colors))
 
 
 def full_address(data: dict) -> str:
@@ -160,6 +173,7 @@ def work_order_values(request, db: Session) -> dict:
         "device": device_name(data),
         "address": full_address(data),
         "notes": str(data.get("notes") or "").strip(),
+        "cover_color": cover_color(data),
     }
     return values
 
@@ -349,6 +363,42 @@ def add_work_order_address(request, dry_run: bool = False) -> str:
         return "عقد مغلق في دفترة؛ لا يمكن التعديل"
     if save_work_order_fields(work_order_id, row, fields):
         return f"written «{address}»"
+    return "Daftra refused it, or did not show it saved; look at it in Daftra"
+
+
+def add_work_order_cover_color(request, dry_run: bool = False) -> str:
+    """For a work order made before لون الكفر had a field of its own (field_55, 2026-11-18): writes
+    the request's cover colour into it, and says what happened.
+
+    Only that field changes. Every other one is sent back exactly as Daftra holds it now — a save
+    empties any field left out — so what staff have changed in Daftra since the approval stays. A
+    colour someone has already written there is never replaced. Safe to run again."""
+    color = cover_color(request.data)
+    if not color:
+        return "no cover colour on the request"
+    work_order_id, field = request.daftra_work_order_id, WORK_ORDER_FIELDS["cover_color"]
+    try:
+        held = daftra.read_v2("work_order", work_order_id).get("custom_data") or {}
+    except DaftraError as error:
+        return f"Daftra: {error}"
+    already = blank_or(held.get(field))
+    if already == color:
+        return "already has it"
+    if already:
+        return "its لون الكفر holds something else; left as it is"
+    fields = fields_as_held(held, **{field: color})
+    if dry_run:
+        return f"would write «{color}»"
+    try:
+        row = daftra.get(f"work_orders/{work_order_id}.json").get("data", {}).get("WorkOrder", {})
+    except DaftraError as error:
+        return f"Daftra: {error}"
+    if not row.get("number"):
+        return "Daftra gave back no number for it; left as it is"
+    if is_closed(row):
+        return "عقد مغلق في دفترة؛ لا يمكن التعديل"
+    if save_work_order_fields(work_order_id, row, fields):
+        return f"written «{color}»"
     return "Daftra refused it, or did not show it saved; look at it in Daftra"
 
 

@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import { matchesQuery, normalize, samePerson } from '../src/ds/match.js';
 import { formatAmount, formatDay, localDay } from '../src/lib/format.js';
 import {
-  changedDetails, chargeApplies, coordinatesFromLink, evaluateForm, groupLines, initialValues, linePrice, normalizePhone, packageColors,
+  changedDetails, chargeApplies, coordinatesFromLink, discountFromPercent, packageFields, packageProfile, evaluateForm, groupLines, initialValues, linePrice, normalizePhone, packageColors,
   packageDefault, packageQuantity, today,
 } from '../src/modules/requests/validation.js';
 import { afterCategory, afterEmirate, categoriesFor } from '../src/modules/requests/address.js';
@@ -331,4 +331,132 @@ test('a price does not apply to an inscription of «لا يوجد», and goes wi
   // A real inscription keeps what was typed
   assert.equal(charge({ inscription: 'لا يوجد', inscription_price: '' }, 'بسم الله').inscription, 'بسم الله');
   assert.equal(charge({ inscription: 'بسم الله', inscription_price: '300' }, 'نص آخر').inscription_price, '300');
+});
+
+// The package profiles as the order_lines field carries them (options.PACKAGE_PROFILES): the same
+// shape, cut down to what these tests need. The backend's tests check the real table's contents.
+const PROFILES = [
+  { match: ['فلتر دش'], fields: ['cooler_color'], labels: { cooler_color: 'اللون' }, options: { cooler_color: ['أبيض', 'أسود'] } },
+  { match: ['باب خلفي'], fields: ['cooler_color', 'w_direction', 'manufacturing_notes'], labels: { cooler_color: 'لون الباب' } },
+  { match: ['نبع المزن'], needs: ['مدمج'], fields: ['cooler_color', 'front_design', 'design_version', 'inscription'] },
+  { match: ['نبع المزن'], fields: ['cooler_color', 'front_design', 'inscription'] },
+];
+const LINE = [
+  { name: 'package_quantity', package_only: true },
+  { name: 'cooler_color', label: 'لون البرادة', type: 'select', options: ['أبيض', 'أسود', 'ذهبي', 'أخرى'] },
+  { name: 'front_design' }, { name: 'design_version' }, { name: 'w_direction' },
+  { name: 'inscription' }, { name: 'inscription_price', beside: 'inscription', charge: true },
+  { name: 'manufacturing_notes' },
+  { name: 'item_price', open_price_only: true },
+];
+const names = (fields) => fields.map((d) => d.name);
+
+test('a package takes the first profile its name matches, and none means every field', () => {
+  assert.equal(packageProfile(PROFILES, 'باب خلفي مفصلي لبرادة خاصة (Special)').labels.cooler_color, 'لون الباب');
+  assert.ok(packageProfile(PROFILES, 'باقة نبع المزن مدمجه - برادة مياه').fields.includes('design_version'));
+  assert.ok(!packageProfile(PROFILES, 'باقة برادة نبع المزن - 3 صنابير').fields.includes('design_version'));
+  assert.equal(packageProfile(PROFILES, '  باب   خلفي جرار '), PROFILES[1]);
+  assert.equal(packageProfile(PROFILES, 'لوح خلفي ثابت لبرادة مدمجة'), null);
+  assert.equal(packageProfile(undefined, 'باب خلفي جرار'), null);
+  assert.deepEqual(packageFields(LINE, 'لوح خلفي ثابت لبرادة مدمجة', PROFILES), LINE);
+});
+
+test('a door shows its colour as لون الباب, its W direction and notes, and nothing to inscribe', () => {
+  const door = packageFields(LINE, 'باب خلفي جرار لبرادة مدمجة', PROFILES);
+  assert.deepEqual(names(door), ['package_quantity', 'cooler_color', 'w_direction', 'manufacturing_notes', 'item_price']);
+  const colour = door.find((d) => d.name === 'cooler_color');
+  assert.equal(colour.label, 'لون الباب');
+  assert.deepEqual(colour.options, LINE[1].options);
+  // The field list itself is left as it was
+  assert.equal(LINE[1].label, 'لون البرادة');
+});
+
+test('the shower filter offers one colour of two, and سعر الكتابة goes with الكتابة', () => {
+  const colour = packageFields(LINE, 'فلتر دش Future Life', PROFILES).find((d) => d.name === 'cooler_color');
+  assert.deepEqual([colour.label, colour.options], ['اللون', ['أبيض', 'أسود']]);
+  const naba = names(packageFields(LINE, 'باقة برادة نبع المزن - 3 صنابير', PROFILES));
+  assert.ok(naba.includes('inscription') && naba.includes('inscription_price'));
+});
+
+test('the subtotal counts only the charges the package asks for, as the server does', () => {
+  // evaluateForm itself, on a form with one order_lines field carrying the profiles
+  const form = { sections: [{ fields: [
+    { name: 'order_lines', type: 'order_lines', subtotal_field: 'subtotal', line_fields: LINE, package_profiles: PROFILES },
+  ] }] };
+  const subtotal = (group_name) => evaluateForm(form, { order_lines: [{
+    product_id: '1', quantity: 1, unit_price: 100, group_id: 'g', group_name,
+    details: { inscription: 'بسم الله', inscription_price: '300' },
+  }] }, {}, {}).clean.subtotal;
+  // نبع المزن asks for an inscription, so its 300 counts; a door does not, so it does not
+  assert.equal(subtotal('باقة برادة نبع المزن - 3 صنابير'), 400);
+  assert.equal(subtotal('باب خلفي جرار لبرادة مدمجة'), 100);
+  // A form with no profiles counts every charge, as before
+  const plain = { sections: [{ fields: [{ ...form.sections[0].fields[0], package_profiles: undefined }] }] };
+  assert.equal(evaluateForm(plain, { order_lines: [{ product_id: '1', quantity: 1, unit_price: 100, group_id: 'g',
+    group_name: 'باب خلفي جرار لبرادة مدمجة', details: { inscription_price: '300' } }] }, {}, {}).clean.subtotal, 400);
+});
+
+// سقيا الخير's verse as the form carries it now: no «work», so ملحقات التركيب is never touched
+const quiet = [
+  { name: 'inscription', work_field: 'work', price_field: 'price',
+    default_by_package: [{ match: ['سقيا الخير'], exclude: [], text: VERSE, price: '0' }] },
+  { name: 'work' }, { name: 'price' },
+];
+const pickQuiet = (details, value) => changedDetails(quiet, SAQYA, 'inscription', details, value);
+
+test('a package verse with no work leaves ملحقات التركيب as it was, and still brings its price', () => {
+  const picked = pickQuiet({ work: 'تمديد مياه وكهرباء • فلتر' }, VERSE);
+  assert.deepEqual(picked, { work: 'تمديد مياه وكهرباء • فلتر', inscription: VERSE, price: '0' });
+  assert.equal(pickQuiet({}, VERSE).work, undefined);
+  // Choosing another one takes the free price away and still leaves the box alone
+  const other = pickQuiet(picked, 'نص آخر');
+  assert.equal(other.work, 'تمديد مياه وكهرباء • فلتر');
+  assert.equal(other.price, '');
+});
+
+// نسبة الخصم beside قيمة الخصم, as the shared amounts section declares them
+const PERCENT = { name: 'discount_percent', type: 'number', min: 0, max: 100, percent_of: 'subtotal_amount', amount_field: 'discount_amount' };
+
+test('a percentage typed gives the amount in whole dirhams; an amount gives the percentage to two places', () => {
+  const byPercent = { subtotal_amount: 7537, discount_percent: 10 };
+  discountFromPercent([PERCENT], { discount_percent_basis: 'percent' }, byPercent);
+  assert.equal(byPercent.discount_amount, 754);               // 753.7, to the dirham
+  const half = { subtotal_amount: 1000, discount_percent: 12.55 };
+  discountFromPercent([PERCENT], { discount_percent_basis: 'percent' }, half);
+  assert.equal(half.discount_amount, 126);                    // 125.5: a half goes up, as on the server
+  const byAmount = { subtotal_amount: 6200, discount_amount: 200 };
+  discountFromPercent([PERCENT], {}, byAmount);               // no basis: the amount was typed
+  assert.equal(byAmount.discount_percent, 3.23);
+});
+
+test('the one typed stays, the other is replaced, and emptying it empties both', () => {
+  const stale = { subtotal_amount: 6200, discount_percent: 10, discount_amount: 999 };
+  discountFromPercent([PERCENT], { discount_percent_basis: 'percent' }, stale);
+  assert.equal(stale.discount_amount, 620);
+  const keptAmount = { subtotal_amount: 6200, discount_percent: 50, discount_amount: 620 };
+  discountFromPercent([PERCENT], { discount_percent_basis: 'amount' }, keptAmount);
+  assert.equal(keptAmount.discount_percent, 10);
+  const emptied = { subtotal_amount: 6200, discount_amount: 620 };
+  discountFromPercent([PERCENT], { discount_percent_basis: 'percent' }, emptied);
+  assert.ok(!('discount_amount' in emptied));
+  // With no subtotal yet there is nothing to work from: what was typed is left as it is
+  const early = { discount_percent: 10 };
+  discountFromPercent([PERCENT], { discount_percent_basis: 'percent' }, early);
+  assert.ok(!('discount_amount' in early));
+});
+
+test('the total on the form takes off the amount a percentage works out to', () => {
+  const form = { sections: [{ fields: [
+    { name: 'subtotal_amount', type: 'number', money: true, required: true },
+    { name: 'discount_amount', type: 'number', money: true },
+    PERCENT,
+    { name: 'total_amount', type: 'number', money: true, computed: ['subtotal_amount', 'discount_amount'], negative_message: 'x' },
+  ] }] };
+  const { clean } = evaluateForm(form, { subtotal_amount: '6200', discount_percent: '10', discount_percent_basis: 'percent' }, {}, {});
+  assert.deepEqual([clean.discount_amount, clean.total_amount], [620, 5580]);
+  // And a percentage that grows with the order, which an amount typed would not
+  const bigger = evaluateForm(form, { subtotal_amount: '8000', discount_percent: '10', discount_percent_basis: 'percent' }, {}, {}).clean;
+  assert.equal(bigger.discount_amount, 800);
+  const fixed = evaluateForm(form, { subtotal_amount: '8000', discount_amount: '620', discount_percent: '10' }, {}, {}).clean;
+  assert.deepEqual([fixed.discount_amount, fixed.discount_percent], [620, 7.75]);
 });

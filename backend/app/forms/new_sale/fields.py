@@ -21,6 +21,7 @@ from ...modules.form_engine import (
     NO_INSCRIPTION,
     OPEN_PRICE_FIELDS,
     PACKAGE_COLOR_FAMILIES,
+    PACKAGE_PROFILES,
     PACKAGE_INSCRIPTIONS,
     PLATE_COLORS,
     REQUIRED,
@@ -123,7 +124,7 @@ def order_details(*, order_lines, package_quantity, cooler_color, cover_color, p
     return switched(
         "تفاصيل الطلب",
         (order_lines, f("order_lines", "المنتجات والباقات", "order_lines", subtotal_field="subtotal_amount",
-                        line_fields=lines)),
+                        line_fields=lines, package_profiles=PACKAGE_PROFILES)),
         note="إرسال الطلب يعني أن العميل وافق على التصميم واللون والكتابة.",
     )
 
@@ -198,6 +199,7 @@ SECTIONS = [
         total_amount=SHOW,                          # less the discount
         discount_label=REQUIRED_IF(DISCOUNTED),     # printed on the invoice under this name
         discount_amount=SHOW,
+        discount_percent=SHOW,                      # beside it: each worked out from the other
         discount_approved_by=REQUIRED_IF(DISCOUNTED),
         paid_amount=REQUIRED,
         remaining_amount=SHOW,

@@ -767,12 +767,13 @@ async function installationWork(page, prefix) {
   const boxes = page.locator('textarea[id$="-installation_accessories"]');
 
   // A water cooler, a food cooler (whose name carries «نبع المزن» too and must not take its text),
-  // a stainless one, and a package nothing is written for
+  // a stainless one, and a package nothing is written for. That last is a fixed panel, not a door:
+  // a door is asked only لون الباب, اتجاه الدبليو and ملاحظات, so it has no ملحقات التركيب at all.
   const WANTED = [
     ['نبع المزن - 3 صنابير', 'تمديد مياه وكهرباء كامل للبرادة'],
     ['حفظ الطعام - غطاء نبع المزن', 'تمديد كهرباء كامل للبرادة'],
     ['ستانلس ستيل - 2', 'فلتر 3 مراحل + عمل التمديدات'],
-    ['باب خلفي جرار', ''],
+    ['لوح خلفي ثابت لبرادة مدمجة', ''],
   ];
   const filled = [];
   for (const [search, expected] of WANTED) {
@@ -794,6 +795,75 @@ async function installationWork(page, prefix) {
   }
   log(`${prefix} installation work: ${filled.map((v) => `«${v.slice(0, 22)}»`).join(', ')}`);
   await shot(page, `${prefix}-installation-work`, false);
+}
+
+// The choices a line's drop-down offers, as the salesperson sees them: Select is a combobox whose
+// list opens on click (ds/index.jsx), not a native <select>. The empty first entry is left out.
+const PLACEHOLDERS = ['بدون تحديد', 'اختر اللون…', 'لا توجد ألوان لهذه الباقة'];
+async function lineOptions(page, name) {
+  const box = page.locator(`[id^="order_lines-"][id$="-${name}"]`).first();
+  if (!(await box.count())) return [];
+  await box.click();
+  const list = await box.getAttribute('aria-controls');
+  const texts = list ? await page.locator(`[id="${list}"] [role="option"]`).allInnerTexts() : [];
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(150);
+  return texts.map((text) => text.trim()).filter((text) => text && !PLACEHOLDERS.includes(text));
+}
+
+// Each package asks only the fields its profile names, under its own labels (options.PACKAGE_PROFILES).
+// One package per fresh form, so what is on the page is that package's alone.
+async function packageProfiles(page, prefix) {
+  const CASES = [
+    // [search, fields that must show, fields that must not, {field: label}, {field: [select options]}]
+    ['باب خلفي مفصلي لبرادة 3', ['cooler_color', 'w_direction', 'manufacturing_notes'],
+      ['inscription', 'cover_color', 'base_color', 'installation_accessories'], { cooler_color: 'لون الباب' }],
+    ['فلتر دش', ['cooler_color'], ['w_direction', 'inscription', 'manufacturing_notes'],
+      { cooler_color: 'اللون' }, { cooler_color: ['أبيض', 'أسود'] }],
+    ['نبع المزن مدمجة - برادة مياه 3', ['design_version', 'front_design', 'w_direction', 'inscription'], [], {}],
+    ['نبع المزن - 3 صنابير - أبيض', ['front_design', 'w_direction'], ['design_version'], {}],
+    ['سقيا الخير - 3 صنابير - أبيض', ['cover_back', 'inscription', 'installation_accessories'],
+      ['front_design', 'w_direction', 'design_version'], {}],
+    ['لوح خلفي ثابت لبرادة مدمجة', ['cooler_color', 'w_direction', 'design_version', 'inscription'], [], {}],
+  ];
+  const seen = [];
+  for (const [text, must, mustNot, labels = {}, options = {}] of CASES) {
+    await page.goto(`${BASE}/forms/new_sale`);
+    const search = page.locator('#order_lines');
+    await search.waitFor({ timeout: 15000 });
+    await search.fill(text);
+    await page.waitForTimeout(600);
+    const first = page.locator('.fl-suggest__item').first();
+    if (!(await first.count())) { problems.push(`[${prefix}] profiles: nothing matches «${text}»`); continue; }
+    await first.click();
+    await page.waitForTimeout(500);
+    const present = async (name) => (await page.locator(`[id^="order_lines-"][id$="-${name}"]`).count()) > 0;
+    for (const name of must) if (!(await present(name))) problems.push(`[${prefix}] «${text}» does not ask ${name}`);
+    for (const name of mustNot) if (await present(name)) problems.push(`[${prefix}] «${text}» asks ${name}, which it should not`);
+    for (const [name, label] of Object.entries(labels)) {
+      const shownLabel = (await page.locator(`label[for^="order_lines-"][for$="-${name}"]`).first().innerText().catch(() => '')).trim();
+      if (!shownLabel.startsWith(label)) problems.push(`[${prefix}] «${text}» labels ${name} «${shownLabel}», not «${label}»`);
+    }
+    for (const [name, wanted] of Object.entries(options)) {
+      const got = await lineOptions(page, name);
+      if (got.join() !== wanted.join()) problems.push(`[${prefix}] «${text}» offers ${name}: ${got.join(' / ') || 'nothing'}`);
+    }
+    seen.push(text.split(' ').slice(0, 3).join(' '));
+    await shot(page, `${prefix}-profile-${seen.length}`, false);
+  }
+  // The combined سقيا الخير cover colours, which no longer fall through to the plain ones
+  await page.goto(`${BASE}/forms/new_sale`);
+  const search = page.locator('#order_lines');
+  await search.waitFor({ timeout: 15000 });
+  await search.fill('سقيا الخير مدمجة - برادة مياه 3');
+  await page.waitForTimeout(600);
+  await page.locator('.fl-suggest__item').first().click().catch(() => problems.push(`[${prefix}] no combined سقيا الخير to pick`));
+  await page.waitForTimeout(500);
+  const covers = await lineOptions(page, 'cover_color');
+  if (covers.join() !== ['الابيض', 'الاسود', 'الابيض * الابيض', 'الابيض * الذهبى'].join()) {
+    problems.push(`[${prefix}] combined سقيا الخير offers the cover colours ${covers.join(' / ') || 'none'}`);
+  }
+  log(`${prefix} package profiles: ${seen.length} packages checked; combined سقيا covers: ${covers.join(' / ')}`);
 }
 
 // «استكمال» in طلباتي opens the draft in its own form, and so does the bare URL of that page:
@@ -857,6 +927,7 @@ try {
     await packagesOrProducts(page, prefix);
     await maintenancePrices(page, prefix);
     await installationWork(page, prefix);
+    await packageProfiles(page, prefix);
     await techWorks(page, prefix);
     await discountOrder(page, prefix);
     await page.context().close();
