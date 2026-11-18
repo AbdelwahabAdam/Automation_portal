@@ -40,6 +40,14 @@ CASH_PAYMENT = {"field": "payment_method", "equals": CASH}
 # as «الألوان المتاحة», exactly as staff write it there). The first family that matches wins; a package
 # that matches none offers the field's own default_colors instead (PLATE_COLORS).
 PACKAGE_COLOR_FAMILIES = [
+    # حفظ الطعام (FLP-023/024): the six plain colours every package without a list of its own gets,
+    # and «اسود في بني», which these covers alone come in. First, so no cooler family above takes
+    # them by the «سقيا الخير»/«نبع المزن» in their names. Written as "": Daftra's list has no entry
+    # for these covers, and an empty one leaves the work order to say it in words, as it did before.
+    {"match": ["حفظ الطعام"], "exclude": [], "colors": [
+        *((color, "") for color in PLATE_COLORS),
+        ("اسود في بني", ""),
+    ]},
     # «مدمج» without its last letter: the catalogue was imported as «مدمجة» (jobs/import_catalog.py) and
     # the live names are written «مدمجه», so the word in full matched neither one or the other and the
     # combined packages fell through to the plain سقيا الخير colours below.

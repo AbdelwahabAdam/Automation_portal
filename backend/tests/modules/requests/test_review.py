@@ -37,6 +37,24 @@ def approve(client, user, request_id, revision=1):
     return client.post(f"/api/review/requests/{request_id}/approve", json={"revision": revision}, headers=auth(user))
 
 
+def test_a_back_door_order_starts_its_work_order_in_ابواب_and_a_cooler_order_in_its_emirates(client, db, fake_daftra,
+                                                                                    sales, manager):
+    seed.catalog(db)
+    door = [{**line, "group_name": "باب خلفي مفصلي لبرادة 3 صنابير"} for line in seed.package_lines()]
+    door_request = submitted_sale(client, db, sales, order_lines=door)
+    cooler_request = submitted_sale(client, db, sales)
+    assert approve(client, manager, door_request).status_code == 200
+    assert approve(client, manager, cooler_request).status_code == 200
+    door_order, cooler_order = (posted["WorkOrder"] for posted in fake_daftra.posted("/api2/work_orders.json"))
+    assert door_order["follow_up_status_id"] == settings.daftra_work_order_door_status_id
+    # The seed's cooler is in العين: «نبع المزن + سقيا الخير العين»
+    assert cooler_order["follow_up_status_id"] == settings.daftra_work_order_cooler_status_by_emirate["العين"] == 2
+    # And the save of its custom fields right after sends it back, rather than dropping it
+    edit = [body for body in work_order_edits(fake_daftra) if body["WorkOrder"]["number"] ==
+            fake_daftra.work_orders[db.get(Request, door_request).daftra_work_order_id]["number"]][-1]
+    assert edit["WorkOrder"]["follow_up_status_id"] == settings.daftra_work_order_door_status_id
+
+
 def test_any_number_of_installation_days_sets_the_work_orders_due_date(client, db, fake_daftra, sales, manager):
     seed.catalog(db)
     request_id = submitted_sale(client, db, sales, installation_days="17")

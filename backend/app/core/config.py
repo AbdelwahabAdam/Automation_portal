@@ -56,6 +56,20 @@ class Settings(BaseSettings):
     daftra_client_device_field: str = "test"
     # The اسم الجهاز every new client gets (Nabaa + food cooler); the form does not ask for it
     daftra_default_device_name: str = "N + F"
+    # The work order status (follow_up_status, item_type 8) a work order for a back door starts in:
+    # «ابواب» on our account. Found by name in GET /v2/api/entity/follow_up_status/list/1?page=N.
+    daftra_work_order_door_status_id: int = 107
+    # …and a حفظ الطعام food cooler's (FLP-023/024), whichever cover it has: «برادة طعام بكفر نبع المزن»
+    daftra_work_order_food_cooler_status_id: int = 198
+    # …and the one a نبع المزن or سقيا الخير cooler's work order starts in, by the form's الإمارة (its
+    # own spelling, forms.options.EMIRATES). An emirate not here starts in Daftra's own first status.
+    # As JSON in DAFTRA_WORK_ORDER_COOLER_STATUS_BY_EMIRATE to change it.
+    daftra_work_order_cooler_status_by_emirate: dict[str, int] = {
+        "أبوظبي": 5,        # نبع المزن + سقيا الخير ابوظبي
+        "العين": 2,         # نبع المزن + سقيا الخير العين
+        "دبي": 6,           # نبع المزن + سقيا الخير دبي
+        "رأس الخيمة": 187,  # برادات نبع المزن + سقيا الخير راس الخيمه
+    }
     daftra_client_coordinates_field: str = "coordinates_text"
     # Empty: a map link shared from a phone's own position leaves الإحداثيات to be typed in. Set: Google's
     # Places API is asked where the place it names is, which Google bills per call (clients/location.py).

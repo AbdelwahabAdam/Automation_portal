@@ -3,8 +3,11 @@ the letter is emptied the next time anyone saves the work order in Daftra's own 
 
 from app.modules.form_engine import INSCRIPTIONS
 from app.modules.form_engine.options import PACKAGE_COLOR_FAMILIES
+import pytest
+
+from app.core.config import settings
 from app.modules.invoicing.work_order import (COOLER_ENTRIES, INSCRIPTION_ENTRIES, PLATE_ENTRIES, STAINLESS_ENTRY,
-                                              listed_values)
+                                              listed_values, work_order_status)
 
 # The entries of Daftra's lists, as the account's own form shows them
 PLATE_LIST = {"اللون الابيض", "اللون الاسود", "اللون الدهبي", "اللون الخشبي", "اللون العيناوي", "اللون الازرق"}
@@ -77,3 +80,66 @@ def test_verses_are_written_as_the_list_writes_them():
     for text, entry in INSCRIPTION_ENTRIES.items():
         code = code_of[text]
         assert entry == (f"{code}- {text}" if int(code) >= 100 else f"{code} - {text}")
+
+
+def test_a_food_cooler_in_black_on_brown_gets_a_black_plate_and_its_colours_in_words():
+    """حفظ الطعام's own cover colour. Daftra's الجهاز المطلوب list has no entry for these covers, so
+    the work order says it in words, as it did before; لون اللوحه is the list's black."""
+    food = "باقة برادة حفظ الطعام - غطاء نبع المزن"
+    listed = listed_values({"order_lines": [line(food, cover_color="اسود في بني")]},
+                           {"available_colors": "باقة برادة حفظ الطعام - غطاء نبع المزن – لون الغطاء اسود في بني"})
+    assert listed["plate_color"] == "اللون الاسود" and listed["plate_color"] in PLATE_LIST
+    assert listed["available_colors"] == "باقة برادة حفظ الطعام - غطاء نبع المزن – لون الغطاء اسود في بني"
+    # A plain colour on one is its own plate
+    assert listed_values({"order_lines": [line(food, cover_color="اللون الخشبي")]}, {})["plate_color"] == "اللون الخشبي"
+
+
+def test_an_order_with_a_back_door_starts_its_work_order_in_the_doors_status():
+    doors = settings.daftra_work_order_door_status_id
+    assert doors == 107   # «ابواب» on our account
+    for name in ("باب خلفي جرار لبرادة مدمجة", "باب خلفي مفصلي لبرادة 3 صنابير",
+                 "باب خلفي مفصلي لبرادة 4 صنابير", "باب خلفي مفصلي لبرادة خاصة (Special)"):
+        assert work_order_status({"order_lines": [line(name)]}) == doors, name
+    # With a cooler beside it the order still has a door in it
+    assert work_order_status({"order_lines": [line(NABAA), line("باب خلفي جرار لبرادة مدمجة", group="g2")]}) == doors
+    # A door picked on its own, not as a package, is still a door
+    assert work_order_status({"order_lines": [{"name": "باب خلفي جرار لبرادة مدمجة", "group_id": None}]}) == doors
+    # Anything else starts where Daftra starts it: a cooler, a fixed panel (no door), nothing at all
+    for data in ({"order_lines": [line(NABAA)]}, {"order_lines": [line("لوح خلفي ثابت لبرادة مدمجة")]}, {}):
+        assert work_order_status(data) is None
+
+
+@pytest.mark.parametrize("emirate, status", [("أبوظبي", 5), ("العين", 2), ("دبي", 6), ("رأس الخيمة", 187)])
+def test_a_cooler_order_starts_in_its_emirates_status(emirate, status):
+    for name in (NABAA, "باقة برادة سقيا الخير - 3 صنابير - أبيض", "باقة نبع المزن مدمجه - برادة مياه 3 صنابير وبرادة طعام - أبيض"):
+        assert work_order_status({"emirate": emirate, "order_lines": [line(name)]}) == status, (emirate, name)
+
+
+def test_a_cooler_in_an_emirate_with_no_status_of_its_own_starts_where_daftra_starts_it():
+    for emirate in ("الشارقة", "عجمان", "أم القيوين", "الفجيرة", "", None):
+        assert work_order_status({"emirate": emirate, "order_lines": [line(NABAA)]}) is None, emirate
+
+
+def test_a_door_beats_a_cooler_and_nothing_else_is_a_cooler():
+    doors = settings.daftra_work_order_door_status_id
+    # A door in the order puts it in «ابواب», wherever it is
+    assert work_order_status({"emirate": "دبي", "order_lines": [line(NABAA), line("باب خلفي جرار لبرادة مدمجة", group="g2")]}) == doors
+    # Stainless (even named «سقيا الخير ستانلس ستيل», as the import named it), filters, a panel: none
+    for name in ("باقة برادة سقيا الخير ستانلس ستيل - 3 صنابير", "باقة برادة ستانلس ستيل - 3 صنابير",
+                 "باقة جهاز تنقية RO VIB - سعة 100 GPD", "لوح خلفي ثابت لبرادة مدمجة"):
+        assert work_order_status({"emirate": "دبي", "order_lines": [line(name)]}) is None, name
+
+
+def test_a_food_cooler_starts_in_its_own_status_whatever_its_cover_and_emirate():
+    food = settings.daftra_work_order_food_cooler_status_id
+    assert food == 198   # «برادة طعام بكفر نبع المزن»
+    for name in ("باقة برادة حفظ الطعام - غطاء سقيا الخير", "باقة برادة حفظ الطعام - غطاء نبع المزن"):
+        for emirate in ("أبوظبي", "العين", "دبي", "رأس الخيمة", "الشارقة", None):
+            assert work_order_status({"emirate": emirate, "order_lines": [line(name)]}) == food, (name, emirate)
+    # A combined cooler has a food cooler in it, but is not one of these: its emirate's, as before
+    combined = "باقة نبع المزن مدمجه - برادة مياه 3 صنابير وبرادة طعام - أبيض"
+    assert work_order_status({"emirate": "دبي", "order_lines": [line(combined)]}) == 6
+    # Beside a water cooler it is still a food cooler order; beside a door, the door decides
+    assert work_order_status({"emirate": "دبي", "order_lines": [line(NABAA), line("باقة برادة حفظ الطعام - غطاء نبع المزن", group="g2")]}) == food
+    assert work_order_status({"emirate": "دبي", "order_lines": [line("باقة برادة حفظ الطعام - غطاء نبع المزن"),
+                                                               line("باب خلفي جرار لبرادة مدمجة", group="g2")]}) == settings.daftra_work_order_door_status_id

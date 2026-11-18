@@ -205,3 +205,21 @@ def test_a_combined_suqya_line_takes_a_combined_colour_and_refuses_a_plain_one()
     assert errors == {} and clean["order_lines"][0]["details"]["cover_color"] == "الابيض * الذهبى"
     _, refused = validate(named(SUQYA_COMBINED, cover_color="الابيض * خشابي مقاس طبيعي"))
     assert refused["order_lines"]["lines"]["0"]["cover_color"] == "اختر من القائمة"
+
+
+# ---------- the food coolers' own cover colour ----------
+
+def test_only_the_food_coolers_offer_black_on_brown_beside_the_six_plain_colours():
+    from app.modules.form_engine import PLATE_COLORS
+    for name in (FOOD_SUQYA, FOOD_NABA):
+        assert [shown for shown, _ in package_colors(name)] == [*PLATE_COLORS, "اسود في بني"], name
+    for name in (SUQYA, SUQYA_COMBINED, NABA, NABA_COMBINED, STAINLESS, DOORS[0], PANELS[0], SHOWER):
+        assert "اسود في بني" not in [shown for shown, _ in package_colors(name)], name
+
+
+def test_a_food_cooler_line_takes_black_on_brown():
+    clean, errors = validate(named(FOOD_NABA, cover_color="اسود في بني"))
+    assert errors == {} and clean["order_lines"][0]["details"]["cover_color"] == "اسود في بني"
+    # And a cooler's own family colour is not one of a food cooler's
+    _, refused = validate(named(FOOD_NABA, cover_color="البني والأسود"))
+    assert refused["order_lines"]["lines"]["0"]["cover_color"] == "اختر من القائمة"

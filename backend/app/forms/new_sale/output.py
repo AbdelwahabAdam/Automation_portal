@@ -82,7 +82,8 @@ def work_order(ctx):
     return WorkOrder(
         title=made.title,                             # what and where; the client's code is added
         days=int(d.get("installation_days") or 20),   # due this many days after approval
-        description=made.description,                 # ملاحظات, then رقم مسؤول اخر
+        description=made.description,
+        status=made.status,                           # «ابواب», or the cooler's by الإمارة, else Daftra's own                 # ملاحظات, then رقم مسؤول اخر
         fields={
             "installation_accessories": made.fields["installation_accessories"],
             "product_image": made.fields["product_image"],

@@ -95,6 +95,7 @@ def work_order(ctx):
         title=made.title,
         days=int(d.get("installation_days") or 20),   # asked by the action, and kept on the request
         description=made.description,
+        status=made.status,                           # «ابواب», or the cooler's by الإمارة, else Daftra's own
         fields={
             "installation_accessories": made.fields["installation_accessories"],
             "product_image": made.fields["product_image"],

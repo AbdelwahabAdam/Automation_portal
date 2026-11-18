@@ -83,6 +83,10 @@ PLATE_ENTRIES = {
     "الرصاصي والأسود": BLACK, "الأبيض والذهبي لامع": GOLD, "الأبيض والعيناوي": AINAWI, "الأبيض * الابيض": WHITE,
     "الرصاصي* الذهبي مط": GOLD, "البني * الذهبي مط": GOLD, "الأبيض *  اللون الاسود": BLACK, "الرصاصي* الخشبي": WOOD,
     "6 ولف ابيض": WHITE,
+    # حفظ الطعام's covers: the six plain colours are the plate list's own entries, so each is its own
+    # plate; «اسود في بني» is black on brown, a black plate, as «البني والأسود» is
+    **{color: color for color in (WHITE, BLACK, GOLD, WOOD, AINAWI, "اللون الازرق")},
+    "اسود في بني": BLACK,
 }
 # The list writes a verse with its code: «001 - …», and from 100 on «104- …»
 INSCRIPTION_ENTRIES = {text: f"{code}- {text}" if int(code) >= 100 else f"{code} - {text}" for code, text in INSCRIPTIONS}
@@ -533,6 +537,29 @@ def find_work_order(request, invoice: dict, db: Session, title: str | None = Non
     return None
 
 
+def work_order_status(data: dict) -> int | None:
+    """The حالة an installation's work order starts in, so Daftra sorts it where the floor looks:
+
+    - «ابواب» for an order with a back door in it (FLP-036..039, «باب خلفي …»), whatever else is in it
+    - «برادة طعام بكفر نبع المزن» for one with a حفظ الطعام food cooler (FLP-023/024), whichever cover
+      it has — before the next rule, which the «غطاء نبع المزن / سقيا الخير» in their names would match
+    - for one with a نبع المزن or سقيا الخير cooler, its الإمارة's own: «نبع المزن + سقيا الخير
+      ابوظبي / العين / دبي» or «برادات … راس الخيمه»
+    - otherwise None — Daftra's own first one. So is a cooler in an emirate with no status of its own.
+
+    Matched on the package's name, as the package profiles are (form_engine.options). The «لوح خلفي»
+    panels are not doors, and the stainless coolers are not سقيا الخير whatever their name says.
+    """
+    names = [squash(line.get("group_name") or line.get("name")) for line in data.get("order_lines") or []]
+    if any("باب خلفي" in name for name in names):
+        return settings.daftra_work_order_door_status_id
+    if any("حفظ الطعام" in name for name in names):
+        return settings.daftra_work_order_food_cooler_status_id
+    if any(("نبع المزن" in name or "سقيا الخير" in name) and "ستانلس" not in name for name in names):
+        return settings.daftra_work_order_cooler_status_by_emirate.get(squash(data.get("emirate")))
+    return None
+
+
 def installation_work_order(request, db: Session) -> SimpleNamespace:
     """What a cooler's installation work order is made from, worked out from the order lines as
     the floor writes them: .title (what and where), .description (ملاحظات, رقم مسؤول اخر), .fields
@@ -540,7 +567,8 @@ def installation_work_order(request, db: Session) -> SimpleNamespace:
     them). A form's work_order() takes what it wants of these, and may change any of it."""
     printed = work_order_values(request, db)
     return SimpleNamespace(title=work_order_heading(request.data), description=work_order_description(request),
-                           fields={**printed, **listed_values(request.data, printed)}, printed=printed)
+                           fields={**printed, **listed_values(request.data, printed)}, printed=printed,
+                           status=work_order_status(request.data))
 
 
 def make_work_order(request, invoice: dict, reviewer, db: Session, doc: WorkOrder):
@@ -555,6 +583,8 @@ def make_work_order(request, invoice: dict, reviewer, db: Session, doc: WorkOrde
             "title": title, "client_id": request.daftra_client_id,
             "start_date": start.isoformat(), "delivery_date": (start + timedelta(days=int(doc.days))).isoformat(),
             "description": doc.description,
+            # Its starting حالة, when the form gives one; every later save sends back whatever it holds
+            **({"follow_up_status_id": int(doc.status)} if doc.status else {}),
         }}))
     row = daftra.get(f"work_orders/{request.daftra_work_order_id}.json").get("data", {}).get("WorkOrder", {})
     request.save_document("work_order", request.daftra_work_order_id, row.get("number") or "")

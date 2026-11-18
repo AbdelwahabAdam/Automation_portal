@@ -167,6 +167,8 @@ class WorkOrder:
     fields: its custom fields by name (work_order.WORK_ORDER_FIELDS), as Daftra's lists spell
     them. One left out is sent blank: Daftra empties any field a save leaves out.
     printed: the same values as the portal's PDF of it prints them.
+    status: the work order's حالة (Daftra's follow_up_status_id) it starts in, or None for Daftra's
+    own first one. Only when it is made: a حالة someone has moved it to since is never undone.
     """
 
     title: str
@@ -174,6 +176,7 @@ class WorkOrder:
     description: str
     fields: dict
     printed: dict
+    status: int | None = None
 
 
 __all__ = ["ClientRecord", "Estimate", "ExistingInvoice", "Invoice", "InvoiceEmail", "Receipt", "WorkOrder"]
