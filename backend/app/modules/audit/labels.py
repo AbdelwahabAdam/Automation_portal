@@ -37,6 +37,9 @@ ACTIONS = {
     "request.delete_by_reviewer": "حذف طلب (مراجعة)",
     "request.approve": "اعتماد طلب",
     "request.daftra_failed": "تعذر إنشاء الفاتورة في دفترة",
+    # A correction made by hand on the server: the request pointed at a payment since deleted in
+    # Daftra (request 204, whose transfer was recorded twice), and was given the one that stayed
+    "request.payment_relinked": "ربط الطلب بسند القبض الباقي في دفترة",
     "request.return": "إعادة طلب للتعديل",
     # A form's actions after approval (FormSpec.actions), logged as request.action.<key>
     "request.action.create_work_order": "إنشاء أمر الشغل لطلب بانتظار الدفع",

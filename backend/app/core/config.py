@@ -56,6 +56,14 @@ class Settings(BaseSettings):
     daftra_client_device_field: str = "test"
     # The اسم الجهاز every new client gets (Nabaa + food cooler); the form does not ask for it
     daftra_default_device_name: str = "N + F"
+    # The staff member Daftra records as the maker of whatever the API makes without one of its own.
+    # A payment made through the API always carries it: Daftra drops the staff_id (and the notes)
+    # the portal sends with a payment, as every payment it made on the live account shows.
+    daftra_api_staff_id: int = -3
+    # How long an approval waits before sending a payment again that Daftra left unanswered, unless
+    # the payment shows up on the invoice first. Daftra recorded one about a minute after it was
+    # sent, well after the portal had stopped waiting (TIMEOUT_SECONDS), so twice that. 0: no wait.
+    daftra_unanswered_payment_wait_seconds: int = 120
     # The work order status (follow_up_status, item_type 8) a work order for a back door starts in:
     # «ابواب» on our account. Found by name in GET /v2/api/entity/follow_up_status/list/1?page=N.
     daftra_work_order_door_status_id: int = 107

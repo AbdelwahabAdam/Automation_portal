@@ -25,6 +25,9 @@ from pathlib import Path
 from ...core.text import UAE
 from .errors import DaftraError, NotFound
 
+# The staff member Daftra names as the maker of what the API makes (settings.daftra_api_staff_id)
+API_STAFF_ID = -3
+
 # Ids a local fake hands out. Far above anything the live account holds, so a fake id that
 # reached it would find nothing rather than a real record.
 FIRST_LOCAL_ID = 900000001
@@ -88,6 +91,10 @@ class FakeDaftra:
         self.next_client_number = FIRST_LOCAL_CLIENT_NUMBER
         # Set to a path prefix (e.g. "/api2/invoice_payments.json") to make that call fail once
         self.fail_once = None
+        # False, as the live account is: a payment keeps neither the notes nor the staff member it
+        # was sent with — its notes come back empty and the API is its maker (staff -3). So nothing
+        # written in a payment's notes can be what finds it again. True: an account that keeps both.
+        self.keeps_payment_notes = False
         if self.store:
             self.treasuries = [dict(row) for row in LOCAL_TREASURIES]
             self.load()
@@ -466,7 +473,13 @@ class FakeDaftra:
                 # The preview a client opens without logging in, as Daftra answers it
                 "invoice_html_url": f"https://fake.daftra.test/invoices/preview/{invoice['id']}?hash=x",
                 "Client": {"client_number": client.get("client_number", "")},
-                "InvoicePayment": [{"id": str(p["id"]), "notes": p["notes"]} for p in invoice["payments"]],
+                # A payment as the invoice carries it: the fields Daftra answers with that the
+                # portal reads (invoicing.invoice.same_payment), its amount as text
+                "InvoicePayment": [{"id": str(p["id"]), "code": p.get("code"), "notes": p.get("notes"),
+                                    "amount": f"{float(p['amount']):g}", "payment_method": p.get("payment_method"),
+                                    "transaction_id": p.get("transaction_id"), "staff_id": str(p.get("staff_id")),
+                                    "status": p.get("status", "1"), "created": p.get("created")}
+                                   for p in invoice["payments"]],
                 "InvoiceDocument": [{"id": str(i + 1), "invoice_id": invoice["id"], "document_id": str(d)}
                                     for i, d in enumerate(invoice["documents"])]}
 
@@ -548,7 +561,10 @@ class FakeDaftra:
     def create_payment(self, params, body):
         payment_id = self._new_id()
         fields = body["InvoicePayment"]
-        payment = {**fields, "id": payment_id, "code": f"R{payment_id}"}
+        payment = {**fields, "id": payment_id, "code": f"R{payment_id}", "status": "1",
+                   "created": datetime.now(UAE).strftime("%Y-%m-%d %H:%M:%S")}
+        if not self.keeps_payment_notes:
+            payment.update(notes=None, staff_id=API_STAFF_ID)
         self.payments[payment_id] = payment
         self.invoices[int(fields["invoice_id"])]["payments"].append(payment)
         return {"id": payment_id}

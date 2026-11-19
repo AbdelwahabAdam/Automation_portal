@@ -16,7 +16,7 @@ from app.modules.models import Attachment, Client, Product, Request
 
 from ... import seed
 from ...conftest import VISIBLE_FORMS, auth, make_user, may_fill, may_review
-from ...seed import TODAY, create, submitted_sale, upload
+from ...seed import TODAY, create, payment_wait_is_over, submitted_sale, upload
 
 UAE = timezone(timedelta(hours=4))
 # The custom fields a work order is saved with: the ids we know, and Daftra's own flag
@@ -541,6 +541,102 @@ def test_a_work_order_whose_answer_was_lost_is_found_again_not_made_twice(client
     assert db.get(Request, request_id).daftra_work_order_id == made
 
 
+def test_a_payment_whose_answer_was_lost_is_found_again_not_made_twice(client, db, fake_daftra, sales, manager,
+                                                                       monkeypatch):
+    """Request 204, invoice 06651. Daftra took longer than the portal waits and recorded the payment
+    all the same; the next try of the approval recorded it again — two receipts for one transfer.
+    Daftra keeps no notes on a payment, so the marker never found it: it is known by its amount,
+    method and transfer number."""
+    seed.catalog(db)
+    request_id = submitted_sale(client, db, sales, create_work_order="لا", installation_days="")
+    answer_lost_once(fake_daftra, monkeypatch, "/api2/invoice_payments.json")
+    assert approve(client, manager, request_id).status_code == 502
+    request = db.get(Request, request_id)
+    db.refresh(request)
+    assert request.daftra_payment_id is None
+    # Not «تعذر الإنشاء»: the manager is told it may be there, and to wait before approving again
+    assert "انتظر دقيقتين" in request.daftra_error and "timed out" in request.daftra_error
+    [made] = fake_daftra.payments
+    # As the live account leaves it: no notes, and the API as its maker, whatever was sent
+    assert fake_daftra.payments[made]["notes"] is None and fake_daftra.payments[made]["staff_id"] == -3
+
+    # It is on the invoice already, so it is taken at once: the wait is only for one not there yet
+    assert approve(client, manager, request_id).status_code == 200
+    assert len(fake_daftra.posted("/api2/invoice_payments.json")) == 1
+    db.refresh(request)
+    assert (request.daftra_payment_id, request.daftra_receipt_no) == (made, f"R{made}")
+    assert request.status == "approved" and request.payment_unanswered_at is None
+
+
+def test_a_payment_still_on_its_way_is_not_sent_again_while_it_is_waited_for(client, db, fake_daftra, sales,
+                                                                             manager, monkeypatch):
+    """What request 204 needed as well: Daftra recorded its payment about a minute after it was
+    sent. An approval tried again inside that minute sees no payment on the invoice — and must
+    not send another."""
+    seed.catalog(db)
+    request_id = submitted_sale(client, db, sales, create_work_order="لا", installation_days="")
+    answer_lost_once(fake_daftra, monkeypatch, "/api2/invoice_payments.json")
+    assert approve(client, manager, request_id).status_code == 502
+    request = db.get(Request, request_id)
+    db.refresh(request)
+    asked_at = request.payment_unanswered_at
+    assert asked_at is not None
+    # Daftra has it, and does not show it on the invoice yet
+    invoice = fake_daftra.invoices[request.daftra_invoice_id]
+    on_its_way, invoice["payments"] = invoice["payments"], []
+
+    refused = approve(client, manager, request_id)
+    assert refused.status_code == 409
+    db.refresh(request)
+    assert "ثانية" in request.daftra_error and "لن تُسجَّل الدفعة مرتين" in request.daftra_error
+    assert len(fake_daftra.posted("/api2/invoice_payments.json")) == 1
+    # Trying again does not start the wait over
+    assert request.payment_unanswered_at == asked_at and request.status == "submitted"
+
+    # It shows up: taken at once, with the wait not yet over
+    invoice["payments"] = on_its_way
+    assert approve(client, manager, request_id).status_code == 200
+    assert len(fake_daftra.posted("/api2/invoice_payments.json")) == 1
+    db.refresh(request)
+    assert request.daftra_payment_id == on_its_way[0]["id"] and request.payment_unanswered_at is None
+
+
+def test_a_payment_daftra_never_recorded_is_sent_again_once_the_wait_is_over(client, db, fake_daftra, sales, manager):
+    seed.catalog(db)
+    request_id = submitted_sale(client, db, sales, create_work_order="لا", installation_days="")
+    fake_daftra.fail_once = "/api2/invoice_payments.json"     # fails, and records nothing
+    assert approve(client, manager, request_id).status_code == 502
+    assert approve(client, manager, request_id).status_code == 409
+    assert fake_daftra.posted("/api2/invoice_payments.json") == [] and len(fake_daftra.failed) == 1
+
+    payment_wait_is_over(db, request_id)
+    assert approve(client, manager, request_id).status_code == 200
+    assert len(fake_daftra.posted("/api2/invoice_payments.json")) == 1
+    request = db.get(Request, request_id)
+    db.refresh(request)
+    assert request.status == "approved" and request.payment_unanswered_at is None
+
+
+def test_a_payment_daftra_refuses_is_said_as_refused(client, db, fake_daftra, sales, manager, monkeypatch):
+    """HTTP 4xx is Daftra saying no: nothing was recorded, so there is nothing to wait for."""
+    seed.catalog(db)
+    request_id = submitted_sale(client, db, sales, create_work_order="لا", installation_days="")
+    real = type(fake_daftra).__call__
+
+    def refuse(self, method, called, params=None, body=None):
+        if method == "POST" and called == "/api2/invoice_payments.json":
+            raise daftra.DaftraError("HTTP 400: Bad Request")
+        return real(self, method, called, params, body)
+
+    monkeypatch.setattr(type(fake_daftra), "__call__", refuse)
+    assert approve(client, manager, request_id).status_code == 502
+    request = db.get(Request, request_id)
+    db.refresh(request)
+    assert "تعذر الإنشاء في دفترة" in request.daftra_error and "انتظر" not in request.daftra_error
+    # …and nothing is waited for: the next try sends it again at once
+    assert request.payment_unanswered_at is None
+
+
 def test_a_like_work_order_another_request_holds_is_not_taken(client, db, fake_daftra, sales, manager):
     """Two sales of the same package to one client: the second gets its own work order."""
     seed.catalog(db)
@@ -563,6 +659,8 @@ def test_a_failed_step_is_resumed_without_duplicates(client, db, fake_daftra, sa
     request = db.get(Request, request_id)
     assert request.status == "submitted" and request.daftra_invoice_id and "simulated failure" in request.daftra_error
 
+    # A payment Daftra failed on may still have been recorded, so the next try waits for it first
+    payment_wait_is_over(db, request_id)
     assert approve(client, manager, request_id).status_code == 200
     assert len(fake_daftra.posted("/api2/clients.json")) == 1
     assert len(fake_daftra.posted("/api2/invoices.json")) == 1
@@ -637,6 +735,7 @@ def test_a_lost_invoice_id_is_found_again_by_its_marker(client, db, fake_daftra,
     request = db.get(Request, request_id)
     request.forget_document("invoice")
     db.commit()
+    payment_wait_is_over(db, request_id)
     assert approve(client, manager, request_id).status_code == 200
     assert len(fake_daftra.posted("/api2/invoices.json")) == 1
 
@@ -819,6 +918,46 @@ def test_balance_payment(client, db, fake_daftra, sales, manager):
     assert payment["InvoicePayment"]["payment_method"] == "cash"
     assert payment["InvoicePayment"]["amount"] == 500.0
     assert fake_daftra.posted("/api2/invoices.json") == []
+
+
+def submitted_balance(client, db, sales, invoice_id) -> int:
+    request_id = create(client, sales, balance_data(invoice_id), form_type="balance_payment").json()["id"]
+    upload(client, sales, request_id, "payment_proof")
+    sent = client.put(f"/api/requests/{request_id}", json={"data": balance_data(invoice_id), "action": "submit"},
+                      headers=auth(sales))
+    assert sent.status_code == 200, sent.json()
+    return request_id
+
+
+def test_two_requests_paying_the_same_on_one_invoice_each_get_a_payment_of_their_own(client, db, fake_daftra,
+                                                                                    sales, manager):
+    """The same amount, method and number twice is two instalments when two requests say so: a
+    payment another request holds is never taken for this one's."""
+    seed.existing_client(db)
+    fake_daftra.add_client(4053, "0509999999")
+    invoice_id = fake_daftra.add_invoice(4053, total=5000, paid=1000)
+    first, second = submitted_balance(client, db, sales, invoice_id), submitted_balance(client, db, sales, invoice_id)
+    assert approve(client, manager, first).status_code == 200
+    assert approve(client, manager, second).status_code == 200
+    assert len(fake_daftra.posted("/api2/invoice_payments.json")) == 2
+    assert db.get(Request, first).daftra_payment_id != db.get(Request, second).daftra_payment_id
+
+
+def test_a_payment_made_by_hand_in_daftra_is_not_taken_for_the_requests(client, db, fake_daftra, sales, manager):
+    """An accountant recorded the same amount, method and number themselves. It is theirs: who made
+    a payment is part of what is matched, so the request still records its own."""
+    seed.existing_client(db)
+    fake_daftra.add_client(4053, "0509999999")
+    invoice_id = fake_daftra.add_invoice(4053, total=5000, paid=1000)
+    request_id = submitted_balance(client, db, sales, invoice_id)
+    fake_daftra.keeps_payment_notes = True     # so this one keeps the maker it is given
+    by_hand = fake_daftra("POST", "/api2/invoice_payments.json", None, {"InvoicePayment": {
+        "invoice_id": invoice_id, "amount": 500.0, "payment_method": "cash", "transaction_id": "SND-1",
+        "staff_id": 38, "notes": ""}})["id"]
+    fake_daftra.keeps_payment_notes = False
+    assert approve(client, manager, request_id).status_code == 200
+    assert len(fake_daftra.posted("/api2/invoice_payments.json")) == 2
+    assert db.get(Request, request_id).daftra_payment_id != by_hand
 
 
 def test_the_receipts_receiver_is_the_salesperson_not_the_manager(client, db, fake_daftra, sales, manager, monkeypatch):

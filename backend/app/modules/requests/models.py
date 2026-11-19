@@ -46,6 +46,10 @@ class Request(Base):
     # These two are about the approval, not about one document, so they stay on the request
     daftra_error: Mapped[str | None] = mapped_column(Text)
     daftra_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # When Daftra last left this request's payment unanswered: it may still record it, so the next
+    # try of the approval waits rather than pay again (invoicing.invoice.make_payment). Emptied
+    # once the payment is known.
+    payment_unanswered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # The terms its invoice printed (modules/terms), and their name and version as printed: kept
     # as written, so it still reads right if the term is ever gone
     printed_terms_id: Mapped[int | None] = mapped_column(ForeignKey("terms.id", ondelete="SET NULL"), index=True)

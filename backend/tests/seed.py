@@ -4,12 +4,13 @@ and building a request through the API.
 It is the one place for these, so a test file never imports another test file.
 """
 
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 from sqlalchemy import text
 
 from app.core.text import uae_today
-from app.modules.models import Address, Client, ClientCategory, Package, PackageItem, Product
+from app.modules.models import Address, Client, ClientCategory, Package, PackageItem, Product, Request
 
 from .conftest import auth
 
@@ -151,3 +152,13 @@ def submitted_sale(client, db, user, **overrides) -> int:
                           headers=auth(user))
     assert response.status_code == 200, response.json()
     return request_id
+
+
+def payment_wait_is_over(db, request_id: int):
+    """As though the wait after a payment Daftra left unanswered had passed: an approval tried
+    again before then is refused, so that a payment still on its way is not made twice."""
+    request = db.get(Request, request_id)
+    db.refresh(request)
+    assert request.payment_unanswered_at is not None, "this request is not waiting for a payment"
+    request.payment_unanswered_at = datetime.now(timezone.utc) - timedelta(minutes=10)
+    db.commit()

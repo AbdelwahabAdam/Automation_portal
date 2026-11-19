@@ -55,7 +55,7 @@ def run(ctx, documents: list[Callable]) -> dict:
     def close(receipt: Receipt | None):
         nonlocal open_invoice, existing
         if existing is not None and existing.refuse_overpaying and receipt is not None:
-            refuse_overpaying(request, invoice, receipt)
+            refuse_overpaying(request, invoice, receipt, db)
         summary.update(finish_invoice(request, invoice, receipt, db))
         open_invoice, existing = False, None
 
@@ -125,11 +125,12 @@ def take_invoice(request, doc: ExistingInvoice) -> dict:
     return invoice
 
 
-def refuse_overpaying(request, invoice: dict, receipt: Receipt):
+def refuse_overpaying(request, invoice: dict, receipt: Receipt, db=None):
     """Not more than the invoice still owes — unless this request has already paid it, when what
     is left is what its own payment left."""
     unpaid = money(invoice.get("summary_unpaid"))
-    if request.daftra_payment_id is None and not payment_of(request, invoice) and receipt.paid > unpaid + TOTAL_TOLERANCE:
+    if (request.daftra_payment_id is None and not payment_of(request, invoice, receipt, db)
+            and receipt.paid > unpaid + TOTAL_TOLERANCE):
         raise SyncError(f"المبلغ المدفوع {receipt.paid} أكبر من المتبقي على الفاتورة {request.daftra_invoice_no} "
                         f"({unpaid}). أعد الطلب للموظف ليصحح المبلغ.")
 

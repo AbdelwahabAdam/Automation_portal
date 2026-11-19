@@ -1,11 +1,14 @@
 """The invoice with its lines, the receipt (سند قبض) for what was paid, and both PDFs."""
 
+import math
+from datetime import datetime, timezone
 from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from . import printouts
+from .. import requests
 from ...core.errors import SyncError
 from ...integrations import daftra
 from ..clients import address_fields
@@ -216,25 +219,91 @@ def send_payment_proof(request, invoice: dict) -> bool:
     return sent
 
 
-def payment_of(request, invoice: dict) -> int | None:
-    """The payment this request already made on the invoice, found by the marker in its notes.
+def same_payment(payment: dict, request, receipt: Receipt) -> bool:
+    """Whether a payment already on the invoice is the one this receipt would make, going by what
+    Daftra keeps of a payment the API made: its amount, its method, its transfer number, that the
+    API made it (or the receipt's own staff member, should Daftra ever keep the one it is sent),
+    and that it is not older than the request. A payment made by hand in Daftra is never taken for
+    the portal's own: who made it is part of what is matched."""
+    return (str(payment.get("status") or "1") == "1"
+            and money(payment.get("amount")) == receipt.paid
+            and (payment.get("payment_method") or "") == (receipt.method_key or "")
+            and str(payment.get("transaction_id") or "").strip() == str(receipt.reference or "").strip()
+            and str(payment.get("staff_id")) in {str(settings.daftra_api_staff_id), str(receipt.received_by)}
+            and not made_before_the_request(request, payment.get("created")))
 
-    The marker is the first line: a payment with no invoice of its own to carry them (طلب تسديد
-    مبلغ متبقي) holds the salesperson's ملاحظات on the lines under it.
+
+def payment_of(request, invoice: dict, receipt: Receipt | None = None, db: Session | None = None) -> int | None:
+    """The payment this request already made on the invoice, when an earlier try of the approval
+    got that far and Daftra's answer never came back, so the request does not hold it.
+
+    By the marker in its notes, where Daftra kept it (its first line: a payment with no invoice of
+    its own to carry them, طلب تسديد مبلغ متبقي, holds the salesperson's ملاحظات under it). Our
+    account does not keep it: every payment the portal made there has empty notes. With the marker
+    alone, a payment whose answer timed out was made a second time on the next try (request 204,
+    invoice 06651: receipts 030226 and 030228 for one transfer).
+
+    So, given the receipt, also by what Daftra does keep (same_payment), and held by no other
+    request: two requests paying the same amount on one invoice each get a payment of their own.
     """
-    return next((int(p["id"]) for p in invoice.get("InvoicePayment") or []
-                 if (p.get("notes") or "").strip().splitlines()[:1] == [marker(request)]), None)
+    payments = invoice.get("InvoicePayment") or []
+    marked = next((int(p["id"]) for p in payments
+                   if (p.get("notes") or "").strip().splitlines()[:1] == [marker(request)]), None)
+    if marked is not None or receipt is None:
+        return marked
+    for payment in payments:
+        if not same_payment(payment, request, receipt):
+            continue
+        holder = requests.document_holder(db, "payment", int(payment["id"])) if db is not None else None
+        if holder in (None, request.id):
+            return int(payment["id"])
+    return None
 
 
-def make_payment(request, invoice: dict, receipt: Receipt):
+def unanswered(error: DaftraError) -> bool:
+    """Whether Daftra may have done what it was asked although no answer came: anything but its own
+    refusal (HTTP 4xx). A timeout, a dropped connection, a 5xx — it has saved a record after each."""
+    return not str(error).startswith("HTTP 4")
+
+
+def seconds_left_to_wait(request) -> int:
+    """How long before a payment Daftra left unanswered may be sent again; 0 when there is nothing
+    to wait for. Counted from when the portal stopped waiting for the answer, not from each try
+    since: trying again does not start the wait over."""
+    sent = request.payment_unanswered_at
+    if sent is None:
+        return 0
+    passed = (datetime.now(timezone.utc) - sent).total_seconds()
+    return max(0, math.ceil(settings.daftra_unanswered_payment_wait_seconds - passed))
+
+
+def wait_in_words(seconds: int) -> str:
+    """The wait as the manager is told it: «دقيقتين» for the usual two minutes."""
+    if seconds == 120:
+        return "دقيقتين"
+    if seconds == 60:
+        return "دقيقة"
+    return f"{seconds} ثانية"
+
+
+def make_payment(request, invoice: dict, receipt: Receipt, db: Session | None = None):
     """The receipt (سند قبض) against the request's invoice, made once.
 
     receipt.notes: for a form whose only record in Daftra is this payment, so its ملاحظات has a
-    home. The marker stays the first line, which is what finds the payment again."""
-    existing = payment_of(request, invoice)
+    home. The marker stays the first line, which finds the payment again where Daftra keeps it;
+    where it does not, payment_of knows the payment by its amount, method and transfer number."""
+    existing = payment_of(request, invoice, receipt, db)
     if existing:
         request.save_document("payment", existing)
     else:
+        # Sent before and left unanswered: Daftra may be recording it still, and it is not on the
+        # invoice yet. Nothing is sent again until it has had its time; once it shows up, the
+        # check above takes it at once, however little of the wait has gone.
+        left = seconds_left_to_wait(request)
+        if left > 0:
+            raise SyncError(
+                "أُرسل طلب تسجيل الدفعة إلى دفترة ولم يصل ردها، وقد تظهر الدفعة على الفاتورة خلال لحظات. "
+                f"انتظر {left} ثانية ثم اعتمد الطلب مرة أخرى؛ لن تُسجَّل الدفعة مرتين.")
         fields = {
             "invoice_id": request.daftra_invoice_id, "amount": float(receipt.paid),
             "payment_method": receipt.method_key, "treasury_id": receipt.treasury, "date": receipt.date,
@@ -244,8 +313,24 @@ def make_payment(request, invoice: dict, receipt: Receipt):
             # request, not the manager approving it. Without one it prints "API", so one is required.
             "staff_id": receipt.received_by,
         }
-        request.save_document("payment",
-                              daftra.create("invoice_payments.json", {"InvoicePayment": fields}))
+        try:
+            made = daftra.create("invoice_payments.json", {"InvoicePayment": fields})
+        except DaftraError as error:
+            if not unanswered(error):
+                raise
+            # Not «تعذر الإنشاء»: Daftra has recorded a payment a minute after the portal stopped
+            # waiting for its answer. Approving again at once would not see it yet and pay twice,
+            # so the time is kept (the failed approval saves it with the request) and the next
+            # try waits for it above.
+            request.payment_unanswered_at = datetime.now(timezone.utc)
+            raise SyncError(
+                "لم يصل رد دفترة على تسجيل الدفعة، وقد تكون سُجّلت فيها. "
+                f"انتظر {wait_in_words(settings.daftra_unanswered_payment_wait_seconds)} ثم اعتمد الطلب مرة "
+                "أخرى: إن كانت الدفعة قد سُجّلت فستتعرف عليها البوابة ولن تكررها. "
+                f"({error})", from_daftra=True) from error
+        request.save_document("payment", made)
+    # Known now, one way or the other: nothing is left to wait for
+    request.payment_unanswered_at = None
     row = daftra.get(f"invoice_payments/{request.daftra_payment_id}.json").get("data", {}).get("InvoicePayment", {})
     request.save_document("payment", request.daftra_payment_id, row.get("code") or "")
 
@@ -275,7 +360,7 @@ def finish_invoice(request, invoice: dict, receipt: Receipt | None, db: Session)
     receipt None: nothing was paid now, so no payment is made and no receipt drawn."""
     paid = receipt.paid if receipt is not None else Decimal(0)
     if paid > 0 and request.daftra_payment_id is None:
-        make_payment(request, invoice, receipt)
+        make_payment(request, invoice, receipt, db)
         invoice = get_invoice(request.daftra_invoice_id)
     # Daftra draws the PDF from the invoice as it stands, so it is taken after the payment: taken
     # before, «مدفوع» reads 0 and «الرصيد المستحق» the whole total, whatever the client just paid

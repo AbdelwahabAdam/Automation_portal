@@ -11,7 +11,7 @@ from app.modules.models import Request, RequestDocument
 
 from ... import seed
 from ...conftest import auth
-from ...seed import submitted_sale
+from ...seed import payment_wait_is_over, submitted_sale
 
 
 def approve(client, user, request_id, revision=1):
@@ -72,6 +72,7 @@ def test_one_of_each_kind_per_request(client, db, fake_daftra, sales, manager):
     db.refresh(request)
     assert {row.kind for row in request.documents} == {"client", "invoice"}
 
+    payment_wait_is_over(db, request_id)
     assert approve(client, manager, request_id).status_code == 200
     db.refresh(request)
     kinds = [row.kind for row in request.documents]
