@@ -130,7 +130,7 @@ def refuse_overpaying(request, invoice: dict, receipt: Receipt, db=None):
     is left is what its own payment left."""
     unpaid = money(invoice.get("summary_unpaid"))
     if (request.daftra_payment_id is None and not payment_of(request, invoice, receipt, db)
-            and receipt.paid > unpaid + TOTAL_TOLERANCE):
+            and receipt.to_invoice > unpaid + TOTAL_TOLERANCE):
         raise SyncError(f"المبلغ المدفوع {receipt.paid} أكبر من المتبقي على الفاتورة {request.daftra_invoice_no} "
                         f"({unpaid}). أعد الطلب للموظف ليصحح المبلغ.")
 

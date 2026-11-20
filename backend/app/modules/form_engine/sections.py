@@ -119,6 +119,16 @@ def percent_discount(label: str = "نسبة الخصم (%)", *, of: str = "subto
     return f("discount_percent", label, "number", min=0, max=100, percent_of=of, amount_field=amount)
 
 
+# ---------- الزيادة عن قيمة الطلب ----------
+
+def overpaid(label: str = "زيادة تُضاف إلى رصيد العميل", *, paid: str = "paid_amount",
+             total: str = "total_amount") -> dict:
+    """What was paid beyond the total: worked out, never typed, and on the form only when there is
+    one (hide_when_zero), so that a slip of the finger in المبلغ المدفوع shows up as a line the
+    salesperson did not expect. Approving puts it on the client in Daftra as their balance."""
+    return f("overpaid_amount", label, "number", money=True, computed=[paid, total], floor=0, hide_when_zero=True)
+
+
 # ---------- عنوان الخدمة ----------
 
 def address(*, category: Switch, area: Switch, emirate: Switch, street: Switch, house: Switch,
@@ -153,7 +163,8 @@ def address(*, category: Switch, area: Switch, emirate: Switch, street: Switch, 
 def amounts(*, subtotal_amount: Switch, total_amount: Switch, discount_label: Switch,
             discount_amount: Switch, discount_percent: Switch, discount_approved_by: Switch, paid_amount: Switch,
             remaining_amount: Switch, remaining_due_date: Switch,
-            must_pay: bool = False, price_default: int | None = None, paid_default: str | None = None,
+            must_pay: bool = False, may_overpay: bool = False,
+            price_default: int | None = None, paid_default: str | None = None,
             labels: dict | None = None, note: str | None = None) -> dict:
     """قيمة الطلب.
 
@@ -171,6 +182,10 @@ def amounts(*, subtotal_amount: Switch, total_amount: Switch, discount_label: Sw
                      (percent_discount below). Only with a subtotal shown — there is nothing else for a
                      percentage to be of. Daftra still gets the amount: an invoice's discount is an amount.
     must_pay: what is paid now must be more than 0.
+    may_overpay: what is paid now may be more than the total. Nothing is then left to pay, and the
+                 rest is shown as «زيادة تُضاف إلى رصيد العميل» (overpaid_amount, there only when
+                 there is one): approving records it in Daftra as the client's own balance, not on
+                 the invoice. Without it, paying more than the total is refused.
     """
     labels = _labelled(labels, {"subtotal_amount", "total_amount", "discount_label", "discount_amount",
                                 "discount_percent", "discount_approved_by", "paid_amount", "remaining_amount",
@@ -224,12 +239,21 @@ def amounts(*, subtotal_amount: Switch, total_amount: Switch, discount_label: Sw
     due = f("remaining_due_date", labels.get(
         "remaining_due_date", "موعد سداد المتبقي (قسط اتفاقية التقسيط)" if instalment else "موعد سداد المتبقي، إن وجد"),
         "date")
+    left = {"floor": 0} if may_overpay else {"negative_message": "المبلغ المدفوع أكبر من قيمة الطلب"}
     remaining = f("remaining_amount", labels.get("remaining_amount", "المبلغ المتبقي"), "number", money=True,
-                  computed=["total_amount", "paid_amount"], negative_message="المبلغ المدفوع أكبر من قيمة الطلب")
+                  computed=["total_amount", "paid_amount"], **left)
 
     order = [("subtotal_amount", subtotal), ("total_amount", total), *middle,
              ("remaining_amount", remaining), ("remaining_due_date", due)]
-    return _build("قيمة الطلب", note, [(name, switches[name], field) for name, field in order])
+    section = _build("قيمة الطلب", note, [(name, switches[name], field) for name, field in order])
+    if may_overpay:
+        if not (shown(switches["paid_amount"]) and shown(switches["remaining_amount"])):
+            raise TypeError("amounts: may_overpay is what is paid beyond the total — paid_amount and "
+                            "remaining_amount must be shown")
+        # Right under المبلغ المتبقي, which it is the other side of: one of the two is always 0
+        at = next(i for i, field in enumerate(section["fields"]) if field["name"] == "remaining_amount") + 1
+        section["fields"].insert(at, overpaid())
+    return section
 
 
 def _check_amounts(s: dict[str, Switch]):

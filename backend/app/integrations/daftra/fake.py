@@ -70,6 +70,8 @@ class FakeDaftra:
         # Offers (عروض الأسعار), kept apart from the invoices: Daftra numbers them separately
         self.estimates = {}
         self.payments = {}
+        # What clients hold on no invoice (client_payments), by id
+        self.client_payments = {}
         self.work_orders = {}
         # Who holds what (item_staff), as Daftra lists them
         self.assignments = []
@@ -101,7 +103,7 @@ class FakeDaftra:
 
     # ---------- keeping it across restarts ----------
 
-    KEPT = ("clients", "invoices", "estimates", "payments", "work_orders", "assignments", "uploads", "staff",
+    KEPT = ("clients", "invoices", "estimates", "payments", "client_payments", "work_orders", "assignments", "uploads", "staff",
             "treasuries", "order_sources", "products", "categories", "next_id", "next_client_number", "calls")
 
     def load(self):
@@ -117,7 +119,7 @@ class FakeDaftra:
                 continue
             value = saved[name]
             # JSON keys are strings; these are kept by integer id
-            if name in ("clients", "invoices", "estimates", "payments", "work_orders"):
+            if name in ("clients", "invoices", "estimates", "payments", "client_payments", "work_orders"):
                 value = {int(key): row for key, row in value.items()}
             setattr(self, name, value)
 
@@ -340,6 +342,9 @@ class FakeDaftra:
             (r"POST /api2/invoices/assign_work_order/(\d+)\.json", self.assign_work_order),
             (r"POST /api2/invoice_payments\.json", self.create_payment),
             (r"GET /api2/invoice_payments/(\d+)\.json", self.get_payment),
+            (r"GET /api2/client_payments\.json", self.list_client_payments),
+            (r"POST /api2/client_payments\.json", self.create_client_payment),
+            (r"GET /api2/client_payments/(\d+)\.json", self.get_client_payment),
             (r"GET /api2/work_orders\.json", self.list_work_orders),
             (r"POST /api2/work_orders\.json", self.create_work_order),
             (r"GET /api2/work_orders/(\d+)\.json", self.get_work_order),
@@ -571,6 +576,42 @@ class FakeDaftra:
 
     def get_payment(self, payment_id, params, body):
         return {"data": {"InvoicePayment": self.payments[int(payment_id)]}}
+
+    # ---------- client payments: what a client holds, on no invoice (رصيد العميل) ----------
+    # As the live account answered when tried (2026-11-20): the status and the currency are kept
+    # only when sent — a payment sent without a status is saved with none, and is then not listed
+    # among the client's payments — and, as with an invoice's payments, neither the notes nor the
+    # staff member sent are kept.
+
+    def create_client_payment(self, params, body):
+        payment_id = self._new_id()
+        fields = body["ClientPayment"]
+        payment = {**fields, "id": payment_id, "code": f"R{payment_id}", "invoice_id": None,
+                   "status": str(fields["status"]) if fields.get("status") is not None else None,
+                   "currency_code": fields.get("currency_code") or "",
+                   "created": datetime.now(UAE).strftime("%Y-%m-%d %H:%M:%S")}
+        if not self.keeps_payment_notes:
+            payment.update(notes=None, staff_id=API_STAFF_ID)
+        self.client_payments[payment_id] = payment
+        return {"id": payment_id}
+
+    def get_client_payment(self, payment_id, params, body):
+        if int(payment_id) not in self.client_payments:
+            raise NotFound("HTTP 404: عملية الدفع خطأ")
+        return {"data": {"ClientPayment": self._client_payment_out(self.client_payments[int(payment_id)])}}
+
+    def list_client_payments(self, params, body):
+        wanted = str(params.get("client_id") or "")
+        rows = [p for p in self.client_payments.values()
+                if p.get("status") == "1" and (not wanted or str(p.get("client_id")) == wanted)]
+        limit, page = int(params.get("limit") or 20), int(params.get("page") or 1)
+        rows = sorted(rows, key=lambda p: -p["id"])[(page - 1) * limit:page * limit]
+        return {"data": [{"ClientPayment": self._client_payment_out(p)} for p in rows]}
+
+    @staticmethod
+    def _client_payment_out(payment):
+        return {**payment, "id": str(payment["id"]), "client_id": str(payment["client_id"]),
+                "amount": f"{float(payment['amount']):g}", "staff_id": str(payment.get("staff_id"))}
 
     # ---------- work orders ----------
 

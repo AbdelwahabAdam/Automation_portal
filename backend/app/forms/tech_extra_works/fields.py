@@ -84,6 +84,7 @@ SECTIONS = [
         paid_amount=REQUIRED,
         remaining_amount=SHOW,
         remaining_due_date=SHOW,
+        may_overpay=True,                   # more than the total goes to the client's balance in Daftra
         labels={"total_amount": "قيمة الأعمال النهائية، شامل الضريبة",
                 "paid_amount": "المبلغ المدفوع فعليًا الآن"},
     ),

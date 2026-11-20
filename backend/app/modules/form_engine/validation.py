@@ -350,9 +350,13 @@ def validate_submission(form_type: str, data: dict, file_counts: dict, employee_
             first, *rest = (clean.get(operand) for operand in spec["computed"])
             if first is not None:
                 result = round(first - sum(v or 0 for v in rest), 2)
+                # floor: never below it, instead of an error — المتبقي of an order paid beyond its
+                # total is 0, and what went beyond is a field of its own (sections.overpaid)
+                if "floor" in spec:
+                    result = max(result, spec["floor"])
                 if result < 0:
                     errors[name] = spec["negative_message"]
-                else:
+                elif result or not spec.get("hide_when_zero"):
                     clean[name] = result
 
     # The same for a field of the form itself, before the checks below read it

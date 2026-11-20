@@ -10,6 +10,7 @@ import {
   packageDefault, packageQuantity, today,
 } from '../src/modules/requests/validation.js';
 import { afterCategory, afterEmirate, categoriesFor } from '../src/modules/requests/address.js';
+import { balanceLines } from '../src/modules/requests/form/balance.js';
 
 const families = [
   { match: ['سقيا الخير مدمجة'], exclude: [], colors: ['الابيض', 'الاسود'] },
@@ -459,4 +460,54 @@ test('the total on the form takes off the amount a percentage works out to', () 
   assert.equal(bigger.discount_amount, 800);
   const fixed = evaluateForm(form, { subtotal_amount: '8000', discount_amount: '620', discount_percent: '10' }, {}, {}).clean;
   assert.deepEqual([fixed.discount_amount, fixed.discount_percent], [620, 7.75]);
+});
+
+// ---------- paying beyond the total, and the client's balance ----------
+
+const PAYING = { sections: [{ fields: [
+  { name: 'total_amount', type: 'number', money: true, required: true },
+  { name: 'paid_amount', type: 'number', money: true, min: 0 },
+  { name: 'remaining_amount', type: 'number', money: true, computed: ['total_amount', 'paid_amount'], floor: 0 },
+  { name: 'overpaid_amount', type: 'number', money: true, computed: ['paid_amount', 'total_amount'], floor: 0, hide_when_zero: true },
+] }] };
+
+test('what is paid beyond the total is worked out, and nothing is left to pay', () => {
+  const { clean, errors } = evaluateForm(PAYING, { total_amount: '6000', paid_amount: '6300' }, {}, {});
+  assert.deepEqual([clean.remaining_amount, clean.overpaid_amount], [0, 300]);
+  assert.deepEqual(errors, {});
+});
+
+test('an order paid no more than its total holds no extra at all', () => {
+  const exact = evaluateForm(PAYING, { total_amount: '6000', paid_amount: '6000' }, {}, {}).clean;
+  assert.equal(exact.remaining_amount, 0);
+  assert.ok(!('overpaid_amount' in exact));
+  const part = evaluateForm(PAYING, { total_amount: '6000', paid_amount: '1000' }, {}, {}).clean;
+  assert.equal(part.remaining_amount, 5000);
+  assert.ok(!('overpaid_amount' in part));
+  // What the browser may still hold from an earlier amount is not kept
+  const stale = evaluateForm(PAYING, { total_amount: '6000', paid_amount: '1000', overpaid_amount: '300' }, {}, {}).clean;
+  assert.ok(!('overpaid_amount' in stale));
+});
+
+test('a form that does not take more than its total still refuses it', () => {
+  const strict = { sections: [{ fields: [
+    ...PAYING.sections[0].fields.slice(0, 2),
+    { name: 'remaining_amount', type: 'number', money: true, computed: ['total_amount', 'paid_amount'], negative_message: 'أكبر' },
+  ] }] };
+  const { errors } = evaluateForm(strict, { total_amount: '6000', paid_amount: '6300' }, {}, {});
+  assert.equal(errors.remaining_amount, 'أكبر');
+});
+
+test('the balance of a found client shows what they owe and what they hold, each only when there is some', () => {
+  const ready = (balance) => ({ status: 'ready', balance });
+  assert.deepEqual(balanceLines(ready({ owed: 1250, credit: 500 })), [['المستحق عليه', 1250], ['رصيد دائن', 500]]);
+  assert.deepEqual(balanceLines(ready({ owed: 0, credit: 500 })), [['رصيد دائن', 500]]);
+  assert.deepEqual(balanceLines(ready({ owed: 1250, credit: 0 })), [['المستحق عليه', 1250]]);
+  assert.deepEqual(balanceLines(ready({ owed: 0, credit: 0 })), []);
+  // Daftra would not say what they hold: what they owe is still shown
+  assert.deepEqual(balanceLines(ready({ owed: 800, credit: null })), [['المستحق عليه', 800]]);
+  // Not answered yet, failed, or an older answer with no balance in it
+  assert.deepEqual(balanceLines({ status: 'loading' }), []);
+  assert.deepEqual(balanceLines(ready(undefined)), []);
+  assert.deepEqual(balanceLines(null), []);
 });

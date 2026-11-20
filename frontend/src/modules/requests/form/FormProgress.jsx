@@ -10,7 +10,12 @@ const TOTALS = [
   ['total_amount', 'الإجمالي'],
   ['paid_amount', 'المدفوع'],
   ['remaining_amount', 'المتبقي'],
+  // Only while more is paid than the total: it has no value otherwise (hide_when_zero)
+  ['overpaid_amount', 'زيادة لرصيد العميل'],
 ];
+
+// How each amount is set off from the rest: the two that matter most, and the one nobody expects
+const LOOK = { remaining_amount: 'strong', total_amount: 'strong', overpaid_amount: 'alert' };
 
 const STATE_LOOK = {
   done: ['check-circle', 'مكتمل'],
@@ -32,7 +37,7 @@ export function Totals({ totals, compact }) {
   return (
     <dl className={compact ? 'fl-totals fl-totals--compact' : 'fl-totals'}>
       {totals.map((total) => (
-        <div key={total.name} className={total.name === 'remaining_amount' || total.name === 'total_amount' ? 'fl-totals__item fl-totals__item--strong' : 'fl-totals__item'}>
+        <div key={total.name} data-total={total.name} className={LOOK[total.name] ? `fl-totals__item fl-totals__item--${LOOK[total.name]}` : 'fl-totals__item'}>
           <dt>{total.label}</dt>
           <dd data-fl-num><bdi dir="ltr">{formatMoney(total.value)}</bdi> <span className="fl-totals__unit">درهم</span></dd>
         </div>

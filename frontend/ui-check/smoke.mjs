@@ -235,6 +235,7 @@ async function salesForm(page, prefix) {
   const amount = Number(String(subtotal).replace(/[^\d.]/g, ''));
   if (!(amount > 0) || !subtotal.includes('درهم')) problems.push(`[value] subtotal after picking a package: «${subtotal}»`);
   log(`${prefix} subtotal after package x2:`, subtotal);
+  await overpaying(page, prefix, amount);
   // Files are added one way only: the phone's own picker offers its camera among the rest
   if (await page.getByText('التقاط صورة').count()) problems.push(`[${prefix}] the removed camera button is still on the form`);
   const dropzones = await page.locator('.fl-dropzone').count();
@@ -446,6 +447,31 @@ async function discountInitiative(page, prefix) {
   await shot(page, `${prefix}-discount`, false);
 }
 
+// Paying beyond the total: nothing is left to pay, and the rest shows as a line of its own that
+// is not there otherwise. Leaves المبلغ المدفوع as it found it.
+async function overpaying(page, prefix, total) {
+  const paid = page.locator('#paid_amount');
+  const extra = page.locator('#field-overpaid_amount');
+  const before = await paid.inputValue();
+  if (await extra.isVisible()) problems.push('[overpaid] the «زيادة» line shows with nothing paid beyond the total');
+  await paid.fill(String(total + 300));
+  await page.waitForTimeout(300);
+  if (!(await extra.isVisible())) {
+    problems.push('[overpaid] no «زيادة تُضاف إلى رصيد العميل» line after paying 300 beyond the total');
+  } else {
+    const shown = await page.locator('#overpaid_amount').inputValue();
+    const left = await page.locator('#remaining_amount').inputValue();
+    if (Number(shown.replace(/[^\d.]/g, '')) !== 300) problems.push(`[overpaid] the «زيادة» line reads «${shown}», not 300`);
+    if (Number(left.replace(/[^\d.]/g, '')) !== 0) problems.push(`[overpaid] المبلغ المتبقي reads «${left}», not 0`);
+    if (await page.getByText('المبلغ المدفوع أكبر من قيمة الطلب').count()) problems.push('[overpaid] paying beyond the total is still refused');
+    log(`${prefix} overpaid: 300 beyond ${total} shows «${shown}», المتبقي «${left}»`);
+    await shot(page, `${prefix}-overpaid`, false);
+  }
+  await paid.fill(before);
+  await page.waitForTimeout(300);
+  if (await extra.isVisible()) problems.push('[overpaid] the «زيادة» line stays after the amount is put back');
+}
+
 // Every field each visible form defines is on the screen
 async function everyField(page, prefix) {
   const types = await page.evaluate(async (token) => (await fetch('/api/form-types', { headers: { Authorization: `Bearer ${token}` } })).json(), TOKEN);
@@ -457,7 +483,8 @@ async function everyField(page, prefix) {
     await page.getByRole('button', { name: 'فتح كل الأقسام' }).click();
     await page.waitForTimeout(500);
     // A new client's fields (نوع العميل, الجنس, البريد) wait for a phone search that finds nobody: newClient()
-    const expected = type.sections.flatMap((section) => section.fields.filter((f) => !f.new_client).map((f) => f.name));
+    // …and an amount worked out that is only a line when there is one (زيادة تُضاف إلى رصيد العميل): overpaying()
+    const expected = type.sections.flatMap((section) => section.fields.filter((f) => !f.new_client && !f.hide_when_zero).map((f) => f.name));
     const shown = await page.$$eval('[id^="field-"]', (els) => els.filter((el) => el.offsetParent !== null).map((el) => el.id.slice(6)));
     const missing = expected.filter((name) => !shown.includes(name));
     log(`${prefix} ${type.key}: ${shown.length} of ${expected.length} fields shown`);

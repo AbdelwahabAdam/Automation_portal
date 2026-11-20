@@ -76,6 +76,8 @@ function DaftraCard({ request }) {
         {request.daftra_estimate_no && <div><dt>رقم عرض السعر</dt><dd><bdi dir="ltr">{request.daftra_estimate_no}</bdi></dd></div>}
         {request.daftra_invoice_no && <div><dt>رقم الفاتورة</dt><dd><bdi dir="ltr">{request.daftra_invoice_no}</bdi></dd></div>}
         {request.daftra_receipt_no && <div><dt>رقم سند القبض</dt><dd><bdi dir="ltr">{request.daftra_receipt_no}</bdi></dd></div>}
+        {/* What was paid beyond the invoice: a receipt of its own in Daftra, on the client's balance */}
+        {request.daftra_credit_no && <div><dt>سند قبض رصيد العميل</dt><dd><bdi dir="ltr">{request.daftra_credit_no}</bdi></dd></div>}
         {request.daftra_work_order_no && <div><dt>رقم أمر الشغل</dt><dd><bdi dir="ltr">{request.daftra_work_order_no}</bdi></dd></div>}
         {request.printed_terms && <div><dt>الشروط والأحكام المطبوعة</dt><dd>{request.printed_terms}</dd></div>}
         {pdfs.map(([label, file]) => <DocRow key={file.id} label={label} file={file} />)}
@@ -85,7 +87,9 @@ function DaftraCard({ request }) {
 }
 
 // The request at a glance, above its sections: who it is for and what it comes to
-const SUMMARY_MONEY = [['total_amount', 'الإجمالي'], ['paid_amount', 'المدفوع'], ['remaining_amount', 'المتبقي']];
+const SUMMARY_MONEY = [['total_amount', 'الإجمالي'], ['paid_amount', 'المدفوع'], ['remaining_amount', 'المتبقي'],
+  // Only on a request paid beyond its total: the data holds it only then
+  ['overpaid_amount', 'زيادة لرصيد العميل']];
 
 function Summary({ request }) {
   const data = request.data;
@@ -103,7 +107,8 @@ function Summary({ request }) {
   const money = SUMMARY_MONEY.filter(([name]) => typeof data[name] === 'number');
   const daftra = [
     ['عرض السعر', request.daftra_estimate_no], ['الفاتورة', request.daftra_invoice_no],
-    ['سند القبض', request.daftra_receipt_no], ['أمر الشغل', request.daftra_work_order_no],
+    ['سند القبض', request.daftra_receipt_no], ['سند رصيد العميل', request.daftra_credit_no],
+    ['أمر الشغل', request.daftra_work_order_no],
   ].filter(([, value]) => value);
   if (!facts.length && !money.length) return null;
   return (

@@ -62,6 +62,7 @@ def receipt(ctx):
         return None
     return Receipt(
         amount=d.get("paid_amount"),
+        to_credit=d.get("overpaid_amount"),           # beyond the total: the client's balance, not the invoice
         method=d.get("payment_method") or "",
         treasury=d.get("treasury"),
         date=d.get("payment_date"),

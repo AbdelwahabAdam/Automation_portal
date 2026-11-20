@@ -46,6 +46,8 @@ class RequestOut(BaseModel):
     attachments: list[AttachmentOut]
     daftra_invoice_no: str | None
     daftra_receipt_no: str | None
+    # The receipt of what was paid beyond the invoice and put on the client's balance, if anything was
+    daftra_credit_no: str | None = None
     daftra_work_order_no: str | None
     daftra_estimate_no: str | None
     daftra_error: str | None

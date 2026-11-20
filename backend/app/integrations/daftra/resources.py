@@ -213,6 +213,28 @@ def client_invoices(client_id: int) -> list[dict]:
     return get("invoices.json", {"client_id": client_id, "limit": 100}).get("data", [])
 
 
+def client_payments(client_id: int) -> list[dict]:
+    """The payments Daftra holds for the client themselves rather than for an invoice of theirs:
+    their balance (رصيد العميل, shown as الدائن). What a client paid beyond an invoice lands here
+    when it is settled in Daftra, and the portal puts it here itself (invoicing.make_client_credit).
+
+    Only the client's own: the list's client_id is checked again, as it answers with others' when
+    the filter is not understood. Every page of it, newest first: most clients have none, a few
+    who pay on account have more than a page (one has 117)."""
+    found = []
+    for page in range(1, CLIENT_PAYMENT_PAGES + 1):
+        rows = get("client_payments.json", {"client_id": client_id, "limit": 100, "page": page}).get("data", [])
+        payments = (row.get("ClientPayment") or row for row in rows)
+        found += [payment for payment in payments if str(payment.get("client_id")) == str(client_id)]
+        if len(rows) < 100:
+            break
+    return found
+
+
+#: How many pages of a client's payments are read at most (100 a page)
+CLIENT_PAYMENT_PAGES = 10
+
+
 # ---------- Order sources (an invoice's مصدر الطلب) ----------
 
 ORDER_SOURCES = "order_sources"

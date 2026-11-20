@@ -91,7 +91,8 @@ def categories(db: Session) -> list[dict]:
 
 def details_from_daftra(daftra_id: int) -> dict:
     """What a form needs to know about a client from Daftra itself: their current category, where
-    Daftra has them, and the invoices that still have something to pay."""
+    Daftra has them, the invoices that still have something to pay, and their balance: what they
+    owe on those and what they hold with us (in_daftra.balance)."""
     invoices = in_daftra.open_invoices(daftra_id)
     # Where Daftra has this client: it keeps the point on them, which a map link of theirs
     # often does not — a link shared from a phone holds the place's name and nothing else.
@@ -100,4 +101,5 @@ def details_from_daftra(daftra_id: int) -> dict:
         "category": daftra.client_category(daftra_id),
         "coordinates": str(held.get(settings.daftra_client_coordinates_field) or "").strip(),
         "open_invoices": [{**invoice, "name": in_daftra.invoice_label(invoice)} for invoice in invoices],
+        "balance": in_daftra.balance(daftra_id, invoices),
     }

@@ -266,10 +266,23 @@
       "total_amount",
       "paid_amount"
      ],
+     "floor": 0,
      "label": "المبلغ المتبقي",
      "money": true,
      "name": "remaining_amount",
-     "negative_message": "المبلغ المدفوع أكبر من قيمة الطلب",
+     "required": false,
+     "type": "number"
+    },
+    {
+     "computed": [
+      "paid_amount",
+      "total_amount"
+     ],
+     "floor": 0,
+     "hide_when_zero": true,
+     "label": "زيادة تُضاف إلى رصيد العميل",
+     "money": true,
+     "name": "overpaid_amount",
      "required": false,
      "type": "number"
     },

@@ -583,6 +583,8 @@ ul.fl-catalog, ul.fl-cards { list-style: none; margin: 0; padding: 0; }
 .fl-totals dd { margin: 0; font-weight: var(--fl-font-weight-medium); }
 .fl-totals__item--strong dd { font-size: var(--fl-type-subsection-size); font-weight: var(--fl-font-weight-bold); color: var(--fl-color-text-brand); }
 .fl-totals__unit { font-size: var(--fl-type-caption-size); font-weight: var(--fl-font-weight-regular); color: var(--fl-color-text-secondary); }
+/* Paid beyond the total: there only then, and set off so a slip in المبلغ المدفوع is seen */
+.fl-totals__item--alert dt, .fl-totals__item--alert dd { color: var(--fl-color-status-warning-text); font-weight: var(--fl-font-weight-bold); }
 .fl-totals--compact { flex-direction: row; flex-wrap: wrap; column-gap: var(--fl-space-5); row-gap: var(--fl-space-2); }
 .fl-totals--compact .fl-totals__item { gap: var(--fl-space-2); }
 .fl-totals--compact .fl-totals__item--strong dd { font-size: var(--fl-type-body-size); }
@@ -620,7 +622,9 @@ ul.fl-catalog, ul.fl-cards { list-style: none; margin: 0; padding: 0; }
   /* One line on a phone: progress, the total and what is left */
   .fl-actionbar__summary { flex-wrap: nowrap; justify-content: space-between; gap: var(--fl-space-3); font-size: var(--fl-type-caption-size); }
   .fl-totals--compact { flex-wrap: nowrap; column-gap: var(--fl-space-3); }
-  .fl-totals--compact .fl-totals__item:not(.fl-totals__item--strong) { display: none; }
+  .fl-totals--compact .fl-totals__item:not(.fl-totals__item--strong):not(.fl-totals__item--alert) { display: none; }
+  /* With an extra there is nothing left to pay: the extra takes that place on the one line */
+  .fl-totals--compact:has(.fl-totals__item--alert) [data-total="remaining_amount"] { display: none; }
   .fl-totals--compact .fl-totals__unit { display: none; }
   .fl-actionbar { padding: var(--fl-space-3) var(--fl-space-4); gap: var(--fl-space-2); }
 }

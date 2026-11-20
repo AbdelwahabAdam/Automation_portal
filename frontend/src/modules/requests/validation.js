@@ -314,7 +314,12 @@ export function evaluateForm(formType, values, fileCounts = {}, catalog = {}) {
     if (spec.computed.some((name) => name in errors || (requiredInput(name) && !(name in clean)))) continue;
     const [first, ...rest] = spec.computed.map((name) => clean[name]);
     if (first === undefined) continue;
-    const result = Math.round((first - rest.reduce((sum, v) => sum + (v || 0), 0)) * 100) / 100;
+    let result = Math.round((first - rest.reduce((sum, v) => sum + (v || 0), 0)) * 100) / 100;
+    // floor: never below it, instead of an error — المتبقي of an order paid beyond its total is 0,
+    // and what went beyond is a field of its own, there only when there is one (hide_when_zero).
+    // Mirrors the computed step of validate_submission (form_engine/validation.py).
+    if ('floor' in spec) result = Math.max(result, spec.floor);
+    if (result === 0 && spec.hide_when_zero) continue;
     clean[spec.name] = result;
     if (result < 0) errors[spec.name] = spec.negative_message;
   }

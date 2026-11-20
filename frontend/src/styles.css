@@ -17,6 +17,9 @@
 .fl-invite-link { margin-block-start: var(--fl-space-2); overflow-wrap: anywhere; }
 /* The client found by a search: their address choice and its buttons */
 .fl-lookup__actions { margin-block-start: var(--fl-space-2); }
+/* …and their balance in Daftra: what they owe and what they hold, on one line that may wrap */
+.fl-lookup__balance { margin-block-start: var(--fl-space-1); }
+.fl-lookup__balance span { white-space: nowrap; }
 
 /* Review page: the employees with drafts, with their counts */
 .fl-draftcounts { display: flex; flex-direction: column; gap: 8px; }

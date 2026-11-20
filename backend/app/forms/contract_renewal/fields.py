@@ -70,6 +70,7 @@ SECTIONS = [
         remaining_amount=SHOW,
         remaining_due_date=REQUIRED_IF(HAS_REMAINDER),
         must_pay=True,
+        may_overpay=True,                   # more than the total goes to the client's balance in Daftra
         price_default=RENEWAL_PRICE,
         labels={"subtotal_amount": "سعر تجديد العقد قبل الخصم، شامل الضريبة",
                 "total_amount": "قيمة الطلب النهائية بعد الخصم، شامل الضريبة"},

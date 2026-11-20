@@ -205,6 +205,7 @@ SECTIONS = [
         remaining_amount=SHOW,
         remaining_due_date=REQUIRED_IF(HAS_REMAINDER),   # an instalment in Daftra
         must_pay=True,
+        may_overpay=True,                   # more than the total goes to the client's balance in Daftra
     ),
     shared.payment(
         payment_method=REQUIRED,

@@ -137,6 +137,58 @@ def open_invoices(client_id: int) -> list[dict]:
     return sorted(found, key=lambda invoice: invoice["id"], reverse=True)
 
 
+#: How Daftra names the payment of an invoice out of the client's own balance (دفع من رصيد العميل)
+FROM_CREDIT = "client_credit"
+#: How many of a client's paid invoices are opened at most to see what they spent of their balance
+MOST_INVOICES_OPENED = 30
+
+
+def balance(client_id: int, invoices: list[dict]) -> dict:
+    """What the client owes and what they hold, in dirhams: {"owed": …, "credit": …}.
+
+    Daftra's API has no balance of a client (looked for on the live account, 2026-11-20: neither
+    api2 nor the read API v2 answers one); it is made here of what it is made of there.
+    owed: what is left to pay on their issued invoices (`invoices`: open_invoices, already read).
+    credit: رصيد العميل, which their page in Daftra shows as الدائن — their payments on no invoice,
+    less what they have spent of them since (credit_spent). Paid beyond an invoice and settled in
+    Daftra, or put there by the portal itself (invoicing.make_client_credit).
+    None when Daftra would not say, or it could not be worked out: what they owe is still shown.
+    """
+    owed = round(sum(invoice["unpaid"] for invoice in invoices), 2)
+    try:
+        held = sum(float(payment.get("amount") or 0) for payment in daftra.client_payments(client_id)
+                   if str(payment.get("status")) == "1")
+        # Most clients hold nothing, and nothing more is read for them
+        spent = credit_spent(client_id) if held > 0.005 else 0
+    except DaftraError:
+        return {"owed": owed, "credit": None}
+    if spent is None:
+        return {"owed": owed, "credit": None}
+    return {"owed": owed, "credit": max(round(held - spent, 2), 0)}
+
+
+def credit_spent(client_id: int) -> float | None:
+    """How much of their balance the client has spent: Daftra pays an invoice out of it with a
+    payment of the invoice whose method is client_credit, and leaves the payments that made the
+    balance as they were. Summing those alone showed 7,350 held by a client who had spent all of
+    it on their invoice four days later (live, 2026-11-20) — and so for most of the 292 clients
+    who have ever paid on account.
+
+    The list of invoices does not carry their payments, so each invoice with something paid is
+    opened. None when there are too many to open for one search of a client."""
+    paid = [row["Invoice"] for row in daftra.client_invoices(client_id)
+            if row["Invoice"].get("draft") == "0"
+            and float(row["Invoice"].get("summary_total") or 0) - float(row["Invoice"].get("summary_unpaid") or 0) > 0.005]
+    if len(paid) > MOST_INVOICES_OPENED:
+        return None
+    spent = 0.0
+    for listed in paid:
+        invoice = daftra.get(f"invoices/{listed['id']}.json").get("data", {}).get("Invoice", {})
+        spent += sum(float(payment.get("amount") or 0) for payment in invoice.get("InvoicePayment") or []
+                     if payment.get("payment_method") == FROM_CREDIT and str(payment.get("status") or "1") == "1")
+    return spent
+
+
 def invoice_label(invoice: dict) -> str:
     """How an open invoice reads in the balance-payment form, e.g. «06273 — 18/10/2026 — المتبقي 4,650 درهم»."""
     return f"{invoice['no']} — {invoice['date']} — المتبقي {invoice['unpaid']:,.2f}".removesuffix(".00") + " درهم"

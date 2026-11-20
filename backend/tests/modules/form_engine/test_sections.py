@@ -74,6 +74,27 @@ def test_amounts_refuses_what_cannot_be_worked_out():
         shared.amounts(**{**base, "discount_amount": HIDE})
 
 
+def test_amounts_takes_more_than_the_total_only_where_the_form_says_so():
+    base = dict(subtotal_amount=SHOW, total_amount=SHOW, discount_label=HIDE, discount_amount=SHOW,
+                discount_percent=HIDE, discount_approved_by=SHOW, paid_amount=REQUIRED, remaining_amount=SHOW,
+                remaining_due_date=SHOW)
+    strict = {field["name"]: field for field in shared.amounts(**base)["fields"]}
+    assert "overpaid_amount" not in strict
+    assert strict["remaining_amount"]["negative_message"] == "المبلغ المدفوع أكبر من قيمة الطلب"
+
+    names = [field["name"] for field in shared.amounts(**base, may_overpay=True)["fields"]]
+    fields = {field["name"]: field for field in shared.amounts(**base, may_overpay=True)["fields"]}
+    # Nothing is left of an order paid beyond its total, and the rest is a line of its own right under it
+    assert "negative_message" not in fields["remaining_amount"] and fields["remaining_amount"]["floor"] == 0
+    assert names[names.index("remaining_amount") + 1] == "overpaid_amount"
+    extra = fields["overpaid_amount"]
+    assert (extra["computed"], extra["floor"], extra["hide_when_zero"]) == (["paid_amount", "total_amount"], 0, True)
+    # It is what was paid beyond the total: with nothing paid on the form there is no such thing
+    with pytest.raises(TypeError, match="may_overpay"):
+        shared.amounts(**{**base, "paid_amount": HIDE, "remaining_amount": HIDE, "remaining_due_date": HIDE},
+                       may_overpay=True)
+
+
 def test_request_info_asks_one_order_source_at_most():
     with pytest.raises(TypeError, match="not both"):
         shared.request_info(request_date=REQUIRED, employee_name=SHOW, order_source=REQUIRED, source=REQUIRED)

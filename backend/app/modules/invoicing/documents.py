@@ -132,6 +132,10 @@ class Receipt:
     received_by: the Daftra staff member printed as its المستلم.
     notes: under the marker that finds it again.
     method_label, treasury_name, client_name: what the portal's own PDF of it prints.
+    to_credit: how much of `amount` is beyond what the invoice comes to (the form's overpaid_amount).
+    That part is not put on the invoice, where it would stand as a negative remainder until someone
+    settled it by hand: it is recorded as the client's own balance (رصيد العميل, الدائن), a payment
+    of theirs on no invoice, with a receipt of its own.
     """
 
     amount: Any
@@ -143,14 +147,28 @@ class Receipt:
     notes: str = ""
     treasury_name: str = ""
     client_name: str = ""
+    to_credit: Any = 0
 
     def __post_init__(self):
         if money(self.amount) > 0 and not self.method_key:
             raise SyncError(f"طريقة الدفع «{self.method or '—'}» غير معروفة لدفترة.")
+        if not 0 <= self.credit <= self.paid:
+            raise SyncError(f"الزيادة عن قيمة الطلب ({self.credit}) لا يمكن أن تتجاوز المبلغ المدفوع ({self.paid}).")
 
     @property
     def paid(self) -> Decimal:
+        """Everything the client handed over now."""
         return money(self.amount)
+
+    @property
+    def credit(self) -> Decimal:
+        """The part of it that goes to the client's balance."""
+        return money(self.to_credit)
+
+    @property
+    def to_invoice(self) -> Decimal:
+        """The part of it that pays the invoice."""
+        return self.paid - self.credit
 
     @property
     def method_key(self) -> str | None:

@@ -158,6 +158,16 @@ class Request(Base):
     def daftra_receipt_no(self) -> str | None:
         return self.doc_no("payment")
 
+    # What the client paid beyond the invoice, put on their balance in Daftra: a payment of theirs
+    # on no invoice, with a receipt number of its own (invoicing.make_client_credit)
+    @property
+    def daftra_credit_id(self) -> int | None:
+        return self.doc_id("client_credit")
+
+    @property
+    def daftra_credit_no(self) -> str | None:
+        return self.doc_no("client_credit")
+
     @property
     def daftra_estimate_id(self) -> int | None:
         return self.doc_id("estimate")

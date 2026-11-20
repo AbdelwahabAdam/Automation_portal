@@ -403,7 +403,9 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
   };
   const isFilled = (spec) => (spec.type === 'files' ? fileCounts[spec.name] : hasValue(shownValue(spec)));
   // A new-client field the server still asks about (e.g. the search was never run) is shown too
-  const shown = (spec) => fieldApplies(spec, values) || Boolean(errors[spec.name]);
+  // A worked-out amount that is only worth a line when there is one (زيادة تُضاف إلى رصيد العميل)
+  const nothingToShow = (spec) => spec.hide_when_zero && !(evaluation?.clean[spec.name] > 0);
+  const shown = (spec) => (fieldApplies(spec, values) && !nothingToShow(spec)) || Boolean(errors[spec.name]);
   const inputsOf = (section) => section.fields.filter((spec) => spec.type !== 'auto_user' && !spec.computed && shown(spec));
 
   function summary(section) {

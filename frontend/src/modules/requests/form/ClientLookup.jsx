@@ -4,6 +4,8 @@ import { useRef, useState } from 'react';
 import * as clientsApi from '../../../api/clients.js';
 import { Alert, Button, Select } from '../../../ds/index.jsx';
 import { samePerson } from '../../../ds/match.js';
+import { formatMoney } from '../../../lib/format.js';
+import { balanceLines } from './balance.js';
 import { coordinatesFromLink, normalizePhone } from '../validation.js';
 
 // Form fields that an existing Daftra client can fill. المنطقة is not one: whatever a client's saved
@@ -217,6 +219,21 @@ export function useClientLookup(form) {
   };
 }
 
+// The client's balance in Daftra, under their name (balance.js)
+function ClientBalance({ info }) {
+  const lines = balanceLines(info);
+  if (!lines.length) return null;
+  return (
+    <p className="fl-lookup__balance">
+      {lines.map(([label, amount], index) => (
+        <span key={label}>
+          {index > 0 && ' · '}{label}: <strong><bdi dir="ltr">{formatMoney(amount)}</bdi> درهم</strong>
+        </span>
+      ))}
+    </p>
+  );
+}
+
 // What the last search found, under the field it was made from
 export function ClientLookupNote({ name, client: found, values }) {
   const { lookup, addressChoice, addressBusy } = found;
@@ -229,6 +246,7 @@ export function ClientLookupNote({ name, client: found, values }) {
     return (
       <Alert tone={otherName ? 'warning' : 'success'} title={otherName ? 'تنبيه: اسم العميل مختلف' : 'عميل مسجل'}>
         <p>{lookup.client.customer_name} — كود <bdi dir="ltr">{lookup.client.client_code}</bdi>. تم تعبئة بياناته.</p>
+        <ClientBalance info={found.clientInfo} />
         {otherName && (
           <p>
             الطلب باسم «<bdi>{values.customer_name}</bdi>» وهذا العميل اسمه «<bdi>{lookup.client.customer_name}</bdi>». عند
