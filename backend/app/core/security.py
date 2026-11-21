@@ -52,6 +52,30 @@ def decode(token: str) -> dict:
     return jwt.decode(token, settings.jwt_secret, algorithms=[ALGORITHM])
 
 
+def create_link_token(user, use: str, minutes: int, **claims) -> str:
+    """A token for one thing a plain link opens, where no login header can be sent. Never a login:
+    get_current_user refuses any token that carries a `use`."""
+    expires = datetime.now(timezone.utc) + timedelta(minutes=minutes)
+    return jwt.encode({"sub": str(user.id), "exp": expires, "use": use, **claims},
+                      settings.jwt_secret, algorithm=ALGORITHM)
+
+
+def user_for_link_token(db: Session, token: str, use: str, **claims):
+    """The active user a link token was made for, or None when it is not one for this use and these
+    claims, has expired, or names a user who is gone."""
+    try:
+        payload = decode(token)
+    except jwt.PyJWTError:
+        return None
+    if payload.get("use") != use or not str(payload.get("sub", "")).isdigit():
+        return None
+    if any(payload.get(key) != value for key, value in claims.items()):
+        return None
+    if _load_user is None:
+        return None
+    return _load_user(db, int(payload["sub"]))
+
+
 def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
     db: Session = Depends(get_db),

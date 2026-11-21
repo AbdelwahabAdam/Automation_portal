@@ -76,11 +76,13 @@ export async function attachmentUrl(id) {
   return shownAttachments.get(id);
 }
 
-// Attachments need the auth header, so they are fetched and opened as a blob
+// Opened at an address of its own that carries a token for that one file: a plain link cannot send
+// the auth header, and a file opened as a blob is saved from the browser's viewer under a random id
+// instead of its name. The tab is opened first, while the click still counts as the user's.
 export async function openAttachment(id) {
   const tab = window.open('', '_blank');
   try {
-    const url = blobUrl(await (await request(`/attachments/${id}`)).blob());
+    const { url } = await api(`/attachments/${id}/link`, { method: 'POST' });
     if (tab) tab.location = url;
     else window.location = url;
   } catch (err) {

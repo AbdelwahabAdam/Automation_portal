@@ -1,5 +1,6 @@
 """A salesperson's requests: drafts, attachments, submitting, and who can see what."""
 
+from app.core.security import create_link_token
 from app.modules.models import AuditLog, Request
 
 from ... import seed
@@ -80,6 +81,33 @@ def test_attachments(client, db, sales):
     assert client.get(f"/api/attachments/{attachment['id']}", headers=auth(other)).status_code == 404
     assert client.delete(f"/api/attachments/{attachment['id']}", headers=auth(sales)).status_code == 204
     assert client.get(f"/api/attachments/{attachment['id']}", headers=auth(sales)).status_code == 404
+
+
+def test_a_file_opens_at_a_link_that_carries_its_name(client, db, sales):
+    """Opened in a tab of its own, so the browser saves it under the name the portal shows."""
+    request_id = create(client, sales, {}).json()["id"]
+    attachment = upload(client, sales, request_id, "payment_proof", name="سند قبض.pdf").json()
+    another = upload(client, sales, request_id, "payment_proof", name="other.pdf").json()
+    url = client.post(f"/api/attachments/{attachment['id']}/link", headers=auth(sales)).json()["url"]
+    assert url.startswith(f"/api/files/{attachment['id']}/%D8%B3%D9%86%D8%AF%20")
+
+    opened = client.get(url)                      # no login header: the token in the link is enough
+    assert opened.status_code == 200 and opened.content == b"image-bytes"
+    assert opened.headers["content-disposition"] == "inline; filename*=utf-8''" + url.split("/")[4].split("?")[0]
+    assert db.query(AuditLog).filter_by(action="attachment.download", entity_id=attachment["id"]).count() == 1
+
+    # Good for that one file only, never as a login, and not once changed or expired
+    token = url.split("token=")[1]
+    assert client.get(f"/api/files/{another['id']}/other.pdf?token={token}").status_code == 401
+    assert client.get("/api/requests/mine", headers={"Authorization": f"Bearer {token}"}).status_code == 401
+    assert client.get(url.replace("token=", "token=x")).status_code == 401
+    expired = create_link_token(sales, "file", -1, att=attachment["id"])
+    assert client.get(f"/api/files/{attachment['id']}/a.pdf?token={expired}").status_code == 401
+    # Someone who may not see the file gets no link, and a link stops working once the file is gone
+    other = make_user(db, "sales2", permissions=may_fill(*VISIBLE_FORMS))
+    assert client.post(f"/api/attachments/{attachment['id']}/link", headers=auth(other)).status_code == 404
+    assert client.delete(f"/api/attachments/{attachment['id']}", headers=auth(sales)).status_code == 204
+    assert client.get(url).status_code == 404
 
 
 def test_deleting_a_draft(client, db, sales):
