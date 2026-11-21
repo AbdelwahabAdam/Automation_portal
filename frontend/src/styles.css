@@ -24,8 +24,13 @@
 .fl-invite-link { margin-block-start: var(--fl-space-2); overflow-wrap: anywhere; }
 /* The client found by a search: their address choice and its buttons */
 .fl-lookup__actions { margin-block-start: var(--fl-space-2); }
-/* …and their balance in Daftra under it: two short locked boxes side by side, on a phone too */
+/* …and their balance in Daftra: two short locked boxes side by side, on a phone too. Under the
+   note, or — where the next field stands on the same line — under that field, in the room the note
+   opens beside itself (--beside) */
 .fl-client-balance { margin-block-start: var(--fl-space-3); }
+.fl-client-balance > .fl-field__hint { margin-block-start: var(--fl-space-2); }
+/* Level with the note: the searched field has a line of hint between its box and its note */
+.fl-client-balance--beside { margin-block-start: var(--fl-space-7); }
 .fl-client-balance .fl-field__head { margin-block-end: var(--fl-space-2); }
 .fl-client-balance__boxes { display: grid; grid-template-columns: 1fr 1fr; gap: var(--fl-space-3); }
 .fl-client-balance__boxes .fl-field__label { font-weight: var(--fl-font-weight-regular); color: var(--fl-color-text-secondary); }

@@ -508,9 +508,16 @@ test('the balance of a found client shows what they owe and what they hold, 0 in
   assert.deepEqual(lines(ready({ owed: 800, credit: null })), [['المستحق عليه', 800], ['رصيد دائن', null]]);
   // An older answer with no balance in it says neither
   assert.deepEqual(lines(ready(undefined)), [['المستحق عليه', null], ['رصيد دائن', null]]);
-  // Not answered yet, failed, or no client found
-  assert.deepEqual(balanceView({ status: 'loading' }), { status: 'loading' });
-  assert.deepEqual(balanceView({ status: 'error', message: 'x' }), { status: 'error' });
+  // Not answered yet, or failed: the same two lines stand, with no figure in them, so the block is
+  // there with the client's note and nothing moves when Daftra answers
+  const empty = [['المستحق عليه', null], ['رصيد دائن', null]];
+  assert.equal(balanceView({ status: 'loading' }).status, 'loading');
+  assert.deepEqual(lines({ status: 'loading' }), empty);
+  assert.equal(balanceView({ status: 'error', message: 'x' }).status, 'error');
+  assert.deepEqual(lines({ status: 'error', message: 'x' }), empty);
+  // A figure left over from another answer is never shown while waiting
+  assert.deepEqual(lines({ status: 'loading', balance: { owed: 5, credit: 5 } }), empty);
+  // No client found
   assert.equal(balanceView(null), null);
 });
 

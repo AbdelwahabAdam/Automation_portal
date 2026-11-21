@@ -449,17 +449,26 @@ async function discountInitiative(page, prefix) {
   await shot(page, `${prefix}-discount`, false);
 }
 
-// A found client's balance in Daftra shows under the note that found them, in boxes nothing can be
-// typed into. Whatever the local data holds: the figures, or the quiet line saying Daftra could not answer.
+// A found client's balance in Daftra shows with the note that found them, in boxes nothing can be
+// typed into: once, beside the note where the next field stands on the same line (a desktop), under
+// it otherwise (a phone). Whatever the local data holds: the figures, or the line saying Daftra
+// could not answer.
 async function clientBalance(page, prefix) {
   const block = page.locator('.fl-client-balance');
-  await page.getByText(/رصيد العميل في دفترة|تعذر تحميل رصيد العميل/).first().waitFor({ timeout: 12000 })
-    .catch(() => problems.push('[balance] neither «رصيد العميل في دفترة» nor its failure shows after the client is found'));
-  if (await page.getByText('تعذر تحميل رصيد العميل من دفترة').count()) {
-    log(`${prefix} client balance: Daftra could not be asked here`);
-    return;
-  }
-  if (!(await block.first().isVisible())) return;
+  await block.first().waitFor({ timeout: 12000 })
+    .catch(() => problems.push('[balance] «رصيد العميل في دفترة» does not show after the client is found'));
+  const blocks = await block.count();
+  if (!blocks) return;
+  if (blocks > 1) problems.push(`[balance] «رصيد العميل في دفترة» shows ${blocks} times`);
+  // Where it stands: level with the note and clear of it, or right under it
+  const where = await page.evaluate(() => {
+    const box = (el) => el?.getBoundingClientRect();
+    const [note, balance] = [box(document.querySelector('.fl-grid > * > .fl-alert--success, .fl-grid > * > .fl-alert--warning')), box(document.querySelector('.fl-client-balance'))];
+    if (!note || !balance) return null;
+    const apart = balance.right <= note.left || balance.left >= note.right;
+    return { beside: apart && balance.top < note.bottom && balance.bottom > note.top, under: !apart && balance.top >= note.bottom - 1 };
+  });
+  if (where && !where.beside && !where.under) problems.push('[balance] the balance is neither beside the found client\'s note nor under it');
   const boxes = block.locator('input');
   const count = await boxes.count();
   if (count !== 2) problems.push(`[balance] ${count} boxes in «رصيد العميل في دفترة», not 2 (المستحق عليه, رصيد دائن)`);
@@ -467,7 +476,14 @@ async function clientBalance(page, prefix) {
   if (typeable) problems.push(`[balance] ${typeable} of the balance boxes can be typed into`);
   // Inside the green note it was in before, it would show twice
   if (await page.locator('.fl-alert .fl-client-balance').count()) problems.push('[balance] the balance is still inside the found client\'s note');
-  log(`${prefix} client balance: ${(await boxes.evaluateAll((els) => els.map((el) => el.value))).join(' / ')}`);
+  // Daftra's answer: the figures, or the line saying it could not be asked
+  await page.waitForFunction(() => document.querySelector('.fl-client-balance')?.getAttribute('aria-busy') !== 'true', null, { timeout: 12000 })
+    .catch(() => problems.push('[balance] the balance is still waiting for Daftra'));
+  if (await page.getByText('تعذر تحميل رصيد العميل من دفترة').count()) {
+    log(`${prefix} client balance: Daftra could not be asked here`);
+    return;
+  }
+  log(`${prefix} client balance (${where?.beside ? 'beside the note' : 'under the note'}): ${(await boxes.evaluateAll((els) => els.map((el) => el.value))).join(' / ')}`);
 }
 
 // رصيد سابق beside المبلغ المدفوع is Daftra's figure for the found client: never typed into

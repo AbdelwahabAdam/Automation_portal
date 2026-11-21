@@ -10,18 +10,20 @@ function amountOf(value) {
 }
 
 // What the «رصيد العميل في دفترة» block shows for the found client (info: the form's clientInfo):
-// null with no client; { status: 'loading' } or { status: 'error' } while Daftra has not answered
-// or could not; else { status: 'ready', lines: [[key, label, amount], …] }. Both lines always come,
-// 0 included, so the salesperson sees that it was checked; an amount of null reads «غير متاح».
+// null with no client; else { status: 'loading' | 'error' | 'ready', lines: [[key, label, amount], …] }.
+// Both lines always come — the block stands with the client's note from the moment they are found,
+// and does not move when Daftra answers. An amount is null while Daftra has not answered, when it
+// could not, or when it would not say («غير متاح»); 0 is a figure like any other, so the
+// salesperson sees that it was checked.
 export function balanceView(info) {
   if (!info) return null;
-  if (info.status === 'loading') return { status: 'loading' };
-  if (info.status !== 'ready') return { status: 'error' };
+  const status = ['loading', 'ready'].includes(info.status) ? info.status : 'error';
+  const known = status === 'ready' ? info.balance : null;
   return {
-    status: 'ready',
+    status,
     lines: [
-      ['owed', 'المستحق عليه', amountOf(info.balance?.owed)],
-      ['credit', 'رصيد دائن', amountOf(info.balance?.credit)],
+      ['owed', 'المستحق عليه', amountOf(known?.owed)],
+      ['credit', 'رصيد دائن', amountOf(known?.credit)],
     ],
   };
 }

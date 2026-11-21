@@ -4,7 +4,7 @@ import * as requestsApi from '../../api/requests.js';
 import {
   ActionBar, Alert, Badge, Button, Dialog, Field, Icon, PageHeader, Section, Skeleton, TextInput, useToast,
 } from '../../ds/index.jsx';
-import { ClientLookupNote, SEARCH_FIELDS, useClientLookup } from './form/ClientLookup.jsx';
+import { ClientBalanceBeside, ClientLookupNote, SEARCH_FIELDS, useClientLookup } from './form/ClientLookup.jsx';
 import { Control, DaftraListSelect, FileField, ProductPicker, guessFromProductName, showsAsChoice } from './form/fields.jsx';
 import FormProgress, { Totals, formTotals } from './form/FormProgress.jsx';
 import OrderLines from './form/OrderLines.jsx';
@@ -601,12 +601,23 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
     );
   }
 
-  function fieldRow(spec) {
-    // قيمة الخصم and نسبة الخصم share one cell of the grid, the amount first: they are one value
-    // written two ways. The percentage is drawn there, beside its amount, and not on its own.
+  // The discount's two boxes, when both are shown: they share one cell of the grid
+  const discountCell = (spec) => {
     const pair = pairOf(spec.name);
     const amountSpec = pair && fields.find((other) => other.name === pair.amount_field);
-    if (pair && amountSpec && shown(pair) && shown(amountSpec)) {
+    return pair && amountSpec && shown(pair) && shown(amountSpec) ? { pair, amountSpec } : null;
+  };
+  const isWide = (spec) => WIDE_TYPES.includes(spec.type) || showsAsChoice(spec);
+  // A field drawn alone in a cell one column wide (fieldRow's last case)
+  const ownCell = (spec) => !discountCell(spec) && !(spec.pair_with && specOf(spec.pair_with) && shown(specOf(spec.pair_with)))
+    && !(besideOf(spec.name) && shown(besideOf(spec.name))) && !isWide(spec);
+
+  // row: the section's shown fields, in order
+  function fieldRow(spec, index, row) {
+    // قيمة الخصم and نسبة الخصم share one cell of the grid, the amount first: they are one value
+    // written two ways. The percentage is drawn there, beside its amount, and not on its own.
+    const { pair, amountSpec } = discountCell(spec) || {};
+    if (pair) {
       if (spec.name === pair.name) return null;
       return (
         <div key={spec.name} className="fl-discount-pair">
@@ -622,11 +633,16 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
     if (spec.pair_with && specOf(spec.pair_with) && shown(specOf(spec.pair_with))) return null;
     const beside = besideOf(spec.name);
     if (beside && shown(beside)) return fieldPair(spec, beside);
-    const wide = WIDE_TYPES.includes(spec.type) || showsAsChoice(spec);
+    const wide = isWide(spec);
+    // The found client's balance goes beside their note: under the next field, when that one is
+    // alone in its cell and on the same line (ClientBalanceBeside), else under the note itself
+    const [before, after] = [row[index - 1], row[index + 1]];
+    const mayHost = (other) => !wide && other && ownCell(other);
     return (
       <div key={spec.name} className={wide ? 'fl-wide' : undefined}>
         {fieldOf(spec)}
-        <ClientLookupNote name={spec.name} client={client} values={values} />
+        <ClientLookupNote name={spec.name} next={mayHost(after) ? after.name : null} client={client} values={values} />
+        {mayHost(before) && <ClientBalanceBeside name={spec.name} after={before.name} client={client} />}
       </div>
     );
   }

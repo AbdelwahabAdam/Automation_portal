@@ -1,6 +1,6 @@
 // Finding the request's client in our copy of Daftra's client list (by phone or client code),
 // filling in their details, choosing one of their addresses, and what Daftra itself knows of them.
-import { useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import * as clientsApi from '../../../api/clients.js';
 import { Alert, Button, Field, Icon, Select, TextInput } from '../../../ds/index.jsx';
 import { samePerson } from '../../../ds/match.js';
@@ -160,7 +160,8 @@ export function useClientLookup(form) {
     form.setValues((current) => ({ ...current, new_client: false }));
     typingNewAddress.current = false;
     // Daftra is asked about every client found, whatever the form: their balance shows on all of them
-    // (ClientBalance), besides the التصنيف and open invoices of the forms that ask for those
+    // (ClientBalance), besides the التصنيف and open invoices of the forms that ask for those.
+    // Asked here, in the same step that shows the client's note, so the balance's boxes come with it
     loadClientInfo(client.daftra_id, client.location_url || "");
     const last = client.addresses?.[client.addresses.length - 1];
     setAddressChoice(last ? String(last.id) : null);
@@ -246,15 +247,38 @@ export function useClientLookup(form) {
   };
 }
 
-// The found client's balance in Daftra (balance.js), under the note that found them: two boxes
-// that look like the form's other locked ones, since nothing here is typed — it is what Daftra says
-function ClientBalance({ info }) {
+// Whether two fields of the form stand on one line of its grid (first, second: field names, or
+// null). The grid fits as many columns as the page has room for, so only the page can say — and
+// says again when its width changes or a folded section opens. A cell's top is its line's top
+// whatever is drawn inside it, so what is decided from this answer does not change the answer.
+function useOnOneLine(first, second) {
+  const [together, setTogether] = useState(false);
+  useLayoutEffect(() => {
+    const cellOf = (name) => document.getElementById('field-' + name)?.closest('.fl-grid > *');
+    const [a, b] = first && second ? [cellOf(first), cellOf(second)] : [];
+    if (!a || !b || a === b) {
+      setTogether(false);
+      return undefined;
+    }
+    const measure = () => setTogether(a.offsetParent !== null && a.offsetTop === b.offsetTop);
+    measure();
+    const watcher = new ResizeObserver(measure);
+    watcher.observe(a.parentElement);
+    return () => watcher.disconnect();
+  }, [first, second]);
+  return together;
+}
+
+// The found client's balance in Daftra (balance.js): two boxes that look like the form's other
+// locked ones, since nothing here is typed — it is what Daftra says. They stand from the moment the
+// client is found, waiting for Daftra's answer, so nothing moves when it comes.
+function ClientBalance({ info, beside = false }) {
   const view = balanceView(info);
   if (!view) return null;
-  if (view.status === 'loading') return <p className="fl-field__hint fl-client-balance">جارٍ تحميل رصيد العميل من دفترة…</p>;
-  if (view.status === 'error') return <p className="fl-field__hint fl-client-balance">تعذر تحميل رصيد العميل من دفترة</p>;
+  const waiting = view.status === 'loading';
   return (
-    <div className="fl-client-balance" role="group" aria-labelledby="client-balance-title">
+    <div className={beside ? 'fl-client-balance fl-client-balance--beside' : 'fl-client-balance'} role="group"
+      aria-labelledby="client-balance-title" aria-busy={waiting}>
       <div className="fl-field__head">
         <span className="fl-field__label" id="client-balance-title">رصيد العميل في دفترة</span>
         <span className="fl-field__aside"><Icon name="lock" size={13} />للقراءة فقط</span>
@@ -262,18 +286,31 @@ function ClientBalance({ info }) {
       <div className="fl-client-balance__boxes">
         {view.lines.map(([key, label, amount]) => (
           <Field key={key} label={label} htmlFor={`client-balance-${key}`}>
-            <TextInput id={`client-balance-${key}`} dir="auto" readOnly
-              value={amount === null ? 'غير متاح' : formatAmount(amount)} />
+            <TextInput id={`client-balance-${key}`} dir={waiting ? 'rtl' : 'auto'} readOnly placeholder={waiting ? 'جارٍ التحميل…' : undefined}
+              value={waiting ? '' : amount === null ? 'غير متاح' : formatAmount(amount)} />
           </Field>
         ))}
       </div>
+      {view.status === 'error' && <p className="fl-field__hint">تعذر تحميل رصيد العميل من دفترة</p>}
     </div>
   );
 }
 
-// What the last search found, under the field it was made from
-export function ClientLookupNote({ name, client: found, values }) {
+// The found client's balance in the room their note opens beside itself: under the field that
+// follows the one the search was made from (name: this field, after: the one before it), when the
+// two stand on one line. Otherwise — a phone, or the line's last field — it is under the note itself.
+export function ClientBalanceBeside({ name, after, client: found }) {
+  const mine = found.lookup?.status === 'found' && found.lookup.field === after;
+  const beside = useOnOneLine(mine ? after : null, mine ? name : null);
+  return mine && beside ? <ClientBalance info={found.clientInfo} beside /> : null;
+}
+
+// What the last search found, under the field it was made from. next: the field that follows it
+// in a cell of its own, where the client's balance goes when it is beside this one (ClientBalanceBeside).
+export function ClientLookupNote({ name, next = null, client: found, values }) {
   const { lookup, addressChoice, addressBusy } = found;
+  const isFound = lookup?.field === name && lookup.status === 'found';
+  const balanceBeside = useOnOneLine(isFound ? name : null, isFound ? next : null);
   if (lookup?.field !== name) return null;
   if (lookup.status === 'loading') return <p className="fl-field__hint">جارٍ البحث عن العميل…</p>;
   if (lookup.status === 'found') {
@@ -314,7 +351,7 @@ export function ClientLookupNote({ name, client: found, values }) {
           )}
         </div>
       </Alert>
-      <ClientBalance info={found.clientInfo} />
+      {!balanceBeside && <ClientBalance info={found.clientInfo} />}
       </>
     );
   }
