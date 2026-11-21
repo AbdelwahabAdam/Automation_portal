@@ -319,9 +319,21 @@ export function evaluateForm(formType, values, fileCounts = {}, catalog = {}) {
     // and what went beyond is a field of its own, there only when there is one (hide_when_zero).
     // Mirrors the computed step of validate_submission (form_engine/validation.py).
     if ('floor' in spec) result = Math.max(result, spec.floor);
+    // cap: never more than another field holds — what is taken off the client's credit (رصيد سابق) is
+    // what is left to pay, up to the credit they have, and nothing without one. Fields are worked out
+    // in their order, so المتبقي after it takes it off in its turn. Mirrors the server's computed step.
+    if ('cap' in spec) result = Math.min(result, clean[spec.cap] || 0);
     if (result === 0 && spec.hide_when_zero) continue;
     clean[spec.name] = result;
     if (result < 0) errors[spec.name] = spec.negative_message;
+  }
+  // positive_unless: more than 0, unless another field holds something — nothing paid in cash is
+  // still a payment when the client's balance pays part of the order (credit_applied). Here, after
+  // the amounts are worked out, as on the server (form_engine/validation.py).
+  for (const spec of fields.filter((s) => s.positive_unless)) {
+    if (!errors[spec.name] && spec.name in clean && clean[spec.name] <= 0 && !(clean[spec.positive_unless] > 0)) {
+      errors[spec.name] = 'يجب أن يكون أكبر من صفر';
+    }
   }
   // A field that must equal another (e.g. the amount paid must be the whole total)
   for (const spec of fields.filter((s) => s.must_equal)) {

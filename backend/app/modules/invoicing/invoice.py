@@ -11,7 +11,7 @@ from . import printouts
 from .. import requests
 from ...core.errors import SyncError
 from ...integrations import daftra
-from ..clients import address_fields
+from ..clients import FROM_CREDIT, address_fields
 from ...core.config import UPLOAD_DIR, settings
 from ...integrations.daftra import DaftraError, NotFound
 from ..form_engine import NO_INSCRIPTION, package_quantity
@@ -399,6 +399,70 @@ def make_client_credit(request, receipt: Receipt, db: Session | None = None):
     request.save_document(CLIENT_CREDIT, request.daftra_credit_id, row.get("code") or "")
 
 
+# The document a request keeps for the part of its invoice the client's balance paid (RequestDocument.kind)
+CREDIT_USE = "credit_use"
+
+
+def credit_use_of(request, invoice: dict, amount: Decimal, db: Session | None = None) -> int | None:
+    """The payment out of the client's balance this request already made on its own invoice, when an
+    earlier try of the approval got that far and Daftra's answer never came back.
+
+    Known by what Daftra keeps of it (tried on the live account, 2026-11-21: no notes, its own
+    treasury, no transfer number): the method client_credit, the amount, made by the API, and not
+    older than the request — and held by no other request, so two requests taking the same amount
+    from one client's balance on one invoice each have their own. The method alone keeps it apart
+    from the cash payment (same_payment): no payment method a form offers is client_credit."""
+    for payment in invoice.get("InvoicePayment") or []:
+        if not (payment.get("payment_method") == FROM_CREDIT
+                and str(payment.get("status") or "1") == "1"
+                and money(payment.get("amount")) == amount
+                and str(payment.get("staff_id")) == str(settings.daftra_api_staff_id)
+                and not made_before_the_request(request, payment.get("created"))):
+            continue
+        holder = requests.document_holder(db, CREDIT_USE, int(payment["id"])) if db is not None else None
+        if holder in (None, request.id):
+            return int(payment["id"])
+    return None
+
+
+def make_credit_use(request, invoice: dict, amount: Decimal, date: str, db: Session | None = None):
+    """The part of the invoice the client's own balance pays (رصيد العميل), made once: a payment of
+    the invoice whose method is client_credit, as Daftra's own «دفع من رصيد العميل» makes it.
+
+    Sent with these four fields and nothing else, as tried on the live account (2026-11-21): Daftra
+    takes the treasury it keeps the balance in on its own, as it does from its screen, and leaves the
+    client's payments on no invoice as they were — what they hold is what those come to less such
+    payments (clients.credit_held). Whether Daftra refuses more than they hold is not known, so the
+    runner checks that before the invoice is made (check_credit).
+    Found again and waited for exactly as the invoice's cash payment is (make_payment)."""
+    existing = credit_use_of(request, invoice, amount, db)
+    if existing:
+        request.save_document(CREDIT_USE, existing)
+    else:
+        left = seconds_left_to_wait(request)
+        if left > 0:
+            raise SyncError(
+                "أُرسل طلب دفع الفاتورة من رصيد العميل إلى دفترة ولم يصل ردها، وقد تظهر الدفعة على الفاتورة "
+                f"خلال لحظات. انتظر {left} ثانية ثم اعتمد الطلب مرة أخرى؛ لن يُخصم من الرصيد مرتين.")
+        fields = {"invoice_id": request.daftra_invoice_id, "amount": float(amount),
+                  "payment_method": FROM_CREDIT, "date": date}
+        try:
+            made = daftra.create("invoice_payments.json", {"InvoicePayment": fields})
+        except DaftraError as error:
+            if not unanswered(error):
+                raise
+            request.payment_unanswered_at = datetime.now(timezone.utc)
+            raise SyncError(
+                "لم يصل رد دفترة على دفع الفاتورة من رصيد العميل، وقد يكون سُجّل فيها. "
+                f"انتظر {wait_in_words(settings.daftra_unanswered_payment_wait_seconds)} ثم اعتمد الطلب مرة "
+                "أخرى: إن كان قد سُجّل فستتعرف عليه البوابة ولن تكرره. "
+                f"({error})", from_daftra=True) from error
+        request.save_document(CREDIT_USE, made)
+    request.payment_unanswered_at = None
+    row = daftra.get(f"invoice_payments/{request.daftra_credit_use_id}.json").get("data", {}).get("InvoicePayment", {})
+    request.save_document(CREDIT_USE, request.daftra_credit_use_id, row.get("code") or "")
+
+
 def save_receipt_pdf(request, invoice: dict, receipt: Receipt, db: Session) -> bool:
     """Attaches the receipt PDF once. Like the invoice PDF, failing to make it does not stop the approval."""
     if not request.daftra_receipt_no or any(a.field == RECEIPT_ATTACHMENT_FIELD for a in request.attachments):
@@ -418,20 +482,27 @@ def save_receipt_pdf(request, invoice: dict, receipt: Receipt, db: Session) -> b
     return True
 
 
-def finish_invoice(request, invoice: dict, receipt: Receipt | None, db: Session) -> dict:
-    """The steps every request shares once its invoice exists: the payment, the receipt, both PDFs.
+def finish_invoice(request, invoice: dict, receipt: Receipt | None, db: Session,
+                   made: Invoice | None = None) -> dict:
+    """The steps every request shares once its invoice exists: the payments, the receipt, both PDFs.
 
     receipt None: nothing was paid now, so no payment is made and no receipt drawn.
+    made: the Invoice document the request made, whose from_credit the client's balance pays —
+    first, whether or not anything was paid in cash, so the cash pays what the balance leaves.
     What the receipt holds beyond the invoice (receipt.credit) goes to the client's balance, after
     the invoice's own payment: a receipt of its own in Daftra, kept on the request with its number."""
     paid = receipt.to_invoice if receipt is not None else Decimal(0)
     credit = receipt.credit if receipt is not None else Decimal(0)
+    from_credit = made.credit if made is not None else Decimal(0)
+    if from_credit > 0 and request.daftra_credit_use_id is None:
+        make_credit_use(request, invoice, from_credit, made.date, db)
+        invoice = get_invoice(request.daftra_invoice_id)
     if paid > 0 and request.daftra_payment_id is None:
         make_payment(request, invoice, receipt, db)
         invoice = get_invoice(request.daftra_invoice_id)
     if credit > 0 and request.daftra_credit_id is None:
         make_client_credit(request, receipt, db)
-    # Daftra draws the PDF from the invoice as it stands, so it is taken after the payment: taken
+    # Daftra draws the PDF from the invoice as it stands, so it is taken after the payments: taken
     # before, «مدفوع» reads 0 and «الرصيد المستحق» the whole total, whatever the client just paid
     pdf_saved = save_invoice_pdf(request, invoice, db)
     receipt_saved = paid > 0 and save_receipt_pdf(request, invoice, receipt, db)
@@ -440,4 +511,6 @@ def finish_invoice(request, invoice: dict, receipt: Receipt | None, db: Session)
                "payment_proof_sent": send_payment_proof(request, invoice)}
     if credit > 0:
         summary.update(daftra_credit_no=request.daftra_credit_no, client_credit=float(credit))
+    if from_credit > 0:
+        summary.update(daftra_credit_use_no=request.daftra_credit_use_no, credit_used=float(from_credit))
     return summary

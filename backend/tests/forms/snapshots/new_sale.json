@@ -1052,8 +1052,18 @@
      "min": 0,
      "money": true,
      "name": "paid_amount",
-     "positive": true,
+     "positive": false,
+     "positive_unless": "credit_applied",
      "required": true,
+     "type": "number"
+    },
+    {
+     "client_credit": true,
+     "label": "رصيد سابق",
+     "money": true,
+     "name": "previous_credit",
+     "pair_with": "paid_amount",
+     "required": false,
      "type": "number"
     },
     {
@@ -1067,9 +1077,24 @@
      "type": "staff"
     },
     {
+     "cap": "previous_credit",
      "computed": [
       "total_amount",
       "paid_amount"
+     ],
+     "floor": 0,
+     "hide_when_zero": true,
+     "label": "المخصوم من رصيد العميل",
+     "money": true,
+     "name": "credit_applied",
+     "required": false,
+     "type": "number"
+    },
+    {
+     "computed": [
+      "total_amount",
+      "paid_amount",
+      "credit_applied"
      ],
      "floor": 0,
      "label": "المبلغ المتبقي",
@@ -1118,13 +1143,21 @@
       "تمارا",
       "طلب من الموقع"
      ],
-     "required": true,
+     "required": false,
+     "required_if": {
+      "field": "paid_amount",
+      "gt": 0
+     },
      "type": "select"
     },
     {
      "label": "الخزينة / الحساب المستلم في دفترة",
      "name": "treasury",
-     "required": true,
+     "required": false,
+     "required_if": {
+      "field": "paid_amount",
+      "gt": 0
+     },
      "type": "daftra_treasury"
     },
     {
@@ -1132,13 +1165,21 @@
      "label": "تاريخ الدفع",
      "name": "payment_date",
      "not_future": true,
-     "required": true,
+     "required": false,
+     "required_if": {
+      "field": "paid_amount",
+      "gt": 0
+     },
      "type": "date"
     },
     {
      "label": "رقم التحويل / طلب تابي / السند الورقي",
      "name": "payment_reference",
-     "required": true,
+     "required": false,
+     "required_if": {
+      "field": "paid_amount",
+      "gt": 0
+     },
      "type": "text"
     },
     {
@@ -1160,7 +1201,11 @@
     {
      "label": "إثبات الدفع",
      "name": "payment_proof",
-     "required": true,
+     "required": false,
+     "required_if": {
+      "field": "paid_amount",
+      "gt": 0
+     },
      "type": "files"
     },
     {

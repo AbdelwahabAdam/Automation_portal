@@ -132,6 +132,7 @@ async function salesForm(page, prefix) {
     await page.locator('#phone').fill(PHONE);
     await page.locator('#phone').press('Enter');
     await expectText(page, 'عميل مسجل', 'client lookup after pressing Enter');
+    await clientBalance(page, prefix);
   }
   // Finding a client fills التصنيف from Daftra, المنطقة is that التصنيف, and الإمارة comes from the
   // address. التصنيف and الإمارة are buttons showing what is chosen; المنطقة has a value.
@@ -228,6 +229,7 @@ async function salesForm(page, prefix) {
   const plus = page.getByRole('button', { name: /زيادة الكمية/ }).first();
   if (await plus.count()) await plus.click();
   await page.getByRole('button', { name: 'فتح كل الأقسام' }).click().catch(() => {});
+  await previousCredit(page, prefix);
   await page.locator('#paid_amount').fill('100');
   await page.waitForTimeout(300);
   const subtotal = await page.locator('#subtotal_amount').inputValue().catch(() => '');
@@ -447,6 +449,40 @@ async function discountInitiative(page, prefix) {
   await shot(page, `${prefix}-discount`, false);
 }
 
+// A found client's balance in Daftra shows under the note that found them, in boxes nothing can be
+// typed into. Whatever the local data holds: the figures, or the quiet line saying Daftra could not answer.
+async function clientBalance(page, prefix) {
+  const block = page.locator('.fl-client-balance');
+  await page.getByText(/رصيد العميل في دفترة|تعذر تحميل رصيد العميل/).first().waitFor({ timeout: 12000 })
+    .catch(() => problems.push('[balance] neither «رصيد العميل في دفترة» nor its failure shows after the client is found'));
+  if (await page.getByText('تعذر تحميل رصيد العميل من دفترة').count()) {
+    log(`${prefix} client balance: Daftra could not be asked here`);
+    return;
+  }
+  if (!(await block.first().isVisible())) return;
+  const boxes = block.locator('input');
+  const count = await boxes.count();
+  if (count !== 2) problems.push(`[balance] ${count} boxes in «رصيد العميل في دفترة», not 2 (المستحق عليه, رصيد دائن)`);
+  const typeable = await boxes.evaluateAll((els) => els.filter((el) => !el.readOnly).length);
+  if (typeable) problems.push(`[balance] ${typeable} of the balance boxes can be typed into`);
+  // Inside the green note it was in before, it would show twice
+  if (await page.locator('.fl-alert .fl-client-balance').count()) problems.push('[balance] the balance is still inside the found client\'s note');
+  log(`${prefix} client balance: ${(await boxes.evaluateAll((els) => els.map((el) => el.value))).join(' / ')}`);
+}
+
+// رصيد سابق beside المبلغ المدفوع is Daftra's figure for the found client: never typed into
+async function previousCredit(page, prefix) {
+  const credit = page.locator('#previous_credit');
+  if (!(await credit.count())) return;
+  if (!(await credit.evaluate((el) => el.readOnly))) problems.push('[credit] رصيد سابق can be typed into');
+  const paid = page.locator('#paid_amount');
+  if (await paid.evaluate((el) => el.readOnly)) problems.push('[credit] المبلغ المدفوع is locked beside رصيد سابق');
+  // One cell of the grid holds both
+  const together = await credit.evaluate((el) => Boolean(el.closest('.fl-field-pair')?.querySelector('#paid_amount')));
+  if (!together) problems.push('[credit] رصيد سابق is not beside المبلغ المدفوع');
+  log(`${prefix} previous credit: «${await credit.inputValue() || '—'}», locked`);
+}
+
 // Paying beyond the total: nothing is left to pay, and the rest shows as a line of its own that
 // is not there otherwise. Leaves المبلغ المدفوع as it found it.
 async function overpaying(page, prefix, total) {
@@ -483,7 +519,8 @@ async function everyField(page, prefix) {
     await page.getByRole('button', { name: 'فتح كل الأقسام' }).click();
     await page.waitForTimeout(500);
     // A new client's fields (نوع العميل, الجنس, البريد) wait for a phone search that finds nobody: newClient()
-    // …and an amount worked out that is only a line when there is one (زيادة تُضاف إلى رصيد العميل): overpaying()
+    // …and an amount worked out that is only a line when there is one (زيادة تُضاف إلى رصيد العميل, المخصوم
+    // من رصيد العميل): overpaying(). رصيد سابق is always there, beside المبلغ المدفوع, empty without a client.
     const expected = type.sections.flatMap((section) => section.fields.filter((f) => !f.new_client && !f.hide_when_zero).map((f) => f.name));
     const shown = await page.$$eval('[id^="field-"]', (els) => els.filter((el) => el.offsetParent !== null).map((el) => el.id.slice(6)));
     const missing = expected.filter((name) => !shown.includes(name));

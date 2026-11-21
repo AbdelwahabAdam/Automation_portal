@@ -8,13 +8,19 @@ import { formatMoney } from '../../../lib/format.js';
 const TOTALS = [
   ['subtotal_amount', 'قبل الخصم'],
   ['total_amount', 'الإجمالي'],
+  // What the found client holds with us, before what is paid now: it goes towards المتبقي too
+  ['previous_credit', 'رصيد سابق'],
   ['paid_amount', 'المدفوع'],
   ['remaining_amount', 'المتبقي'],
   // Only while more is paid than the total: it has no value otherwise (hide_when_zero)
   ['overpaid_amount', 'زيادة لرصيد العميل'],
 ];
 
-// How each amount is set off from the rest: the two that matter most, and the one nobody expects
+// The amounts that are a line only when there is some: a client with no credit has no «رصيد سابق»
+const ONLY_WHEN_SOME = ['previous_credit'];
+
+// How each amount is set off from the rest: the two that matter most, and the one nobody expects.
+// The phone's one-line bar shows only these (ds.css), so رصيد سابق never crowds it.
 const LOOK = { remaining_amount: 'strong', total_amount: 'strong', overpaid_amount: 'alert' };
 
 const STATE_LOOK = {
@@ -27,9 +33,11 @@ const STATE_LOOK = {
 
 // The amounts of this form that have a value right now; none until something costs anything
 export function formTotals(fieldNames, clean) {
-  const totals = TOTALS.filter(([name]) => fieldNames.has(name) && typeof clean[name] === 'number')
+  const totals = TOTALS.filter(([name]) => fieldNames.has(name) && typeof clean[name] === 'number'
+      && !(ONLY_WHEN_SOME.includes(name) && !(clean[name] > 0)))
     .map(([name, label]) => ({ name, label, value: clean[name] }));
-  return totals.some((total) => total.value > 0) ? totals : [];
+  // A client's credit alone is not the order costing anything yet
+  return totals.some((total) => total.value > 0 && !ONLY_WHEN_SOME.includes(total.name)) ? totals : [];
 }
 
 export function Totals({ totals, compact }) {

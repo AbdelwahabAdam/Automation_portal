@@ -570,6 +570,11 @@ class FakeDaftra:
                    "created": datetime.now(UAE).strftime("%Y-%m-%d %H:%M:%S")}
         if not self.keeps_payment_notes:
             payment.update(notes=None, staff_id=API_STAFF_ID)
+        if fields.get("payment_method") == "client_credit":
+            # Out of the client's balance, as the live account saved one (2026-11-21): into the
+            # treasury Daftra keeps it in, whatever was sent, with no transfer number, no notes,
+            # and the API as its maker
+            payment.update(treasury_id="2", transaction_id=None, notes=None, staff_id=API_STAFF_ID)
         self.payments[payment_id] = payment
         self.invoices[int(fields["invoice_id"])]["payments"].append(payment)
         return {"id": payment_id}

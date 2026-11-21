@@ -1,5 +1,6 @@
 """Saving a request as a draft, and submitting it for review."""
 
+import math
 from collections import Counter
 from datetime import datetime, timezone
 
@@ -7,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from ....core.context import Actor
 from ....core.errors import Conflict, Invalid, NotFound, SyncError
+from ....core.text import ARABIC_DIGITS
 from ....integrations import daftra
 from ... import catalog, clients, form_engine
 from ...audit import changes
@@ -69,11 +71,67 @@ def client_invoices(data: dict, db: Session) -> list[dict] | None:
         return None
 
 
+def held_credit(data: dict, db: Session) -> float | None:
+    """What the client the form names holds in Daftra now (رصيد العميل); None when Daftra cannot say.
+
+    0 for a client our list does not have: the form finds clients in our list alone, so it has
+    shown them no balance, and Daftra is not searched for them on every submit. 0 too when the
+    phone is several clients' and no code says which: approving refuses that request anyway."""
+    if not clients.known_client(data, db):
+        return 0
+    try:
+        found = clients.existing_client_id(data, db)
+    except SyncError:
+        return 0
+    except daftra.DaftraError:
+        return None
+    return clients.credit_held(found) if found is not None else 0
+
+
+def _sent_amount(raw) -> float:
+    """The figure the browser sent for an amount; nothing, or something that is no number, is 0."""
+    try:
+        amount = float(str(raw if raw is not None else "").translate(ARABIC_DIGITS).replace(",", "").strip() or 0)
+    except ValueError:
+        return 0
+    return amount if math.isfinite(amount) else 0
+
+
+def _dirhams(amount: float) -> str:
+    return f"{amount:,.2f}".removesuffix(".00")
+
+
+def checked_credit(form_type: str, data: dict, db: Session) -> tuple[dict, dict]:
+    """The data with «رصيد سابق» (a field marked client_credit) as Daftra has it now, and the error
+    to refuse the submit with when the browser showed another figure: the salesperson worked out
+    the amounts from what they were shown, and what is taken from the balance follows from it.
+
+    The browser's figure is never kept. Like any empty amount, a balance of 0 is left out."""
+    name = next((spec["name"] for spec in form_engine.form_fields(form_type) if spec.get("client_credit")), None)
+    if name is None:
+        return data, {}
+    sent = _sent_amount(data.get(name))
+    held = held_credit(data, db)
+    data = {key: value for key, value in data.items() if key != name}
+    if held is None:
+        if sent > 0.005:
+            return data, {name: "تعذر التحقق من رصيد العميل في دفترة الآن. حاول مرة أخرى بعد قليل."}
+        return data, {}
+    if held > 0.005:
+        data[name] = held
+    if abs(held - sent) > 0.005:
+        return data, {name: f"رصيد العميل في دفترة الآن {_dirhams(held)} درهم وليس {_dirhams(sent)}. "
+                            "ابحث عن العميل مرة أخرى لتحديث الرصيد ثم راجع المبالغ."}
+    return data, {}
+
+
 def apply_action(db: Session, request: Request, data: dict, action: str, user):
     """Saves the data as a draft, or validates it and locks the request as submitted."""
     if action == "draft":
         request.data = form_engine.sanitize_draft(request.form_type, data)
         return
+    # What the client holds in Daftra, never what the browser says they do
+    data, credit_errors = checked_credit(request.form_type, data, db)
     file_counts = Counter(a.field for a in request.attachments)
     lists = daftra_lists(request.form_type, db)
     invoices = None
@@ -94,6 +152,7 @@ def apply_action(db: Session, request: Request, data: dict, action: str, user):
             clean, form_engine.CheckContext(db=db, user=user, choices=choices)
         ).items():
             errors.setdefault(field, message)
+    errors.update(credit_errors)
     if errors:
         raise Invalid(fields=errors)
     request.data = clean

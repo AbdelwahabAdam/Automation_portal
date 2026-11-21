@@ -4,7 +4,7 @@
     REQUIRED_IF(when)    must be filled when `when` holds
 """
 
-from ...modules.form_engine import (CASH_PAYMENT, DISCOUNTED, HAS_REMAINDER, HIDE, REQUIRED, REQUIRED_IF, SHOW, f,
+from ...modules.form_engine import (CASH_PAYMENT, DISCOUNTED, HAS_REMAINDER, HIDE, PAID, REQUIRED, REQUIRED_IF, SHOW, f,
                                     files, shared, switched)
 
 # The renewal price a طلب تجديد عقد الصيانة السنوي starts from; the salesperson can change it
@@ -71,17 +71,20 @@ SECTIONS = [
         remaining_due_date=REQUIRED_IF(HAS_REMAINDER),
         must_pay=True,
         may_overpay=True,                   # more than the total goes to the client's balance in Daftra
+        takes_credit=True,                  # what the client holds there pays what the cash leaves
         price_default=RENEWAL_PRICE,
         labels={"subtotal_amount": "سعر تجديد العقد قبل الخصم، شامل الضريبة",
                 "total_amount": "قيمة الطلب النهائية بعد الخصم، شامل الضريبة"},
     ),
+    # Asked for when something is paid in cash: a renewal the client's balance pays alone
+    # (takes_credit) has no payment to describe and no proof of one
     shared.payment(
-        payment_method=REQUIRED,
-        treasury=REQUIRED,
-        payment_date=REQUIRED,
-        payment_reference=REQUIRED,
+        payment_method=REQUIRED_IF(PAID),
+        treasury=REQUIRED_IF(PAID),
+        payment_date=REQUIRED_IF(PAID),
+        payment_reference=REQUIRED_IF(PAID),
         collector_name=REQUIRED_IF(CASH_PAYMENT),
     ),
-    attachments(payment_proof=REQUIRED),
+    attachments(payment_proof=REQUIRED_IF(PAID)),
     shared.notes(notes=SHOW),
 ]

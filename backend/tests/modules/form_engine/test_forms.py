@@ -359,7 +359,8 @@ def test_every_amount_field_is_marked_as_money():
         for spec in form_fields(key):
             if spec["type"] != "number":
                 continue
-            looks_like_money = any(word in spec["name"] for word in ("amount", "price", "paid", "refund", "total", "value"))
+            looks_like_money = any(word in spec["name"] for word in ("amount", "price", "paid", "refund", "total", "value",
+                                                                     "credit"))
             assert spec.get("money", False) == looks_like_money, f"{key}.{spec['name']}"
 
 

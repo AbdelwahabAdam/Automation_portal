@@ -109,6 +109,11 @@ _OWN_FIELD_LABELS = {
     "treasury_name": "الخزينة في دفترة",
     "daftra_invoice_no": "رقم الفاتورة في دفترة",
     "daftra_receipt_no": "رقم سند القبض في دفترة",
+    # What was paid beyond the invoice, put on the client's balance, and what their balance paid of it
+    "daftra_credit_no": "رقم سند الزيادة المضافة إلى رصيد العميل في دفترة",
+    "client_credit": "الزيادة المضافة إلى رصيد العميل",
+    "daftra_credit_use_no": "رقم دفعة الفاتورة من رصيد العميل في دفترة",
+    "credit_used": "المدفوع من رصيد العميل",
     "daftra_work_order_no": "رقم أمر الشغل في دفترة",
     "invoice_pdf_saved": "تم حفظ PDF الفاتورة",
     "receipt_pdf_saved": "تم حفظ PDF سند القبض",

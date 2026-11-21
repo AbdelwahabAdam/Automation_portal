@@ -14,6 +14,7 @@ from ...modules.form_engine import (
     DISCOUNTED,
     HAS_REMAINDER,
     HIDE,
+    PAID,
     INSCRIPTION,
     INSTALLATION_WORK,
     MAX_PACKAGE_QUANTITY,
@@ -206,16 +207,19 @@ SECTIONS = [
         remaining_due_date=REQUIRED_IF(HAS_REMAINDER),   # an instalment in Daftra
         must_pay=True,
         may_overpay=True,                   # more than the total goes to the client's balance in Daftra
+        takes_credit=True,                  # what the client holds there pays what the cash leaves
     ),
+    # Asked for when something is paid in cash: an order the client's balance pays alone
+    # (takes_credit) has no payment to describe and no proof of one
     shared.payment(
-        payment_method=REQUIRED,
-        treasury=REQUIRED,
-        payment_date=REQUIRED,
-        payment_reference=REQUIRED,
+        payment_method=REQUIRED_IF(PAID),
+        treasury=REQUIRED_IF(PAID),
+        payment_date=REQUIRED_IF(PAID),
+        payment_reference=REQUIRED_IF(PAID),
         collector_name=REQUIRED_IF(CASH_PAYMENT),
     ),
     attachments(
-        payment_proof=REQUIRED,
+        payment_proof=REQUIRED_IF(PAID),
         design_image=REQUIRED,
         inscription_file=SHOW,
     ),

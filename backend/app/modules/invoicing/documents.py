@@ -76,6 +76,9 @@ class Invoice:
     total: what Daftra's total must come to, checked once it is made.
     address: the client_* fields printed on it (invoice_address), or {} to print the client's own.
     terms: the term printed on its last page (modules/terms), or None.
+    from_credit: how much of this invoice the client's own balance pays (رصيد العميل, the form's
+    credit_applied): a payment of the invoice out of it, made before what is paid in cash, and
+    checked against what they hold in Daftra before the invoice is made.
     """
 
     date: str
@@ -87,6 +90,12 @@ class Invoice:
     order_source: Any = None
     address: dict = field(default_factory=dict)
     terms: Any = None
+    from_credit: Any = 0
+
+    @property
+    def credit(self) -> Decimal:
+        """The part of the invoice the client's balance pays."""
+        return money(self.from_credit)
 
 
 @dataclass(frozen=True)

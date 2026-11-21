@@ -13,13 +13,22 @@
 .fl-discount-pair { display: grid; grid-template-columns: 3fr 2fr; gap: var(--fl-space-3); align-items: start; }
 .fl-discount-pair__hint { grid-column: 1 / -1; margin-top: calc(-1 * var(--fl-space-2)); }
 
+/* A field drawn beside the one it belongs with (رصيد سابق beside المبلغ المدفوع فعليًا الآن), in one
+   field's width the same way. Each field shares the pair's rows (subgrid), so a label that wraps on a
+   phone pushes both boxes down together and they stay level. A note for both runs under them. */
+.fl-field-pair { display: grid; grid-template-columns: 3fr 2fr; column-gap: var(--fl-space-3); row-gap: 6px; align-items: start; }
+.fl-field-pair > .fl-field { display: grid; grid-row: span 4; grid-template-rows: subgrid; }
+.fl-field-pair__note { grid-column: 1 / -1; }
+
 /* The link shown to an admin when an invitation email could not be sent */
 .fl-invite-link { margin-block-start: var(--fl-space-2); overflow-wrap: anywhere; }
 /* The client found by a search: their address choice and its buttons */
 .fl-lookup__actions { margin-block-start: var(--fl-space-2); }
-/* …and their balance in Daftra: what they owe and what they hold, on one line that may wrap */
-.fl-lookup__balance { margin-block-start: var(--fl-space-1); }
-.fl-lookup__balance span { white-space: nowrap; }
+/* …and their balance in Daftra under it: two short locked boxes side by side, on a phone too */
+.fl-client-balance { margin-block-start: var(--fl-space-3); }
+.fl-client-balance .fl-field__head { margin-block-end: var(--fl-space-2); }
+.fl-client-balance__boxes { display: grid; grid-template-columns: 1fr 1fr; gap: var(--fl-space-3); }
+.fl-client-balance__boxes .fl-field__label { font-weight: var(--fl-font-weight-regular); color: var(--fl-color-text-secondary); }
 
 /* Review page: the employees with drafts, with their counts */
 .fl-draftcounts { display: flex; flex-direction: column; gap: 8px; }

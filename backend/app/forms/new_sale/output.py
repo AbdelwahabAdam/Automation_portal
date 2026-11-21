@@ -52,6 +52,7 @@ def invoice(ctx):
         order_source=d.get("order_source"),
         address=service_address(d),                   # عنوان الخدمة, printed on the invoice
         terms=package_terms(ctx),                     # the packages' الشروط والأحكام
+        from_credit=d.get("credit_applied"),          # paid out of what the client holds in Daftra
     )
 
 

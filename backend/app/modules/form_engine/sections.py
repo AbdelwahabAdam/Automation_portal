@@ -129,6 +129,24 @@ def overpaid(label: str = "زيادة تُضاف إلى رصيد العميل", 
     return f("overpaid_amount", label, "number", money=True, computed=[paid, total], floor=0, hide_when_zero=True)
 
 
+# ---------- رصيد العميل ----------
+
+def previous_credit(label: str = "رصيد سابق", *, beside: str = "paid_amount") -> dict:
+    """What the client already holds in Daftra (رصيد العميل, الدائن on their page), beside what they
+    pay now. Never typed: the form fills it in from the client it finds, and submitting puts the
+    figure Daftra has now in its place (requests.service.drafts.checked_credit), whatever came."""
+    return f("previous_credit", label, "number", money=True, client_credit=True, pair_with=beside)
+
+
+def credit_applied(label: str = "المخصوم من رصيد العميل", *, total: str = "total_amount",
+                   paid: str = "paid_amount", held: str = "previous_credit") -> dict:
+    """How much of that the order takes: what the cash leaves unpaid, and never more than the client
+    holds (cap). An order the cash alone covers takes nothing, and the line is not shown. Approving
+    pays this part of the invoice out of their balance in Daftra (invoicing.make_credit_use)."""
+    return f("credit_applied", label, "number", money=True, computed=[total, paid], floor=0, cap=held,
+             hide_when_zero=True)
+
+
 # ---------- عنوان الخدمة ----------
 
 def address(*, category: Switch, area: Switch, emirate: Switch, street: Switch, house: Switch,
@@ -163,7 +181,7 @@ def address(*, category: Switch, area: Switch, emirate: Switch, street: Switch, 
 def amounts(*, subtotal_amount: Switch, total_amount: Switch, discount_label: Switch,
             discount_amount: Switch, discount_percent: Switch, discount_approved_by: Switch, paid_amount: Switch,
             remaining_amount: Switch, remaining_due_date: Switch,
-            must_pay: bool = False, may_overpay: bool = False,
+            must_pay: bool = False, may_overpay: bool = False, takes_credit: bool = False,
             price_default: int | None = None, paid_default: str | None = None,
             labels: dict | None = None, note: str | None = None) -> dict:
     """قيمة الطلب.
@@ -181,11 +199,16 @@ def amounts(*, subtotal_amount: Switch, total_amount: Switch, discount_label: Sw
     discount_percent SHOW: نسبة الخصم beside قيمة الخصم, each worked out from the other and the subtotal
                      (percent_discount below). Only with a subtotal shown — there is nothing else for a
                      percentage to be of. Daftra still gets the amount: an invoice's discount is an amount.
-    must_pay: what is paid now must be more than 0.
+    must_pay: what is paid now must be more than 0 — in cash, or, with takes_credit, out of the
+              client's balance: an order their balance pays part of may be sent with no cash at all.
     may_overpay: what is paid now may be more than the total. Nothing is then left to pay, and the
                  rest is shown as «زيادة تُضاف إلى رصيد العميل» (overpaid_amount, there only when
                  there is one): approving records it in Daftra as the client's own balance, not on
                  the invoice. Without it, paying more than the total is refused.
+    takes_credit: what the client already holds in Daftra pays what the cash leaves: «رصيد سابق»
+                 (previous_credit) beside المبلغ المدفوع, and the part of it the order takes
+                 (credit_applied, there only when there is one) just before المبلغ المتبقي, which
+                 it is taken off. Approving pays that part of the invoice out of their balance.
     """
     labels = _labelled(labels, {"subtotal_amount", "total_amount", "discount_label", "discount_amount",
                                 "discount_percent", "discount_approved_by", "paid_amount", "remaining_amount",
@@ -216,7 +239,12 @@ def amounts(*, subtotal_amount: Switch, total_amount: Switch, discount_label: Sw
         # The order lines fill it in (their subtotal_field names it): nothing is taken off
         total = f("total_amount", total_label, "number", money=True, computed=[])
 
-    paid = money("paid_amount", labels.get("paid_amount", "المبلغ المدفوع فعليًا الآن"), positive=must_pay,
+    # With the client's balance to draw on, nothing in cash is still something paid now: the rule
+    # waits for what the balance pays to be worked out (positive_unless), and holds without one
+    cash_or_credit = must_pay and takes_credit
+    paid = money("paid_amount", labels.get("paid_amount", "المبلغ المدفوع فعليًا الآن"),
+                 positive=must_pay and not cash_or_credit,
+                 **({"positive_unless": "credit_applied"} if cash_or_credit else {}),
                  **({"default": paid_default} if paid_default is not None else {}))
     named = f("discount_label", labels.get("discount_label", "اسم الخصم كما يظهر في الفاتورة"),
               max_length=100, suggestions=DISCOUNT_LABELS, fills="discount_amount",
@@ -240,8 +268,9 @@ def amounts(*, subtotal_amount: Switch, total_amount: Switch, discount_label: Sw
         "remaining_due_date", "موعد سداد المتبقي (قسط اتفاقية التقسيط)" if instalment else "موعد سداد المتبقي، إن وجد"),
         "date")
     left = {"floor": 0} if may_overpay else {"negative_message": "المبلغ المدفوع أكبر من قيمة الطلب"}
+    # What the client's balance pays is left to pay no more
     remaining = f("remaining_amount", labels.get("remaining_amount", "المبلغ المتبقي"), "number", money=True,
-                  computed=["total_amount", "paid_amount"], **left)
+                  computed=["total_amount", "paid_amount", *(["credit_applied"] if takes_credit else [])], **left)
 
     order = [("subtotal_amount", subtotal), ("total_amount", total), *middle,
              ("remaining_amount", remaining), ("remaining_due_date", due)]
@@ -251,9 +280,21 @@ def amounts(*, subtotal_amount: Switch, total_amount: Switch, discount_label: Sw
             raise TypeError("amounts: may_overpay is what is paid beyond the total — paid_amount and "
                             "remaining_amount must be shown")
         # Right under المبلغ المتبقي, which it is the other side of: one of the two is always 0
-        at = next(i for i, field in enumerate(section["fields"]) if field["name"] == "remaining_amount") + 1
-        section["fields"].insert(at, overpaid())
+        section["fields"].insert(_place(section, "remaining_amount") + 1, overpaid())
+    if takes_credit:
+        if not (shown(switches["paid_amount"]) and shown(switches["remaining_amount"])):
+            raise TypeError("amounts: takes_credit pays what paid_amount leaves of the total — paid_amount and "
+                            "remaining_amount must be shown")
+        # Beside what is paid now, the other money the order is paid with; and what it takes of it
+        # just before المبلغ المتبقي, which is worked out after it (the fields are computed in order)
+        section["fields"].insert(_place(section, "paid_amount") + 1, previous_credit())
+        section["fields"].insert(_place(section, "remaining_amount"), credit_applied())
     return section
+
+
+def _place(section: dict, name: str) -> int:
+    """Where the field of this name stands in the section."""
+    return next(i for i, field in enumerate(section["fields"]) if field["name"] == name)
 
 
 def _check_amounts(s: dict[str, Switch]):

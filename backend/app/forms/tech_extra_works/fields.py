@@ -85,6 +85,7 @@ SECTIONS = [
         remaining_amount=SHOW,
         remaining_due_date=SHOW,
         may_overpay=True,                   # more than the total goes to the client's balance in Daftra
+        takes_credit=True,                  # what the client holds there pays what the cash leaves
         labels={"total_amount": "قيمة الأعمال النهائية، شامل الضريبة",
                 "paid_amount": "المبلغ المدفوع فعليًا الآن"},
     ),

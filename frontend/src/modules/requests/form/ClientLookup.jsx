@@ -2,10 +2,10 @@
 // filling in their details, choosing one of their addresses, and what Daftra itself knows of them.
 import { useRef, useState } from 'react';
 import * as clientsApi from '../../../api/clients.js';
-import { Alert, Button, Select } from '../../../ds/index.jsx';
+import { Alert, Button, Field, Icon, Select, TextInput } from '../../../ds/index.jsx';
 import { samePerson } from '../../../ds/match.js';
-import { formatMoney } from '../../../lib/format.js';
-import { balanceLines } from './balance.js';
+import { formatAmount } from '../../../lib/format.js';
+import { balanceView, clientCredit } from './balance.js';
 import { coordinatesFromLink, normalizePhone } from '../validation.js';
 
 // Form fields that an existing Daftra client can fill. المنطقة is not one: whatever a client's saved
@@ -28,15 +28,20 @@ const OF_THE_CLIENT = { invoice: '', invoice_name: '' };
 
 const addressLabel = (address) => [address.emirate, address.area, address.street, address.house].filter(Boolean).join('، ') || 'بلا عنوان مسجل';
 
-// form: { fieldNames, needsClientInfo, setValues, setErrors, setMessage, autoFill, autoFilled } from RequestForm
+// form: { fieldNames, creditFields, setValues, setErrors, setMessage, autoFill, autoFilled } from RequestForm.
+// creditFields: the form's fields that hold what the found client has with us (رصيد سابق, a field
+// with client_credit). Only the found client's answer from Daftra fills them: never typed, and
+// emptied whenever there is no such answer, so a figure of another client's or an old one is never sent.
 export function useClientLookup(form) {
   const toast = form.toast;
+  const creditFields = form.creditFields || [];
   // Result of the last search: { field, status: 'loading' | 'found' | 'many' | 'none' | 'error', ... }
   const [lookup, setLookup] = useState(null);
   // id of the found client's address currently filled in, or 'new' while typing one to save
   const [addressChoice, setAddressChoice] = useState(null);
   const [addressBusy, setAddressBusy] = useState(false);
-  // The found client as Daftra has them now: { status: 'loading' | 'ready' | 'error', category, open_invoices }
+  // The found client as Daftra has them now: { status: 'loading' | 'ready' | 'error', category, open_invoices,
+  // balance: { owed, credit } } — credit is null when Daftra could not say
   const [clientInfo, setClientInfo] = useState(null);
   const lastLookup = useRef('');
   // Set while a new address is being typed, so the client's category from Daftra — which may
@@ -45,13 +50,29 @@ export function useClientLookup(form) {
   // Whose details Daftra was last asked for: an answer for anyone else came too late
   const askedFor = useRef(null);
 
+  // amount: the credit, or null to empty them. A form without them is left alone.
+  function setCredit(amount) {
+    if (!creditFields.length) return;
+    const value = amount > 0 ? String(amount) : '';
+    form.setValues((current) => (creditFields.every((name) => (current[name] ?? '') === value)
+      ? current : { ...current, ...Object.fromEntries(creditFields.map((name) => [name, value])) }));
+  }
+
   async function loadClientInfo(daftraId, theirLink = "") {
     askedFor.current = daftraId;
     setClientInfo({ status: 'loading' });
+    // Until Daftra says what this client holds, nothing is taken off for it
+    setCredit(null);
     try {
       const info = await clientsApi.clientInDaftra(daftraId);
       if (askedFor.current !== daftraId) return;
       setClientInfo({ status: 'ready', ...info });
+      setCredit(clientCredit({ status: 'ready', ...info }));
+      // The client searched for again, as the server asks when their credit has changed since: its
+      // refusal is answered by the figure just fetched
+      if (creditFields.length) {
+        form.setErrors((current) => Object.fromEntries(Object.entries(current).filter(([name]) => !creditFields.includes(name))));
+      }
       // Decided here, not inside the update: an update is run when React next renders, which is
       // after this line, so anything read back out of one is read too early
       const point = coordinatesFromLink(info.coordinates) || coordinatesFromLink(theirLink);
@@ -103,7 +124,9 @@ export function useClientLookup(form) {
   function forgetClient(changed, values) {
     const filledIn = FOUND_FIELDS.filter((name) => name !== changed && values[name] && values[name] === form.autoFilled.current[name]);
     const blank = Object.fromEntries(Object.keys(BLANK_ADDRESS).filter((name) => form.fieldNames.has(name.replace(/_name$/, ''))).map((name) => [name, '']));
-    const gone = { ...blank, ...Object.fromEntries(filledIn.map((name) => [name, ''])), ...(form.fieldNames.has('invoice') ? OF_THE_CLIENT : {}) };
+    // What they hold with us goes too: it was theirs
+    const gone = { ...blank, ...Object.fromEntries(filledIn.map((name) => [name, ''])), ...(form.fieldNames.has('invoice') ? OF_THE_CLIENT : {}),
+      ...Object.fromEntries(creditFields.map((name) => [name, ''])) };
     for (const name of Object.keys(gone)) delete form.autoFilled.current[name];
     form.setValues((current) => ({ ...current, ...gone, new_client: false }));
     form.setErrors((current) => Object.fromEntries(Object.entries(current).filter(([name]) => !(name in gone))));
@@ -136,7 +159,9 @@ export function useClientLookup(form) {
     // A client we have: Daftra already holds their البريد (نوع العميل and الجنس are filled in above)
     form.setValues((current) => ({ ...current, new_client: false }));
     typingNewAddress.current = false;
-    if (form.needsClientInfo) loadClientInfo(client.daftra_id, client.location_url || "");
+    // Daftra is asked about every client found, whatever the form: their balance shows on all of them
+    // (ClientBalance), besides the التصنيف and open invoices of the forms that ask for those
+    loadClientInfo(client.daftra_id, client.location_url || "");
     const last = client.addresses?.[client.addresses.length - 1];
     setAddressChoice(last ? String(last.id) : null);
   }
@@ -193,6 +218,8 @@ export function useClientLookup(form) {
     if (field === 'client_code' && raw === form.autoFilled.current.client_code) return;
     lastLookup.current = query;
     setLookup({ field, status: 'loading' });
+    // No credit of anyone's while the search runs, or when it finds nobody or more than one client
+    setCredit(null);
     try {
       const { matches } = await clientsApi.lookupClient(query);
       if (lastLookup.current !== query) return;
@@ -219,18 +246,28 @@ export function useClientLookup(form) {
   };
 }
 
-// The client's balance in Daftra, under their name (balance.js)
+// The found client's balance in Daftra (balance.js), under the note that found them: two boxes
+// that look like the form's other locked ones, since nothing here is typed — it is what Daftra says
 function ClientBalance({ info }) {
-  const lines = balanceLines(info);
-  if (!lines.length) return null;
+  const view = balanceView(info);
+  if (!view) return null;
+  if (view.status === 'loading') return <p className="fl-field__hint fl-client-balance">جارٍ تحميل رصيد العميل من دفترة…</p>;
+  if (view.status === 'error') return <p className="fl-field__hint fl-client-balance">تعذر تحميل رصيد العميل من دفترة</p>;
   return (
-    <p className="fl-lookup__balance">
-      {lines.map(([label, amount], index) => (
-        <span key={label}>
-          {index > 0 && ' · '}{label}: <strong><bdi dir="ltr">{formatMoney(amount)}</bdi> درهم</strong>
-        </span>
-      ))}
-    </p>
+    <div className="fl-client-balance" role="group" aria-labelledby="client-balance-title">
+      <div className="fl-field__head">
+        <span className="fl-field__label" id="client-balance-title">رصيد العميل في دفترة</span>
+        <span className="fl-field__aside"><Icon name="lock" size={13} />للقراءة فقط</span>
+      </div>
+      <div className="fl-client-balance__boxes">
+        {view.lines.map(([key, label, amount]) => (
+          <Field key={key} label={label} htmlFor={`client-balance-${key}`}>
+            <TextInput id={`client-balance-${key}`} dir="auto" readOnly
+              value={amount === null ? 'غير متاح' : formatAmount(amount)} />
+          </Field>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -244,9 +281,9 @@ export function ClientLookupNote({ name, client: found, values }) {
     // The name typed is someone else's: the request would go on this client's account
     const otherName = !samePerson(values.customer_name, lookup.client.customer_name);
     return (
+      <>
       <Alert tone={otherName ? 'warning' : 'success'} title={otherName ? 'تنبيه: اسم العميل مختلف' : 'عميل مسجل'}>
         <p>{lookup.client.customer_name} — كود <bdi dir="ltr">{lookup.client.client_code}</bdi>. تم تعبئة بياناته.</p>
-        <ClientBalance info={found.clientInfo} />
         {otherName && (
           <p>
             الطلب باسم «<bdi>{values.customer_name}</bdi>» وهذا العميل اسمه «<bdi>{lookup.client.customer_name}</bdi>». عند
@@ -277,6 +314,8 @@ export function ClientLookupNote({ name, client: found, values }) {
           )}
         </div>
       </Alert>
+      <ClientBalance info={found.clientInfo} />
+      </>
     );
   }
   if (lookup.status === 'none') {

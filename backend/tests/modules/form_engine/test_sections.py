@@ -95,6 +95,44 @@ def test_amounts_takes_more_than_the_total_only_where_the_form_says_so():
                        may_overpay=True)
 
 
+def test_amounts_takes_the_clients_balance_only_where_the_form_says_so():
+    base = dict(subtotal_amount=SHOW, total_amount=SHOW, discount_label=HIDE, discount_amount=SHOW,
+                discount_percent=HIDE, discount_approved_by=SHOW, paid_amount=REQUIRED, remaining_amount=SHOW,
+                remaining_due_date=SHOW)
+    plain = {field["name"]: field for field in shared.amounts(**base)["fields"]}
+    assert "previous_credit" not in plain and "credit_applied" not in plain
+    assert plain["remaining_amount"]["computed"] == ["total_amount", "paid_amount"]
+
+    section = shared.amounts(**base, may_overpay=True, takes_credit=True)
+    names = [field["name"] for field in section["fields"]]
+    fields = {field["name"]: field for field in section["fields"]}
+    # «رصيد سابق» beside what is paid now; what the order takes of it just before what is left,
+    # which is worked out after it (computed fields are worked out in the order they stand)
+    assert names[names.index("paid_amount") + 1] == "previous_credit"
+    assert names[names.index("remaining_amount") - 1] == "credit_applied"
+    assert names[names.index("remaining_amount") + 1] == "overpaid_amount"
+    assert fields["previous_credit"] == {"name": "previous_credit", "label": "رصيد سابق", "type": "number",
+                                         "required": False, "money": True, "client_credit": True,
+                                         "pair_with": "paid_amount"}
+    assert fields["credit_applied"] == {"name": "credit_applied", "label": "المخصوم من رصيد العميل",
+                                        "type": "number", "required": False, "money": True,
+                                        "computed": ["total_amount", "paid_amount"], "floor": 0,
+                                        "cap": "previous_credit", "hide_when_zero": True}
+    assert fields["remaining_amount"]["computed"] == ["total_amount", "paid_amount", "credit_applied"]
+    assert fields["remaining_amount"]["floor"] == 0
+
+    # Without may_overpay what is left still may not go below 0
+    strict = {field["name"]: field for field in shared.amounts(**base, takes_credit=True)["fields"]}
+    assert strict["remaining_amount"]["negative_message"] == "المبلغ المدفوع أكبر من قيمة الطلب"
+    assert "overpaid_amount" not in strict and "credit_applied" in strict
+    # It pays what paid_amount leaves: with nothing paid on the form there is no such thing
+    with pytest.raises(TypeError, match="takes_credit"):
+        shared.amounts(**{**base, "paid_amount": HIDE, "remaining_amount": HIDE, "remaining_due_date": HIDE},
+                       takes_credit=True)
+    with pytest.raises(TypeError, match="takes_credit"):
+        shared.amounts(**{**base, "remaining_amount": HIDE, "remaining_due_date": HIDE}, takes_credit=True)
+
+
 def test_request_info_asks_one_order_source_at_most():
     with pytest.raises(TypeError, match="not both"):
         shared.request_info(request_date=REQUIRED, employee_name=SHOW, order_source=REQUIRED, source=REQUIRED)

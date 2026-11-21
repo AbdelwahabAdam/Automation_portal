@@ -172,9 +172,33 @@
      "type": "number"
     },
     {
+     "client_credit": true,
+     "label": "رصيد سابق",
+     "money": true,
+     "name": "previous_credit",
+     "pair_with": "paid_amount",
+     "required": false,
+     "type": "number"
+    },
+    {
+     "cap": "previous_credit",
      "computed": [
       "total_amount",
       "paid_amount"
+     ],
+     "floor": 0,
+     "hide_when_zero": true,
+     "label": "المخصوم من رصيد العميل",
+     "money": true,
+     "name": "credit_applied",
+     "required": false,
+     "type": "number"
+    },
+    {
+     "computed": [
+      "total_amount",
+      "paid_amount",
+      "credit_applied"
      ],
      "floor": 0,
      "label": "المبلغ المتبقي",

@@ -354,10 +354,23 @@ def validate_submission(form_type: str, data: dict, file_counts: dict, employee_
                 # total is 0, and what went beyond is a field of its own (sections.overpaid)
                 if "floor" in spec:
                     result = max(result, spec["floor"])
+                # cap: never above what another field holds — what the client's balance pays of an
+                # order is what the cash leaves, and no more than they have (sections.credit_applied)
+                if "cap" in spec:
+                    result = min(result, clean.get(spec["cap"]) or 0)
                 if result < 0:
                     errors[name] = spec["negative_message"]
                 elif result or not spec.get("hide_when_zero"):
                     clean[name] = result
+
+    # positive_unless: more than 0, unless another field holds something — nothing paid in cash
+    # is still a payment when the client's balance pays part of the order (credit_applied).
+    # Checked here because that part is only known once the amounts are worked out.
+    for spec in fields:
+        other, name = spec.get("positive_unless"), spec["name"]
+        if (other and name not in errors and clean.get(name) is not None and clean[name] <= 0
+                and not (clean.get(other) or 0) > 0):
+            errors[name] = "يجب أن يكون أكبر من صفر"
 
     # The same for a field of the form itself, before the checks below read it
     for spec in fields:

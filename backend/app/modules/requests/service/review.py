@@ -66,7 +66,7 @@ def review_out(request: Request) -> dict:
         "created_by_id": request.created_by_id, "created_by_name": display_name(request.created_by),
         "daftra_invoice_no": request.daftra_invoice_no, "daftra_receipt_no": request.daftra_receipt_no,
         "daftra_work_order_no": request.daftra_work_order_no, "daftra_estimate_no": request.daftra_estimate_no,
-        "daftra_credit_no": request.daftra_credit_no,
+        "daftra_credit_no": request.daftra_credit_no, "daftra_credit_use_no": request.daftra_credit_use_no,
         "daftra_error": request.daftra_error,
     }
 

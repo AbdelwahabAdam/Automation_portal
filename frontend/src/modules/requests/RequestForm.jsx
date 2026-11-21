@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import * as clientsApi from '../../api/clients.js';
 import * as requestsApi from '../../api/requests.js';
 import {
-  ActionBar, Alert, Badge, Button, Dialog, Field, PageHeader, Section, Skeleton, TextInput, useToast,
+  ActionBar, Alert, Badge, Button, Dialog, Field, Icon, PageHeader, Section, Skeleton, TextInput, useToast,
 } from '../../ds/index.jsx';
 import { ClientLookupNote, SEARCH_FIELDS, useClientLookup } from './form/ClientLookup.jsx';
 import { Control, DaftraListSelect, FileField, ProductPicker, guessFromProductName, showsAsChoice } from './form/fields.jsx';
@@ -51,8 +51,15 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
     return pair ? { [`${pair.name}_basis`]: pair.name === name ? 'percent' : 'amount' } : {};
   };
   const specOf = (name) => fields.find((spec) => spec.name === name);
-  // Forms with a field only Daftra can fill for the found client (their التصنيف, their open invoices)
-  const needsClientInfo = fields.some((spec) => ['daftra_client_category', 'daftra_client_invoice'].includes(spec.type));
+  // A field drawn beside another, in that one's width (رصيد سابق beside المبلغ المدفوع): the one beside name
+  const besideOf = (name) => fields.find((spec) => spec.pair_with === name);
+  // What the found client holds with us (رصيد سابق): only their answer from Daftra fills it (ClientLookup.jsx)
+  const creditFields = useMemo(() => fields.filter((spec) => spec.client_credit).map((spec) => spec.name), [fields]);
+  // Forms with a field only Daftra can fill for the found client (their التصنيف, their open invoices, their credit)
+  const needsClientInfo = fields.some((spec) => ['daftra_client_category', 'daftra_client_invoice'].includes(spec.type) || spec.client_credit);
+  // What tells whether anything is unsaved. The client's credit is Daftra's figure, not the user's
+  // change: it is fetched again whenever a draft opens, and a draft nobody typed in stays unchanged.
+  const snapshotOf = (data) => JSON.stringify(without(data, ...creditFields));
 
   // Fills fields that are empty or still hold what an earlier search or pick filled in
   function autoFill(current, next, name, value, force = false) {
@@ -63,7 +70,7 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
   }
 
   const toast = useToast();
-  const client = useClientLookup({ fieldNames, needsClientInfo, setValues, setErrors, setMessage, autoFill, autoFilled, toast });
+  const client = useClientLookup({ fieldNames, creditFields, setValues, setErrors, setMessage, autoFill, autoFilled, toast });
 
   // Where a التصنيف's clients live
   const categories = catalog.daftraLists?.daftra_client_category;
@@ -98,8 +105,10 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
     if (!requestId) return;
     requestsApi.getRequest(requestId)
       .then((request) => {
-        setValues(request.data);
-        setSavedSnapshot(JSON.stringify(request.data));
+        // The credit saved with it may be out of date: it waits for the client to be looked up
+        // again (below), and stays empty when nobody is
+        setValues(without(request.data, ...creditFields));
+        setSavedSnapshot(snapshotOf(request.data));
         setAttachments(request.attachments);
         setSaved({ status: request.status, returned_reason: request.returned_reason });
       })
@@ -117,7 +126,7 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
     [formType, values, fileCounts, catalog],
   );
 
-  const dirty = !submitted && JSON.stringify(values) !== savedSnapshot;
+  const dirty = !submitted && snapshotOf(values) !== savedSnapshot;
   // Closing the tab or reloading with unsaved changes asks first
   useEffect(() => {
     if (!dirty) return undefined;
@@ -271,7 +280,7 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
       ? await requestsApi.updateRequest(id, body)
       : await requestsApi.createRequest(body);
     setId(result.id);
-    setSavedSnapshot(JSON.stringify(body.data));
+    setSavedSnapshot(snapshotOf(body.data));
     return result;
   }
 
@@ -406,7 +415,9 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
   // A worked-out amount that is only worth a line when there is one (زيادة تُضاف إلى رصيد العميل)
   const nothingToShow = (spec) => spec.hide_when_zero && !(evaluation?.clean[spec.name] > 0);
   const shown = (spec) => (fieldApplies(spec, values) && !nothingToShow(spec)) || Boolean(errors[spec.name]);
-  const inputsOf = (section) => section.fields.filter((spec) => spec.type !== 'auto_user' && !spec.computed && shown(spec));
+  // What the user fills in: not what is worked out, nor what Daftra says (رصيد سابق)
+  const inputsOf = (section) => section.fields.filter((spec) => spec.type !== 'auto_user' && !spec.computed
+    && !spec.client_credit && shown(spec));
 
   function summary(section) {
     const inputs = inputsOf(section);
@@ -446,6 +457,15 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
     }
     if (spec.type === 'auto_user') {
       return { locked: 'للقراءة فقط', control: <TextInput id={spec.name} value={user.full_name || user.username} readOnly /> };
+    }
+    if (spec.client_credit) {
+      // Never typed: it is the found client's credit as Daftra has it, and empty without one
+      const credit = evaluation.clean[spec.name];
+      return {
+        locked: 'من دفترة',
+        control: <TextInput id={spec.name} dir="auto" readOnly placeholder="—" invalid={invalid}
+          value={credit > 0 ? formatAmount(credit) : ''} />,
+      };
     }
     if (spec.computed) {
       const value = evaluation.clean[spec.name];
@@ -531,11 +551,12 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
     };
   }
 
-  function fieldOf(spec) {
+  // quiet: the error is shown by whoever draws the field instead (a pair's narrow box: fieldRow)
+  function fieldOf(spec, quiet = false) {
     const { control, locked, hint } = controlFor(spec);
     // A computed field shows its error live (e.g. paid more than the total); order_lines
     // keeps its per-line errors inside the field itself, not as one message here
-    const rawError = errors[spec.name] || (spec.computed && evaluation.errors[spec.name]);
+    const rawError = !quiet && (errors[spec.name] || (spec.computed && evaluation.errors[spec.name]));
     const error = spec.type === 'order_lines' && rawError && typeof rawError === 'object'
       ? 'بعض البنود تحتاج إلى تعديل، انظر التفاصيل أدناه' : rawError;
     return (
@@ -545,6 +566,38 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
       >
         {control}
       </Field>
+    );
+  }
+
+  // What a credit field beside paid_amount comes to: how much of the client's credit is taken off
+  // what is left to pay (the computed field capped by it, المخصوم من رصيد العميل), when any is
+  function creditHint(beside) {
+    const using = fields.find((other) => other.cap === beside.name);
+    const applied = using ? evaluation.clean[using.name] : 0;
+    const credit = evaluation.clean[beside.name];
+    if (!(applied > 0) || !(credit > 0)) return null;
+    if (applied >= credit) return `يُخصم رصيد العميل كله (${formatAmount(credit)}) مما بقي عليه.`;
+    return `يُخصم ${formatAmount(applied)} من رصيد العميل، ويبقى له ${formatAmount(Math.round((credit - applied) * 100) / 100)}.`;
+  }
+
+  // A field and the one drawn beside it (pair_with) in one cell of the grid, the first the wider:
+  // المبلغ المدفوع فعليًا الآن keeps its own label, mark, hint and error; رصيد سابق beside it is
+  // locked, and its error — the server's, when the credit changed in Daftra — runs under both,
+  // where there is room to read it
+  function fieldPair(spec, beside) {
+    const besideError = errors[beside.name];
+    const hint = beside.client_credit ? creditHint(beside) : null;
+    return (
+      <div key={spec.name} className="fl-field-pair">
+        {fieldOf(spec)}
+        {fieldOf(beside, true)}
+        {besideError && (
+          <div className="fl-field__error fl-field-pair__note" role="alert">
+            <Icon name="alert-circle" size={15} /><span>{besideError}</span>
+          </div>
+        )}
+        {hint && <div className="fl-field__hint fl-field-pair__note">{hint}</div>}
+      </div>
     );
   }
 
@@ -565,6 +618,10 @@ export default function RequestForm({ formType, requestId, user, catalog, onBack
         </div>
       );
     }
+    // A field with pair_with is drawn beside its partner, in that one's width, and not on its own
+    if (spec.pair_with && specOf(spec.pair_with) && shown(specOf(spec.pair_with))) return null;
+    const beside = besideOf(spec.name);
+    if (beside && shown(beside)) return fieldPair(spec, beside);
     const wide = WIDE_TYPES.includes(spec.type) || showsAsChoice(spec);
     return (
       <div key={spec.name} className={wide ? 'fl-wide' : undefined}>

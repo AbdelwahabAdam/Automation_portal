@@ -9,12 +9,15 @@ the client or anything else is made. Each document's id is kept on the request a
 approving again after a failure carries on from the one that failed.
 
 The order is the form's, with three rules the documents themselves impose:
-- a Receipt pays the Invoice (or ExistingInvoice) just before it;
+- a Receipt pays the Invoice (or ExistingInvoice) just before it, after the part of an Invoice the
+  client's own balance pays (Invoice.from_credit), which is checked against that balance before
+  the invoice is made;
 - a WorkOrder is linked to the Invoice made before it;
 - the invoice's PDF is taken after its receipt, because Daftra draws it as it stands — taken
   before, «مدفوع» reads 0 whatever the client just paid.
 """
 
+from decimal import Decimal
 from typing import Callable
 
 from ...core.config import settings
@@ -22,12 +25,13 @@ from ...core.errors import SyncError
 from ...core.text import squash
 from ...integrations.daftra import NotFound
 from .. import notifications, requests
-from ..clients import client_id, existing_client_id, update_client
+from ..clients import client_id, credit_held, existing_client_id, update_client
 from .client_email import send_invoice_email
 from .common import TOTAL_TOLERANCE, money, reports_daftra_errors, terms_to_print
 from .documents import ClientRecord, Estimate, ExistingInvoice, Invoice, InvoiceEmail, Receipt, WorkOrder
 from .estimate import make_estimate, save_estimate_pdf
-from .invoice import finish_invoice, get_invoice, invoice_address, invoice_items, make_invoice, payment_of
+from .invoice import (credit_use_of, finish_invoice, get_invoice, invoice_address, invoice_items, make_invoice,
+                      payment_of)
 from .work_order import make_work_order
 
 
@@ -51,13 +55,15 @@ def run(ctx, documents: list[Callable]) -> dict:
     open_invoice = False
     # An invoice Daftra already had, which the receipt after it must not overpay
     existing: ExistingInvoice | None = None
+    # The Invoice document just made, part of which the client's balance may pay
+    made: Invoice | None = None
 
     def close(receipt: Receipt | None):
-        nonlocal open_invoice, existing
+        nonlocal open_invoice, existing, made
         if existing is not None and existing.refuse_overpaying and receipt is not None:
             refuse_overpaying(request, invoice, receipt, db)
-        summary.update(finish_invoice(request, invoice, receipt, db))
-        open_invoice, existing = False, None
+        summary.update(finish_invoice(request, invoice, receipt, db, made))
+        open_invoice, existing, made = False, None, None
 
     for doc in built:
         if open_invoice and not isinstance(doc, Receipt):
@@ -69,8 +75,9 @@ def run(ctx, documents: list[Callable]) -> dict:
             summary.update(daftra_estimate_no=request.daftra_estimate_no,
                            estimate_pdf_saved=save_estimate_pdf(request, estimate, db))
         elif isinstance(doc, Invoice):
+            check_credit(request, doc, db)
             invoice = make_invoice(request, doc)
-            open_invoice = True
+            open_invoice, made = True, doc
         elif isinstance(doc, ExistingInvoice):
             invoice = take_invoice(request, doc)
             open_invoice, existing = True, doc
@@ -110,6 +117,40 @@ def make_client(request, record: ClientRecord, db):
             request.save_document("client", found)
     if record.keep_in_step:
         update_client(request.daftra_client_id, data, db)
+
+
+def check_credit(request, doc: Invoice, db=None):
+    """What the client holds in Daftra still covers what the request takes from it — checked before
+    the invoice is made, so a balance spent since the request was sent leaves nothing behind in
+    Daftra. Whether Daftra itself refuses spending more than is there is not known.
+
+    Not once the request has taken it: that payment has already brought the balance down by what it
+    took. Nor when it did and the answer was lost — so its own invoice is looked at first."""
+    needed = doc.credit
+    if needed <= 0 or request.daftra_credit_use_id is not None:
+        return
+    if request.daftra_invoice_id is not None:
+        try:
+            if credit_use_of(request, get_invoice(request.daftra_invoice_id), needed, db):
+                return
+        except NotFound:
+            pass                                # deleted since: make_invoice makes it again
+    held = credit_held(request.daftra_client_id)
+    if held is None:
+        raise SyncError("تعذر التحقق من رصيد العميل في دفترة الآن، ولا تُنشأ الفاتورة قبل التحقق منه. "
+                        "اعتمد الطلب مرة أخرى بعد قليل.", from_daftra=True)
+    if money(held) + CREDIT_TOLERANCE < needed:
+        raise SyncError(f"رصيد العميل في دفترة الآن {amount_text(held)} درهم، أقل من المخصوم في الطلب "
+                        f"({amount_text(needed)}). أعد الطلب للموظف ليصحح المبالغ.")
+
+
+#: How far what the client holds may fall short of what is taken from it: a rounding, not money
+CREDIT_TOLERANCE = Decimal("0.005")
+
+
+def amount_text(amount) -> str:
+    """An amount as the manager reads it: «1,250» or «1,250.50»."""
+    return f"{float(amount):,.2f}".removesuffix(".00")
 
 
 def take_invoice(request, doc: ExistingInvoice) -> dict:

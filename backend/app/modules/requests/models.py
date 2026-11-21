@@ -168,6 +168,16 @@ class Request(Base):
     def daftra_credit_no(self) -> str | None:
         return self.doc_no("client_credit")
 
+    # The part of its invoice the client's own balance paid: a payment of the invoice whose method
+    # is client_credit, with a receipt number of its own (invoicing.make_credit_use)
+    @property
+    def daftra_credit_use_id(self) -> int | None:
+        return self.doc_id("credit_use")
+
+    @property
+    def daftra_credit_use_no(self) -> str | None:
+        return self.doc_no("credit_use")
+
     @property
     def daftra_estimate_id(self) -> int | None:
         return self.doc_id("estimate")
@@ -203,7 +213,7 @@ class RequestDocument(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     request_id: Mapped[int] = mapped_column(ForeignKey("requests.id", ondelete="CASCADE"), index=True)
-    # client · invoice · payment · work_order · estimate — later credit_note, …
+    # client · invoice · payment · client_credit · credit_use · work_order · estimate — later credit_note, …
     kind: Mapped[str] = mapped_column(String(20))
     # Daftra's own id for it
     external_id: Mapped[int]

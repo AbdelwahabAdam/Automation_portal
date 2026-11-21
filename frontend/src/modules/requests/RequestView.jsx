@@ -78,6 +78,8 @@ function DaftraCard({ request }) {
         {request.daftra_receipt_no && <div><dt>رقم سند القبض</dt><dd><bdi dir="ltr">{request.daftra_receipt_no}</bdi></dd></div>}
         {/* What was paid beyond the invoice: a receipt of its own in Daftra, on the client's balance */}
         {request.daftra_credit_no && <div><dt>سند قبض رصيد العميل</dt><dd><bdi dir="ltr">{request.daftra_credit_no}</bdi></dd></div>}
+        {/* What was taken off the invoice from the credit the client already held with us */}
+        {request.daftra_credit_use_no && <div><dt>سند الخصم من رصيد العميل</dt><dd><bdi dir="ltr">{request.daftra_credit_use_no}</bdi></dd></div>}
         {request.daftra_work_order_no && <div><dt>رقم أمر الشغل</dt><dd><bdi dir="ltr">{request.daftra_work_order_no}</bdi></dd></div>}
         {request.printed_terms && <div><dt>الشروط والأحكام المطبوعة</dt><dd>{request.printed_terms}</dd></div>}
         {pdfs.map(([label, file]) => <DocRow key={file.id} label={label} file={file} />)}
@@ -87,9 +89,15 @@ function DaftraCard({ request }) {
 }
 
 // The request at a glance, above its sections: who it is for and what it comes to
-const SUMMARY_MONEY = [['total_amount', 'الإجمالي'], ['paid_amount', 'المدفوع'], ['remaining_amount', 'المتبقي'],
+const SUMMARY_MONEY = [['total_amount', 'الإجمالي'],
+  // What the client held with us when the request was sent, and how much of it this request used:
+  // only on a request for a client with credit
+  ['previous_credit', 'رصيد سابق'], ['paid_amount', 'المدفوع'], ['credit_applied', 'المخصوم من الرصيد'],
+  ['remaining_amount', 'المتبقي'],
   // Only on a request paid beyond its total: the data holds it only then
   ['overpaid_amount', 'زيادة لرصيد العميل']];
+// Amounts that are no line at all at 0: a client without credit had nothing to take off
+const SUMMARY_ONLY_WHEN_SOME = ['previous_credit', 'credit_applied'];
 
 function Summary({ request }) {
   const data = request.data;
@@ -104,10 +112,12 @@ function Summary({ request }) {
     ['الجنس', data.gender],
     ['البريد الإلكتروني', data.email && <bdi dir="ltr">{data.email}</bdi>],
   ].filter(([, value]) => value);
-  const money = SUMMARY_MONEY.filter(([name]) => typeof data[name] === 'number');
+  const money = SUMMARY_MONEY.filter(([name]) => typeof data[name] === 'number'
+    && !(SUMMARY_ONLY_WHEN_SOME.includes(name) && !(data[name] > 0)));
   const daftra = [
     ['عرض السعر', request.daftra_estimate_no], ['الفاتورة', request.daftra_invoice_no],
     ['سند القبض', request.daftra_receipt_no], ['سند رصيد العميل', request.daftra_credit_no],
+    ['سند الخصم من رصيد العميل', request.daftra_credit_use_no],
     ['أمر الشغل', request.daftra_work_order_no],
   ].filter(([, value]) => value);
   if (!facts.length && !money.length) return null;

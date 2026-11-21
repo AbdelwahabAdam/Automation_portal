@@ -155,16 +155,25 @@ def balance(client_id: int, invoices: list[dict]) -> dict:
     None when Daftra would not say, or it could not be worked out: what they owe is still shown.
     """
     owed = round(sum(invoice["unpaid"] for invoice in invoices), 2)
+    return {"owed": owed, "credit": credit_held(client_id)}
+
+
+def credit_held(client_id: int) -> float | None:
+    """رصيد العميل: what the client holds now — their payments on no invoice, less what they have
+    spent of them (credit_spent). None when Daftra would not say, or it could not be worked out.
+
+    What the form shows as «رصيد سابق», and what submitting and approving check it against: a
+    request paid partly out of it must not spend more than is there (Daftra may well let it)."""
     try:
         held = sum(float(payment.get("amount") or 0) for payment in daftra.client_payments(client_id)
                    if str(payment.get("status")) == "1")
         # Most clients hold nothing, and nothing more is read for them
         spent = credit_spent(client_id) if held > 0.005 else 0
     except DaftraError:
-        return {"owed": owed, "credit": None}
+        return None
     if spent is None:
-        return {"owed": owed, "credit": None}
-    return {"owed": owed, "credit": max(round(held - spent, 2), 0)}
+        return None
+    return max(round(held - spent, 2), 0)
 
 
 def credit_spent(client_id: int) -> float | None:

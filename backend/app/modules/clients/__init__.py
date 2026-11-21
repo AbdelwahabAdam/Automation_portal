@@ -8,9 +8,9 @@ a client's open invoices, creating the client in Daftra when an approved request
 reading a Google Maps link.
 """
 
-from .in_daftra import (CATEGORY_LOCATIONS, CITY_LOCATIONS, address_change, address_fields,
+from .in_daftra import (CATEGORY_LOCATIONS, CITY_LOCATIONS, FROM_CREDIT, address_change, address_fields,
                         address_from_daftra, categories_with_location, city_location, client_id,
-                        create_client, custom_fields, existing_client_id, held_custom_fields,
+                        create_client, credit_held, custom_fields, existing_client_id, held_custom_fields,
                         invoice_label, known_client, open_invoices, other_client, own_number,
                         same_person, save_address, update_client, usable_link)
 from .models import Address, Client, ClientCategory
@@ -19,9 +19,10 @@ from .service import address_out, categories, client_match, details_from_daftra,
 from .sync import client_rows, resend_held_addresses, sync_from_daftra
 
 __all__ = [
-    "Address", "CATEGORY_LOCATIONS", "CITY_LOCATIONS", "Client", "ClientCategory", "address_change",
+    "Address", "CATEGORY_LOCATIONS", "CITY_LOCATIONS", "Client", "ClientCategory", "FROM_CREDIT", "address_change",
     "address_fields", "address_from_daftra", "address_out", "categories", "categories_with_location",
-    "city_location", "client_id", "client_match", "create_client", "custom_fields", "details_from_daftra",
+    "city_location", "client_id", "client_match", "create_client", "credit_held", "custom_fields",
+    "details_from_daftra",
     "client_rows", "existing_client_id", "held_custom_fields", "invoice_label", "known_client", "lookup",
     "open_invoices", "other_client", "own_number", "resend_held_addresses", "router", "same_person",
     "save_address", "sync_from_daftra",

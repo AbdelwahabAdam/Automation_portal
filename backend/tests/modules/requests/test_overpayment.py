@@ -175,7 +175,9 @@ def test_a_like_balance_payment_made_by_hand_is_not_taken_for_the_requests(clien
         "id": 900, "code": "R900", "client_id": 4053, "invoice_id": None, "amount": 300, "status": "1",
         "currency_code": "AED", "payment_method": "bank", "transaction_id": "TRX-1", "staff_id": 15,
         "created": "2030-01-01 10:00:00", "notes": None}
-    request_id = overpaid_sale(client, db, sales, client_code="4089")
+    # That payment is a balance of theirs, which the form shows as «رصيد سابق»; paid beyond the
+    # total, the order takes none of it
+    request_id = overpaid_sale(client, db, sales, client_code="4089", previous_credit="300")
     assert approve(client, manager, request_id).status_code == 200
     request = db.get(Request, request_id)
     db.refresh(request)

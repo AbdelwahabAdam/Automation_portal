@@ -10,7 +10,7 @@ import {
   packageDefault, packageQuantity, today,
 } from '../src/modules/requests/validation.js';
 import { afterCategory, afterEmirate, categoriesFor } from '../src/modules/requests/address.js';
-import { balanceLines } from '../src/modules/requests/form/balance.js';
+import { balanceView, clientCredit } from '../src/modules/requests/form/balance.js';
 
 const families = [
   { match: ['سقيا الخير مدمجة'], exclude: [], colors: ['الابيض', 'الاسود'] },
@@ -498,16 +498,98 @@ test('a form that does not take more than its total still refuses it', () => {
   assert.equal(errors.remaining_amount, 'أكبر');
 });
 
-test('the balance of a found client shows what they owe and what they hold, each only when there is some', () => {
+test('the balance of a found client shows what they owe and what they hold, 0 included', () => {
   const ready = (balance) => ({ status: 'ready', balance });
-  assert.deepEqual(balanceLines(ready({ owed: 1250, credit: 500 })), [['المستحق عليه', 1250], ['رصيد دائن', 500]]);
-  assert.deepEqual(balanceLines(ready({ owed: 0, credit: 500 })), [['رصيد دائن', 500]]);
-  assert.deepEqual(balanceLines(ready({ owed: 1250, credit: 0 })), [['المستحق عليه', 1250]]);
-  assert.deepEqual(balanceLines(ready({ owed: 0, credit: 0 })), []);
-  // Daftra would not say what they hold: what they owe is still shown
-  assert.deepEqual(balanceLines(ready({ owed: 800, credit: null })), [['المستحق عليه', 800]]);
-  // Not answered yet, failed, or an older answer with no balance in it
-  assert.deepEqual(balanceLines({ status: 'loading' }), []);
-  assert.deepEqual(balanceLines(ready(undefined)), []);
-  assert.deepEqual(balanceLines(null), []);
+  const lines = (info) => balanceView(info).lines.map(([, label, amount]) => [label, amount]);
+  assert.deepEqual(lines(ready({ owed: 1250, credit: 500 })), [['المستحق عليه', 1250], ['رصيد دائن', 500]]);
+  // Nothing either way still shows, so the salesperson sees it was checked
+  assert.deepEqual(lines(ready({ owed: 0, credit: 0 })), [['المستحق عليه', 0], ['رصيد دائن', 0]]);
+  // Daftra would not say what they hold (null: «غير متاح»): what they owe is still shown
+  assert.deepEqual(lines(ready({ owed: 800, credit: null })), [['المستحق عليه', 800], ['رصيد دائن', null]]);
+  // An older answer with no balance in it says neither
+  assert.deepEqual(lines(ready(undefined)), [['المستحق عليه', null], ['رصيد دائن', null]]);
+  // Not answered yet, failed, or no client found
+  assert.deepEqual(balanceView({ status: 'loading' }), { status: 'loading' });
+  assert.deepEqual(balanceView({ status: 'error', message: 'x' }), { status: 'error' });
+  assert.equal(balanceView(null), null);
 });
+
+test('رصيد سابق is the found client\'s credit, and only when Daftra says they hold some', () => {
+  const ready = (balance) => ({ status: 'ready', balance });
+  assert.equal(clientCredit(ready({ owed: 0, credit: 500 })), 500);
+  assert.equal(clientCredit(ready({ owed: 1250, credit: 0 })), null);
+  assert.equal(clientCredit(ready({ owed: 0, credit: null })), null);
+  assert.equal(clientCredit(ready(undefined)), null);
+  assert.equal(clientCredit({ status: 'loading' }), null);
+  assert.equal(clientCredit({ status: 'error' }), null);
+  assert.equal(clientCredit(null), null);
+});
+
+// ---------- the client's credit taken off what is left to pay ----------
+
+// As the forms define it: رصيد سابق beside المبلغ المدفوع, and what is taken off it before المتبقي
+const CREDIT = { sections: [{ fields: [
+  PAYING.sections[0].fields[0],
+  PAYING.sections[0].fields[1],
+  { name: 'previous_credit', label: 'رصيد سابق', type: 'number', money: true, client_credit: true, pair_with: 'paid_amount' },
+  { name: 'credit_applied', type: 'number', money: true, computed: ['total_amount', 'paid_amount'], floor: 0, cap: 'previous_credit', hide_when_zero: true },
+  { name: 'remaining_amount', type: 'number', money: true, computed: ['total_amount', 'paid_amount', 'credit_applied'], floor: 0 },
+  PAYING.sections[0].fields[3],
+] }] };
+const withCredit = (paid, credit = '500') => evaluateForm(CREDIT, { total_amount: '6000', paid_amount: paid, previous_credit: credit }, {}, {});
+const amountsOf = (clean) => ['previous_credit', 'credit_applied', 'remaining_amount', 'overpaid_amount'].map((name) => clean[name]);
+
+test('the client\'s credit pays what the payment leaves, up to all of it', () => {
+  // Less than what is left: all of it is used
+  assert.deepEqual(amountsOf(withCredit('1000').clean), [500, 500, 4500, undefined]);
+  // More than what is left: only that much, and nothing remains
+  assert.deepEqual(amountsOf(withCredit('5800').clean), [500, 200, 0, undefined]);
+  assert.deepEqual(withCredit('5800').errors, {});
+});
+
+test('a payment of the whole total, or more, uses none of the credit', () => {
+  const exact = withCredit('6000').clean;
+  assert.ok(!('credit_applied' in exact));
+  assert.equal(exact.remaining_amount, 0);
+  const more = withCredit('6300').clean;
+  assert.ok(!('credit_applied' in more));
+  assert.deepEqual([more.remaining_amount, more.overpaid_amount], [0, 300]);
+});
+
+test('with no credit the amounts are exactly what they were without it', () => {
+  for (const paid of ['1000', '6000', '6300', '']) {
+    for (const credit of [undefined, '', '0']) {
+      const values = { total_amount: '6000', paid_amount: paid, ...(credit === undefined ? {} : { previous_credit: credit }) };
+      const before = evaluateForm(PAYING, values, {}, {});
+      const now = evaluateForm(CREDIT, values, {}, {});
+      assert.ok(!('credit_applied' in now.clean), `paid ${paid}, credit ${credit}`);
+      assert.deepEqual(without(now.clean, 'previous_credit'), before.clean);
+      assert.deepEqual(now.errors, before.errors);
+    }
+  }
+});
+
+test('رصيد سابق is never asked for, and a credit that is no number is refused', () => {
+  const { errors, required } = withCredit('1000', '');
+  assert.ok(!required.has('previous_credit'));
+  assert.ok(!('previous_credit' in errors));
+  assert.equal(withCredit('1000', 'abc').errors.previous_credit, 'أدخل رقمًا صحيحًا');
+});
+
+test('nothing paid in cash is enough when the balance pays something, and not otherwise', () => {
+  const form = { sections: [{ fields: CREDIT.sections[0].fields.map((spec) => (
+    spec.name === 'paid_amount' ? { ...spec, required: true, positive_unless: 'credit_applied' } : spec)) }] };
+  const sent = (paid, credit) => evaluateForm(form, { total_amount: '6000', paid_amount: paid, previous_credit: credit }, {}, {});
+  const covered = sent('0', '500');
+  assert.ok(!('paid_amount' in covered.errors));
+  assert.deepEqual([covered.clean.credit_applied, covered.clean.remaining_amount], [500, 5500]);
+  assert.equal(sent('0', '').errors.paid_amount, 'يجب أن يكون أكبر من صفر');
+  assert.equal(sent('0', '0').errors.paid_amount, 'يجب أن يكون أكبر من صفر');
+  assert.ok(!('paid_amount' in sent('1000', '').errors));
+  // Left empty it is asked for like any required field, whatever the balance
+  assert.ok(sent('', '500').errors.paid_amount);
+});
+
+function without(object, ...names) {
+  return Object.fromEntries(Object.entries(object).filter(([name]) => !names.includes(name)));
+}
